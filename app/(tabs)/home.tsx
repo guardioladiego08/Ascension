@@ -1,11 +1,27 @@
-// app/(tabs)/profile.tsx
-import { Text, View } from 'react-native';
-import { Colors } from 'react-native/Libraries/NewAppScreen';
+// Home.js
+import MacrosChart from '@/components/MacrosPieChart';
+import { Colors } from '@/constants/Colors';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 
 export default function Home() {
+  const macroData = [
+    { label: 'Protein', value: 40, color: '#b0b0b0' },
+    { label: 'Carbs',   value: 35, color: '#f5c100' },
+    { label: 'Fats',    value: 25, color: '#d98c30' },
+  ];
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.backgroundColor }}>
-      <Text>Home Screen</Text>
+    <View style={styles.container}>
+      <MacrosChart data={macroData} />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+  },
+});

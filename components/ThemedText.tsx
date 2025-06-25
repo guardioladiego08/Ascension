@@ -37,24 +37,28 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: 'Koulen-Regular'
   },
   defaultSemiBold: {
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '600',
+    fontFamily: 'Koulen-Regular'
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    lineHeight: 32,
+    fontFamily: 'Koulen-Regular'
   },
   subtitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    fontFamily: 'Koulen-Regular'
   },
   link: {
     lineHeight: 30,
     fontSize: 16,
     color: '#0a7ea4',
+    fontFamily: 'Koulen-Regular'
   },
 });
