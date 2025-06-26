@@ -1,5 +1,6 @@
 // Home.js
-import MacroTracker from '@/components/MacrosPieChart';
+import MacroTracker from '@/components/Home/MacrosPieChart';
+import ProfileCard from '@/components/Home/ProfileCard';
 import { Colors } from '@/constants/Colors';
 
 import React from 'react';
@@ -9,6 +10,7 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ProfileCard></ProfileCard>
       <MacroTracker protein={50} carbs={30} fats={20} />
     </SafeAreaView>
   );

@@ -19,7 +19,11 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
             const isFocused = state.index === index;
 
             const onPress = () => {
-                const event = navigation.emit({ type: 'tabPress', target: route.key });
+                const event = navigation.emit({
+                    type: 'tabPress',
+                    target: route.key,
+                    canPreventDefault: true,
+                  });
                 if (!isFocused && !event.defaultPrevented) {
                 navigation.navigate(route.name);
                 }
@@ -60,36 +64,38 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
   );
 };
 
-const styles = StyleSheet.create({
-  tabBar: {
-  flexDirection: 'row',
-  backgroundColor: Colors.tab,
-  height: 70, // was 100
-  justifyContent: 'space-evenly',
-  alignItems: 'center',
-  paddingBottom: 10, // helps with safe area
-},
+export default CustomTabBar;
 
+const styles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: Colors.background,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: Colors.tab,
+    height: 70,
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    paddingBottom: 10,
+  },
   tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
   },
   centerButton: {
-  position: 'absolute',
-  top: -0,              // slightly less floating
-  left: '50%',
-  transform: [{ translateX: -16 }],
-  backgroundColor: Colors.highlight1,
-  borderRadius: 30,
-  width: 32,
-  height: 32,
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 10,
-},
-
-
+    position: 'absolute',
+    top: 0,
+    left: '50%',
+    transform: [{ translateX: -16 }],
+    backgroundColor: Colors.highlight1,
+    borderRadius: 30,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   centerIcon: {
     shadowColor: '#000',
     shadowOpacity: 0.3,
@@ -98,4 +104,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CustomTabBar;
