@@ -4,6 +4,10 @@ export const Colors = {
   text: '#FFFFFF',
   background: '#525252',
   highlight1: '#FF950A',
-  tab: '#2B2B2B'
+  tab: '#2B2B2B',
+  cardBackground:  '#4f4f4f',   // matches card & doughnut hole
+  macroProtein:    '#9e9e9e',   // light-grey
+  macroCarbs:      '#d4af0f',   // yellow
+  macroFats:       '#cd8c34',   // orange
 
 };

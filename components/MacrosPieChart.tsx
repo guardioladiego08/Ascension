@@ -1,84 +1,101 @@
-// components/MacrosChart.js
+// components/MacrosPieChart.tsx
+import { Colors } from '@/constants/Colors';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { PieChart } from 'react-native-svg-charts';
+import PieChart, { Slice } from 'react-native-pie-chart';
 
-const MacrosChart = ({ data }) => {
-  const pieData = data
-    .filter(item => item.value > 0)
-    .map((item, index) => ({
-      value: item.value,
-      svg: {
-        fill: item.color,
-      },
-      key: `pie-${index}`,
-    }));
+type Props = {
+  protein: number;
+  carbs: number;
+  fats: number;
+  /**
+   * Diameter of the chart (px).  Feel free to tweak.
+   */
+  size?: number;
+};
+
+const MacroTracker: React.FC<Props> = ({
+  protein,
+  carbs,
+  fats,
+  size = 160,
+}) => {
+  const total = protein + carbs + fats;
+
+  // Early-out if nothing to draw
+  if (total === 0) {
+    return (
+      <View style={[styles.card, styles.center]}>
+        <Text style={styles.title}>MACROS</Text>
+        <View style={styles.underline} />
+        <Text style={styles.noData}>No data yet</Text>
+      </View>
+    );
+  }
+
+  /** Pie-chart data (new API) */
+  const series: Slice[] = [
+    { value: carbs,   color: Colors.macroCarbs   },
+    { value: fats,    color: Colors.macroFats    },
+    { value: protein, color: Colors.macroProtein },
+  ];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.card}>
+      {/* Header */}
       <Text style={styles.title}>MACROS</Text>
-      <View style={styles.separator} />
-      <View style={styles.chartRow}>
+      <View style={styles.underline} />
+
+      {/* Body */}
+      <View style={styles.row}>
         <PieChart
-          style={{ height: 150, width: 150 }}
-          data={pieData}
-          innerRadius={50}
-          padAngle={0}
+          widthAndHeight={size}
+          series={series}
+          /** 0.6 = 60 % inner hole radius, colour matches card */
+          cover={{ radius: 0.6, color: Colors.cardBackground }}
+          padAngle={0.002}   // very thin gap between slices
         />
+
+        {/* Legend */}
         <View style={styles.legend}>
-          {data.map((item, index) => (
-            <View key={index} style={styles.legendItem}>
-              <View style={[styles.colorBox, { backgroundColor: item.color }]} />
-              <Text style={styles.label}>{item.label}</Text>
-            </View>
-          ))}
+          <LegendItem label="Protein" color={Colors.macroProtein} />
+          <LegendItem label="Carbs"   color={Colors.macroCarbs}   />
+          <LegendItem label="Fats"    color={Colors.macroFats}    />
         </View>
       </View>
     </View>
   );
 };
 
+/* ---------- helper: legend row ---------- */
+const LegendItem: React.FC<{ label: string; color: string }> = ({
+  label,
+  color,
+}) => (
+  <View style={styles.legendRow}>
+    <View style={[styles.colorBox, { backgroundColor: color }]} />
+    <Text style={styles.legendText}>{label}</Text>
+  </View>
+);
+
+/* ---------- styles ---------- */
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#444',
+  card: {
+    backgroundColor: Colors.cardBackground, // dark grey block
     padding: 20,
-    borderRadius: 12,
-    margin: 16,
+    borderRadius: 8,
+    width: '90%',
+    alignSelf: 'center',
   },
-  title: {
-    fontFamily: 'Koulen-Regular',
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#ccc',
-    marginBottom: 16,
-  },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legend: {
-    marginLeft: 20,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  colorBox: {
-    width: 12,
-    height: 12,
-    marginRight: 8,
-    borderRadius: 2,
-  },
-  label: {
-    color: '#fff',
-  },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { color: Colors.text, fontSize: 18, fontWeight: '700', letterSpacing: 1 },
+  underline: { height: 1, backgroundColor: Colors.text, marginTop: 4, marginBottom: 16 },
+  legend: { marginLeft: 24 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  colorBox: { width: 10, height: 10, borderRadius: 2, marginRight: 8 },
+  legendText: { color: Colors.text, fontSize: 14 },
+  noData: { color: Colors.text, fontSize: 14 },
 });
 
-export default MacrosChart;
+export default MacroTracker;
