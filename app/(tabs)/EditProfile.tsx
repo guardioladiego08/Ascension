@@ -60,7 +60,7 @@ const EditProfile: React.FC = () => {
       {renderField('EMAIL', 'email')}
       {renderField('PASSWORD', 'password', true)}
       {renderField('BIRTHDATE', 'birthdate')}
-      {renderField('GENDER', 'gender', true)}
+      {renderField('GENDER', 'gender')}
       {renderField('HEIGHT', 'height')}
 
       <TouchableOpacity style={styles.saveButton} onPress={handleSubmit}>

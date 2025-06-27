@@ -1,3 +1,4 @@
+import { Colors } from '@/constants/Colors';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -29,8 +30,10 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#444',
-    padding: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingLeft: 30,
+    paddingRight: 30,
     borderRadius: 10,
   },
   image: {
@@ -40,20 +43,16 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   nameTop: {
-    color: '#fff',
+    color: Colors.text,
     fontSize: 20,
     fontWeight: 'bold',
-    borderBottomWidth: 3,
-    borderBottomColor: '#0EA5FF',
     marginBottom: 4,
     width: 90,
   },
   nameBottom: {
-    color: '#fff',
+    color: Colors.text,
     fontSize: 20,
     fontWeight: 'bold',
-    borderBottomWidth: 3,
-    borderBottomColor: '#0EA5FF',
     width: 140,
   },
 });

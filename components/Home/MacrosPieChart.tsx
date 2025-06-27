@@ -81,7 +81,7 @@ const LegendItem: React.FC<{ label: string; color: string }> = ({
 /* ---------- styles ---------- */
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.cardBackground, // dark grey block
+
     padding: 20,
     borderRadius: 8,
     width: '90%',
