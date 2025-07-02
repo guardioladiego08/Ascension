@@ -82,7 +82,7 @@ const LegendItem: React.FC<{ label: string; color: string }> = ({
 const styles = StyleSheet.create({
   card: {
 
-    padding: 20,
+    padding: 16,
     borderRadius: 8,
     width: '90%',
     alignSelf: 'center',

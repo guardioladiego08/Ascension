@@ -1,4 +1,5 @@
 import chartData from '@/assets/data/chartData.json';
+import { Colors } from '@/constants/Colors';
 import moment from 'moment';
 import React, { useState } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -14,7 +15,7 @@ const TotalWeightChart = () => {
 
   const getCumulativeDayData = () => {
     let cumulative = 0;
-    return chartData.dailyData.map((item, index) => {
+    return chartData.dailyData.map((item) => {
       cumulative += item.value;
       return {
         label: item.label,
@@ -25,28 +26,31 @@ const TotalWeightChart = () => {
   };
 
   const getChartData = () => {
-  const labels = chartData.historicalLabels;
-  const values = chartData.historicalValues;
+    if (!chartData?.historicalLabels || !chartData?.historicalValues) {
+      return [];
+    }
 
-  if (selectedRange === 'Day') {
-    return getCumulativeDayData();
-  }
+    const labels = chartData.historicalLabels;
+    const values = chartData.historicalValues;
 
-  const chunkSize = selectedRange === 'Week' ? 7 : 30;
-  const totalChunks = Math.ceil(labels.length / chunkSize);
-  const safeIndex = Math.max(0, Math.min(rangeIndex, totalChunks - 1));
+    if (selectedRange === 'Day') {
+      return getCumulativeDayData();
+    }
 
-  const start = safeIndex * chunkSize;
-  const end = Math.min(start + chunkSize, labels.length);
+    const chunkSize = selectedRange === 'Week' ? 7 : 30;
+    const totalChunks = Math.ceil(labels.length / chunkSize);
+    const safeIndex = Math.max(0, Math.min(rangeIndex, totalChunks - 1));
 
-  return labels.slice(start, end).map((label, i) => ({
-    label: i % 2 === 0 ? moment(label, 'YY-MM-DD').format('D') : '', // 👈 every other
-    value: values[start + i],
-    dataPointText: String(values[start + i]),
-}));
+    const start = safeIndex * chunkSize;
+    const end = Math.min(start + chunkSize, labels.length);
 
-};
-
+    return labels.slice(start, end).map((label, i) => ({
+      label: i % 2 === 0 ? moment(label, 'YY-MM-DD').format('D') : '',
+      value: values[start + i],
+      dataPointText: String(values[start + i]),
+      index: start + i,
+    }));
+  };
 
   const getRangeLabel = () => {
     if (selectedRange === 'Day') {
@@ -83,10 +87,7 @@ const TotalWeightChart = () => {
       {['Day', 'Week', 'Month'].map(range => (
         <TouchableOpacity
           key={range}
-          style={[
-            styles.toggleButton,
-            selectedRange === range && styles.toggleSelected,
-          ]}
+          style={[styles.toggleButton, selectedRange === range && styles.toggleSelected]}
           onPress={() => {
             setSelectedRange(range as any);
             setRangeIndex(0);
@@ -99,10 +100,21 @@ const TotalWeightChart = () => {
 
   const chartDataSet = getChartData();
   const xAxisInterval = Math.ceil(chartDataSet.length / maxXAxisLabels);
+  const yValues = chartDataSet.map(d => d.value);
+  const minY = Math.min(...yValues);
+  const maxY = Math.max(...yValues);
+
+  const sectionCount = 4;
+  const yAxisLabelTexts = [];
+  for (let i = 0; i <= sectionCount; i++) {
+    const y = Math.round(minY + ((maxY - minY) / sectionCount) * i);
+    yAxisLabelTexts.push(y.toString());
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>TOTAL WEIGHT</Text>
+      <Text style={styles.title}>CALORIES</Text>
+      <View style={styles.underline} />
       {renderToggle()}
       <View style={styles.rangeContainer}>
         <TouchableOpacity onPress={handlePrev}>
@@ -113,37 +125,85 @@ const TotalWeightChart = () => {
           <Text style={styles.arrow}>{'>'}</Text>
         </TouchableOpacity>
       </View>
-      <LineChart
-        data={chartDataSet}
-        spacing={screenWidth / chartDataSet.length}
-        xAxisLabelTextStyle={{ color: 'white', fontSize: 10 }}
-        yAxisTextStyle={{ color: 'white' }}
-        showVerticalLines
-        showYAxis
-        showXAxis
-        xAxisColor="gray"
-        yAxisColor="gray"
-        noOfSections={5}
-        yAxisLabelTexts={['2000', '2400', '2800', '3200', '3600']}
-        xAxisIndicesHeight={2}
-        yAxisThickness={1}
-        xAxisIndicesWidth={1}
-        xAxisLabelWidth={screenWidth / maxXAxisLabels}
-        color="#6AE5E5"
-        thickness={2}
-        dataPointsColor="#ffffff"
-        showDataPoint
-        hideDataPointsText={false}
-        initialSpacing={0}
-        areaChart
-        startFillColor="#6AE5E5"
-        endFillColor="#6AE5E5"
-        startOpacity={0.3}
-        endOpacity={0.1}
-        xAxisLabelTexts={chartDataSet.map((item, i) =>
-         i % xAxisInterval === 0 ? item.label : ''
-        )}
-      />
+        <View style={styles.chart}>
+        <LineChart
+          
+          data={chartDataSet}
+          backgroundColor="transparent"
+          hideDataPoints
+          spacing={screenWidth / (chartDataSet.length + 2)}
+          noOfSections={4}
+          yAxisColor="white"
+          yAxisThickness={0}
+          rulesType="solid"
+          rulesColor="gray"
+          yAxisTextStyle={{color: 'white'}}
+          //yAxisLabelSuffix="cal"
+          xAxisColor="white"
+          //showVerticalLines={false}
+          //noOfSections={sectionCount}
+          //yAxisLabelTexts={yAxisLabelTexts}
+          //xAxisLabelTexts={chartDataSet.map((item, i) =>
+          //  i % xAxisInterval === 0 ? item.label : ''
+          //)}
+          //xAxisLabelTextStyle={{ color: 'white', fontSize: 10 }}
+          //yAxisTextStyle={{ color: 'white' }}
+          color="#6AE5E5"
+          thickness={2}
+          areaChart
+          startFillColor="#6AE5E5"
+          endFillColor="#6AE5E5"
+          startOpacity={0.5}
+          endOpacity={0.05}
+          overflowTop={10}
+          pointerConfig={{
+            pointerStripUptoDataPoint: true,
+            pointerStripColor: 'lightgray',
+            pointerStripWidth: 2,
+            strokeDashArray: [2, 5],
+            pointerColor: 'lightgray',
+            radius: 4,
+            pointerLabelWidth: 85,
+            pointerLabelHeight: 120,  
+            pointerLabelComponent: (items) => {
+              if (!items?.[0]) return null;
+
+              const rawDate = chartData.historicalLabels[items[0].index];
+              const formattedDate = moment(rawDate, 'YY-MM-DD').format('MM/DD');
+
+              return (
+                <View 
+                  style={{ 
+                    alignItems: 'center', 
+                    backgroundColor: '#282C3E', 
+                  }}>
+                  <Text style={{ color: 'white', fontSize: 12, marginBottom: 1 }}>
+                    {formattedDate}
+                  </Text>
+                  <View
+                    style={{
+                      height: 40,
+                      paddingHorizontal: 12,
+                      backgroundColor: '#282C3E',
+                      borderRadius: 20,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>
+                      {items[0].value}
+                    </Text>
+                    <Text style={{ color: 'lightgray', fontSize: 13, marginLeft: 4 }}>
+                      cal
+                    </Text>
+                  </View>
+                </View>
+              );
+            },
+          }}
+        />
+      </View>
     </View>
   );
 };
@@ -153,15 +213,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     width: '100%',
-    marginTop: 16,
-
+    backgroundColor: 'transparent',
   },
   title: {
-    textAlign: 'center',
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    color: Colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  underline: {
+    height: 1,
+    backgroundColor: Colors.text,
+    marginTop: 4,
+    marginBottom: 16,
   },
   toggleContainer: {
     flexDirection: 'row',
@@ -197,6 +261,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     paddingHorizontal: 12,
+  },
+  chart: {
+    paddingVertical: 15,
   },
 });
 
