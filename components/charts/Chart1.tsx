@@ -129,9 +129,11 @@ const TotalWeightChart = () => {
         <LineChart
           
           data={chartDataSet}
+          xAxisTextNumberOfLines={0} //hides x labels
           backgroundColor="transparent"
           hideDataPoints
-          spacing={screenWidth / (chartDataSet.length + 2)}
+          width={300}
+          spacing={screenWidth / (chartDataSet.length)}
           noOfSections={4}
           yAxisColor="white"
           yAxisThickness={0}
@@ -143,10 +145,8 @@ const TotalWeightChart = () => {
           //showVerticalLines={false}
           //noOfSections={sectionCount}
           //yAxisLabelTexts={yAxisLabelTexts}
-          //xAxisLabelTexts={chartDataSet.map((item, i) =>
-          //  i % xAxisInterval === 0 ? item.label : ''
-          //)}
-          //xAxisLabelTextStyle={{ color: 'white', fontSize: 10 }}
+          xAxisLabelTexts={[]}
+          xAxisLabelTextStyle={{ color: 'white', fontSize: 10 }}
           //yAxisTextStyle={{ color: 'white' }}
           color="#6AE5E5"
           thickness={2}
@@ -157,45 +157,36 @@ const TotalWeightChart = () => {
           endOpacity={0.05}
           overflowTop={10}
           pointerConfig={{
-            pointerStripUptoDataPoint: true,
+            pointerStripHeight: 160,
             pointerStripColor: 'lightgray',
             pointerStripWidth: 2,
-            strokeDashArray: [2, 5],
             pointerColor: 'lightgray',
-            radius: 4,
-            pointerLabelWidth: 85,
-            pointerLabelHeight: 120,  
-            pointerLabelComponent: (items) => {
+            radius: 6,
+            pointerLabelWidth: 100,
+            pointerLabelHeight: 90,
+            activatePointersOnLongPress: true,
+            autoAdjustPointerLabelPosition: false,
+            pointerLabelComponent: items => {
               if (!items?.[0]) return null;
 
               const rawDate = chartData.historicalLabels[items[0].index];
               const formattedDate = moment(rawDate, 'YY-MM-DD').format('MM/DD');
-
               return (
-                <View 
-                  style={{ 
-                    alignItems: 'center', 
-                    backgroundColor: '#282C3E', 
+                <View
+                  style={{
+                    height: 90,
+                    width: 100,
+                    justifyContent: 'center',
+                    marginTop: -30,
+                    marginLeft: -40,
                   }}>
-                  <Text style={{ color: 'white', fontSize: 12, marginBottom: 1 }}>
+                  <Text style={{color: 'white', fontSize: 14, marginBottom:6,textAlign:'center'}}>
                     {formattedDate}
                   </Text>
-                  <View
-                    style={{
-                      height: 40,
-                      paddingHorizontal: 12,
-                      backgroundColor: '#282C3E',
-                      borderRadius: 20,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      flexDirection: 'row',
-                    }}
-                  >
-                    <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 13 }}>
-                      {items[0].value}
-                    </Text>
-                    <Text style={{ color: 'lightgray', fontSize: 13, marginLeft: 4 }}>
-                      cal
+  
+                  <View style={{paddingHorizontal:14,paddingVertical:6, borderRadius:16, backgroundColor:'white'}}>
+                    <Text style={{fontWeight: 'bold',textAlign:'center'}}>
+                      {'$' + items[0].value}
                     </Text>
                   </View>
                 </View>
@@ -255,7 +246,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 14,
   },
   arrow: {
     color: '#fff',
