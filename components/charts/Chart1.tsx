@@ -10,25 +10,23 @@ const screenWidth = Dimensions.get('window').width;
 const TotalWeightChart = () => {
   const [selectedRange, setSelectedRange] = useState<'Day' | 'Week' | 'Month'>('Month');
   const [rangeIndex, setRangeIndex] = useState(0);
-
   const maxXAxisLabels = 12;
 
   const getCumulativeDayData = () => {
     let cumulative = 0;
-    return chartData.dailyData.map((item) => {
+    return chartData.dailyData.map((item, index) => {
       cumulative += item.value;
       return {
-        label: item.label,
+        label: item.label, // hh:mm format
         value: cumulative,
         dataPointText: String(cumulative),
+        index,
       };
     });
   };
 
   const getChartData = () => {
-    if (!chartData?.historicalLabels || !chartData?.historicalValues) {
-      return [];
-    }
+    if (!chartData?.historicalLabels || !chartData?.historicalValues) return [];
 
     const labels = chartData.historicalLabels;
     const values = chartData.historicalValues;
@@ -40,7 +38,6 @@ const TotalWeightChart = () => {
     const chunkSize = selectedRange === 'Week' ? 7 : 30;
     const totalChunks = Math.ceil(labels.length / chunkSize);
     const safeIndex = Math.max(0, Math.min(rangeIndex, totalChunks - 1));
-
     const start = safeIndex * chunkSize;
     const end = Math.min(start + chunkSize, labels.length);
 
@@ -61,7 +58,6 @@ const TotalWeightChart = () => {
     const chunkSize = selectedRange === 'Week' ? 7 : 30;
     const totalChunks = Math.ceil(labels.length / chunkSize);
     const safeIndex = Math.max(0, Math.min(rangeIndex, totalChunks - 1));
-
     const start = safeIndex * chunkSize;
     const end = Math.min(start + chunkSize, labels.length - 1);
 
@@ -103,8 +99,8 @@ const TotalWeightChart = () => {
   const yValues = chartDataSet.map(d => d.value);
   const minY = Math.min(...yValues);
   const maxY = Math.max(...yValues);
-
   const sectionCount = 4;
+
   const yAxisLabelTexts = [];
   for (let i = 0; i <= sectionCount; i++) {
     const y = Math.round(minY + ((maxY - minY) / sectionCount) * i);
@@ -125,29 +121,21 @@ const TotalWeightChart = () => {
           <Text style={styles.arrow}>{'>'}</Text>
         </TouchableOpacity>
       </View>
-        <View style={styles.chart}>
+
+      <View style={styles.chart}>
         <LineChart
-          
           data={chartDataSet}
           xAxisTextNumberOfLines={0} //hides x labels
+          xAxisColor={'white'}
           backgroundColor="transparent"
           hideDataPoints
-          width={300}
-          spacing={screenWidth / (chartDataSet.length)}
-          noOfSections={4}
+          spacing={screenWidth / chartDataSet.length}
+          noOfSections={sectionCount}
           yAxisColor="white"
           yAxisThickness={0}
           rulesType="solid"
           rulesColor="gray"
-          yAxisTextStyle={{color: 'white'}}
-          //yAxisLabelSuffix="cal"
-          xAxisColor="white"
-          //showVerticalLines={false}
-          //noOfSections={sectionCount}
-          //yAxisLabelTexts={yAxisLabelTexts}
-          xAxisLabelTexts={[]}
-          xAxisLabelTextStyle={{ color: 'white', fontSize: 10 }}
-          //yAxisTextStyle={{ color: 'white' }}
+          yAxisTextStyle={{ color: 'white' }}
           color="#6AE5E5"
           thickness={2}
           areaChart
@@ -169,8 +157,11 @@ const TotalWeightChart = () => {
             pointerLabelComponent: items => {
               if (!items?.[0]) return null;
 
-              const rawDate = chartData.historicalLabels[items[0].index];
-              const formattedDate = moment(rawDate, 'YY-MM-DD').format('MM/DD');
+              const labelText =
+                selectedRange === 'Day'
+                  ? chartData.dailyData?.[items[0].index]?.label ?? ''
+                  : moment(chartData.historicalLabels[items[0].index], 'YY-MM-DD').format('MM/DD');
+
               return (
                 <View
                   style={{
@@ -180,13 +171,19 @@ const TotalWeightChart = () => {
                     marginTop: -30,
                     marginLeft: -40,
                   }}>
-                  <Text style={{color: 'white', fontSize: 14, marginBottom:6,textAlign:'center'}}>
-                    {formattedDate}
+                  <Text style={{ color: 'white', fontSize: 14, marginBottom: 6, textAlign: 'center' }}>
+                    {labelText}
                   </Text>
-  
-                  <View style={{paddingHorizontal:14,paddingVertical:6, borderRadius:16, backgroundColor:'white'}}>
-                    <Text style={{fontWeight: 'bold',textAlign:'center'}}>
-                      {'$' + items[0].value}
+                  <View
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    <Text style={{ fontWeight: 'bold', textAlign: 'center' }}>
+                      {items[0].value}
                     </Text>
                   </View>
                 </View>
