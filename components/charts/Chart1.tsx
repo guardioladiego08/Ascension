@@ -204,14 +204,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   title: {
-    color: Colors.text,
+    color: Colors.dark.text,
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 1,
   },
   underline: {
     height: 1,
-    backgroundColor: Colors.text,
+    backgroundColor: Colors.dark.text,
     marginTop: 4,
     marginBottom: 16,
   },

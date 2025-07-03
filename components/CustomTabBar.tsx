@@ -54,7 +54,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
                 <AntDesign
                     name={iconName}
                     size={30}
-                    color={isFocused ? Colors.highlight1 : Colors.text}
+                    color={isFocused ? Colors.dark.highlight1 : Colors.dark.text}
                 />
                 </TouchableOpacity>
             );
@@ -68,11 +68,11 @@ export default CustomTabBar;
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.dark.background,
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: Colors.tab,
+    backgroundColor: Colors.dark.tab,
     height: 70,
     justifyContent: 'space-evenly',
     alignItems: 'center',
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: '50%',
     transform: [{ translateX: -16 }],
-    backgroundColor: Colors.highlight1,
+    backgroundColor: Colors.dark.highlight1,
     borderRadius: 30,
     width: 32,
     height: 32,

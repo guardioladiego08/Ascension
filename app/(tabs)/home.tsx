@@ -8,9 +8,11 @@ import RangeChart from '@/components/charts/ChartComponent'; // ✅ new componen
 import { Colors } from '@/constants/Colors';
 
 import activityStatsData from '@/assets/data/activityStatsData';
+import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
 import milesRanData from '@/assets/data/milesRanData'; // ✅ fake data
 import weightLiftedData from '@/assets/data/weightLiftedData';
 
+import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet } from 'react-native';
 
 export default function Home() {
@@ -36,6 +38,13 @@ export default function Home() {
           initialRange="month"
           title="Weight Lifted"
         />
+        <RangeChart
+          dataset={caloriesBurnedData}
+          chartColor="#FFAF0A"
+          chartHeight={200}
+          initialRange="week"
+          title="Calories Burned"
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -44,7 +53,7 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.dark.background
   },
   scrollContent: {
     paddingBottom: 20,

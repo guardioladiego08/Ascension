@@ -35,9 +35,9 @@ const MacroTracker: React.FC<Props> = ({
 
   /** Pie-chart data (new API) */
   const series: Slice[] = [
-    { value: carbs,   color: Colors.macroCarbs   },
-    { value: fats,    color: Colors.macroFats    },
-    { value: protein, color: Colors.macroProtein },
+    { value: carbs,   color: Colors.dark.macroCarbs   },
+    { value: fats,    color: Colors.dark.macroFats    },
+    { value: protein, color: Colors.dark.macroProtein },
   ];
 
   return (
@@ -52,15 +52,15 @@ const MacroTracker: React.FC<Props> = ({
           widthAndHeight={size}
           series={series}
           /** 0.6 = 60 % inner hole radius, colour matches card */
-          cover={{ radius: 0.6, color: Colors.cardBackground }}
+          cover={{ radius: 0.6, color: Colors.dark.background }}
           padAngle={0.002}   // very thin gap between slices
         />
 
         {/* Legend */}
         <View style={styles.legend}>
-          <LegendItem label="Protein" color={Colors.macroProtein} />
-          <LegendItem label="Carbs"   color={Colors.macroCarbs}   />
-          <LegendItem label="Fats"    color={Colors.macroFats}    />
+          <LegendItem label="Protein" color={Colors.dark.macroProtein} />
+          <LegendItem label="Carbs"   color={Colors.dark.macroCarbs}   />
+          <LegendItem label="Fats"    color={Colors.dark.macroFats}    />
         </View>
       </View>
     </View>
@@ -89,13 +89,13 @@ const styles = StyleSheet.create({
   },
   center: { alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: Colors.text, fontSize: 18, fontWeight: '700', letterSpacing: 1 },
-  underline: { height: 1, backgroundColor: Colors.text, marginTop: 4, marginBottom: 16 },
+  title: { color: Colors.dark.text, fontSize: 18, fontWeight: '700', letterSpacing: 1 },
+  underline: { height: 1, backgroundColor: Colors.dark.text, marginTop: 4, marginBottom: 16 },
   legend: { marginLeft: 24 },
   legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   colorBox: { width: 10, height: 10, borderRadius: 2, marginRight: 8 },
-  legendText: { color: Colors.text, fontSize: 14 },
-  noData: { color: Colors.text, fontSize: 14 },
+  legendText: { color: Colors.dark.text, fontSize: 14 },
+  noData: { color: Colors.dark.text, fontSize: 14 },
 });
 
 export default MacroTracker;
