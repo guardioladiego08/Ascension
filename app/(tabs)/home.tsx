@@ -1,14 +1,16 @@
 
-import LogoHeader from '@/components/Header/LogoHeader';
-import ActivityStats from '@/components/Home/Activity';
-import MacroTracker from '@/components/Home/MacrosPieChart';
-import ProfileCard from '@/components/Home/ProfileCard';
 import TotalWeightChart from '@/components/charts/Chart1';
 import RangeChart from '@/components/charts/ChartComponent'; // ✅ new component
+import LogoHeader from '@/components/Header/LogoHeader';
+import ActivityStats from '@/components/Home/Activity';
+import StatsComparison from '@/components/Home/ActivityComparison';
+import MacroTracker from '@/components/Home/MacrosPieChart';
+import ProfileCard from '@/components/Home/ProfileCard';
 import { Colors } from '@/constants/Colors';
 
 import activityStatsData from '@/assets/data/activityStatsData';
 import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
+import statsComparisonData from '@/assets/data/ComparisonData';
 import milesRanData from '@/assets/data/milesRanData'; // ✅ fake data
 import weightLiftedData from '@/assets/data/weightLiftedData';
 
@@ -45,6 +47,7 @@ export default function Home() {
           initialRange="week"
           title="Calories Burned"
         />
+        <StatsComparison data={statsComparisonData} />
       </ScrollView>
     </SafeAreaView>
   );
