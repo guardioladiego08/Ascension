@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   header: {
     color: '#FFFFFF',
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
     marginBottom: 8,
   },
   separator: {

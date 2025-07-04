@@ -41,7 +41,7 @@ const MacroTracker: React.FC<Props> = ({
   ];
 
   return (
-    <View style={styles.card}>
+    <View style={styles.container}>
       {/* Header */}
       <Text style={styles.title}>MACROS</Text>
       <View style={styles.underline} />
@@ -51,7 +51,7 @@ const MacroTracker: React.FC<Props> = ({
         <PieChart
           widthAndHeight={size}
           series={series}
-          /** 0.6 = 60 % inner hole radius, colour matches card */
+          /** 0.6 = 60 % inner hole radius, colour matches container */
           cover={{ radius: 0.6, color: Colors.dark.background }}
           padAngle={0.002}   // very thin gap between slices
         />
@@ -80,17 +80,16 @@ const LegendItem: React.FC<{ label: string; color: string }> = ({
 
 /* ---------- styles ---------- */
 const styles = StyleSheet.create({
-  card: {
-
+  container: {
     padding: 16,
     borderRadius: 8,
-    width: '90%',
+    width: '100%',
     alignSelf: 'center',
   },
   center: { alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: Colors.dark.text, fontSize: 18, fontWeight: '700', letterSpacing: 1 },
-  underline: { height: 1, backgroundColor: Colors.dark.text, marginTop: 4, marginBottom: 16 },
+  underline: { width: '100%', height: 1, backgroundColor: Colors.dark.text, marginTop: 4, marginBottom: 16 },
   legend: { marginLeft: 24 },
   legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   colorBox: { width: 10, height: 10, borderRadius: 2, marginRight: 8 },

@@ -120,7 +120,9 @@ const RangeChart: React.FC<Props> = ({
             setSelectedRange(range);
             setRangeIndex(0);
           }}>
-          <Text style={styles.toggleText}>{range.toUpperCase()}</Text>
+          <Text style={styles.toggleText}>
+            {range.charAt(0).toUpperCase() + range.slice(1).toLowerCase()}
+          </Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -146,7 +148,7 @@ const RangeChart: React.FC<Props> = ({
         data={chartDataSet}
         spacing={screenWidth / chartDataSet.length}
         noOfSections={sectionCount}
-        xAxisColor="white"
+        xAxisColor="grey"
         yAxisColor="white"
         backgroundColor="transparent"
         hideDataPoints
@@ -212,6 +214,8 @@ const styles = StyleSheet.create({
     padding: 16,
     width: '100%',
     backgroundColor: 'transparent',
+    marginTop: 20,
+    marginBottom: 20
   },
   title: {
     color: 'white',

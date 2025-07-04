@@ -21,9 +21,9 @@ export default function Home() {
       <LogoHeader />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <ProfileCard />
+        <ActivityStats {...activityStatsData} />
         <MacroTracker protein={50} carbs={30} fats={20} />
         <TotalWeightChart></TotalWeightChart>
-        <ActivityStats {...activityStatsData} />
         <RangeChart
           dataset={milesRanData}
           chartColor="#FF7D0A"
