@@ -103,14 +103,14 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: Colors.dark.card,
+    backgroundColor: Colors.dark.background,
     borderRadius: 10,
     padding: 12,
     marginHorizontal: 4,
   },
   metricLabel: {
     fontSize: 14,
-    color: Colors.dark.textLight,
+    color: Colors.dark.text,
     marginBottom: 6,
   },
   metricValues: {
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   subText: {
     fontSize: 12,
-    color: Colors.dark.textLight,
+    color: Colors.dark.text,
     marginTop: 4,
   },
   prevValue: {

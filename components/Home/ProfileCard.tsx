@@ -43,14 +43,14 @@ const styles = StyleSheet.create({
     marginRight: 15,
   },
   nameTop: {
-    color: Colors.text,
+    color: Colors.dark.text,
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 4,
     width: 90,
   },
   nameBottom: {
-    color: Colors.text,
+    color: Colors.dark.text,
     fontSize: 20,
     fontWeight: 'bold',
     width: 140,

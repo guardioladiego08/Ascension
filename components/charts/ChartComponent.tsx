@@ -1,28 +1,39 @@
+// RangeChart.tsx
+
+// Install these up-to-date deps before using:
+//   yarn add react-native-gifted-charts@^0.6.10 moment@^2.29.4
+
 import moment from 'moment';
 import React, { useState } from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 
-const screenWidth = Dimensions.get('window').width;
+const { width: screenWidth } = Dimensions.get('window');
 
 type RangeType = 'week' | 'month' | 'year';
 
-type DataPoint = {
-  label: string;
+interface DataPoint {
+  label: string; // 'YYYY-MM-DD' for daily/monthly, ignored for yearly
   value: number;
-};
+}
 
-type Props = {
+interface Props {
   dataset: {
-    dailyData: DataPoint[]; // 7 items
-    monthlyData: DataPoint[]; // ~30 items
-    yearlyData: DataPoint[]; // 12 items
+    dailyData: DataPoint[];    // exactly 7 points
+    monthlyData: DataPoint[];  // ~30 points
+    yearlyData: DataPoint[];   // 12 points
   };
   chartColor?: string;
   chartHeight?: number;
   initialRange?: RangeType;
   title?: string;
-};
+}
 
 const RangeChart: React.FC<Props> = ({
   dataset,
@@ -32,131 +43,120 @@ const RangeChart: React.FC<Props> = ({
   title = 'Chart',
 }) => {
   const [selectedRange, setSelectedRange] = useState<RangeType>(initialRange);
-  const [rangeIndex, setRangeIndex] = useState(0);
+  const [pageIndex, setPageIndex] = useState(0);
 
-  const getChartData = () => {
-    let dataSet: DataPoint[] = [];
-
+  /** 1. Select raw slice based on range */
+  const getRawSlice = (): DataPoint[] => {
     if (selectedRange === 'week') {
-        // Calculate start of the week based on current rangeIndex
-        const startOfWeek = moment().startOf('isoWeek').subtract(rangeIndex, 'weeks');
-        const endOfWeek = moment(startOfWeek).add(6, 'days');
-
-        // Match 7 days from Monday to Sunday
-        dataSet = dataset.dailyData.filter((entry) => {
-        const date = moment(entry.label, 'YYYY-MM-DD');
-        return date.isSameOrAfter(startOfWeek, 'day') && date.isSameOrBefore(endOfWeek, 'day');
-        });
-    } else if (selectedRange === 'month') {
-        const chunkSize = 30;
-        const start = rangeIndex * chunkSize;
-        dataSet = dataset.monthlyData.slice(start, start + chunkSize);
-    } else if (selectedRange === 'year') {
-        dataSet = dataset.yearlyData;
+      return dataset.dailyData;
     }
-
-    return dataSet.map((item, index) => ({
-        label:
-        selectedRange === 'year'
-            ? moment().month(index).format('MMM')
-            : selectedRange === 'month'
-            ? moment(item.label, 'YYYY-MM-DD').format('D')
-            : moment(item.label, 'YYYY-MM-DD').format('ddd'), // Weekday
-        value: item.value,
-        dataPointText: String(item.value),
-        index,
-    }));
-    };
-
-    const getRangeLabel = () => {
-    if (selectedRange === 'week') {
-        const startOfWeek = moment().startOf('isoWeek').subtract(rangeIndex, 'weeks');
-        const endOfWeek = moment(startOfWeek).add(6, 'days');
-        return `${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D')}`;
-    }
-
     if (selectedRange === 'month') {
-        const firstDay = dataset.monthlyData[rangeIndex * 30];
-        if (firstDay) return moment(firstDay.label, 'YYYY-MM-DD').format('MMMM');
-        return 'Month';
+      const start = pageIndex * 30;
+      return dataset.monthlyData.slice(start, start + 30);
     }
-
-    if (selectedRange === 'year') {
-        const year = moment().format('YYYY');
-        return year;
-    }
-
-    return '';
-};
-
-
-  const handleNext = () => {
-    if (selectedRange === 'month') {
-      const maxIndex = Math.floor(dataset.monthlyData.length / 30);
-      setRangeIndex(prev => Math.min(prev + 1, maxIndex));
-    }
+    return dataset.yearlyData;
   };
 
-  const handlePrev = () => {
-    if (selectedRange === 'month') {
-      setRangeIndex(prev => Math.max(prev - 1, 0));
+  /** 2. Map to gifted-charts format + labels */
+  const chartData = getRawSlice().map((pt, i) => ({
+    index: i,
+    value: pt.value,
+    dataPointText: String(pt.value),
+    label:
+      selectedRange === 'year'
+        ? moment().month(i).format('MMM')
+        : selectedRange === 'month'
+        ? moment(pt.label, 'YYYY-MM-DD').format('D')
+        : moment(pt.label, 'YYYY-MM-DD').format('ddd'),
+  }));
+
+  /** 3. Compute spacing with a sensible minimum */
+  const rawSpacing = screenWidth / (chartData.length || 1);
+  const spacing = Math.max(rawSpacing, 30);
+
+  /** 4. Generate the text for the current range */
+  const getRangeLabel = () => {
+    if (selectedRange === 'week') {
+      const dates = dataset.dailyData.map(d => moment(d.label, 'YYYY-MM-DD'));
+      return `${moment.min(dates).format('MMM D')} – ${moment
+        .max(dates)
+        .format('MMM D')}`;
     }
+    if (selectedRange === 'month') {
+      const first = dataset.monthlyData[pageIndex * 30];
+      return first
+        ? moment(first.label, 'YYYY-MM-DD').format('MMMM')
+        : '';
+    }
+    return moment().format('YYYY');
   };
 
-  const chartDataSet = getChartData();
-  const xAxisInterval = Math.ceil(chartDataSet.length / 12);
-  const yValues = chartDataSet.map(d => d.value);
-  const minY = Math.min(...yValues);
-  const maxY = Math.max(...yValues);
-  const sectionCount = 4;
-
-  const renderToggle = () => (
-    <View style={styles.toggleContainer}>
-      {(['week', 'month', 'year'] as RangeType[]).map(range => (
-        <TouchableOpacity
-          key={range}
-          style={[styles.toggleButton, selectedRange === range && styles.toggleSelected]}
-          onPress={() => {
-            setSelectedRange(range);
-            setRangeIndex(0);
-          }}>
-          <Text style={styles.toggleText}>
-            {range.charAt(0).toUpperCase() + range.slice(1).toLowerCase()}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  /** 5. Handlers for month pagination */
+  const prevPage = () => setPageIndex(i => Math.max(i - 1, 0));
+  const nextPage = () => {
+    const maxPage = Math.floor(dataset.monthlyData.length / 30);
+    setPageIndex(i => Math.min(i + 1, maxPage));
+  };
 
   return (
     <View style={[styles.container, { height: chartHeight + 120 }]}>
+      {/* Title */}
       <Text style={styles.title}>{title.toUpperCase()}</Text>
       <View style={styles.underline} />
-      {renderToggle()}
-      {selectedRange === 'month' && (
-        <View style={styles.rangeContainer}>
-          <TouchableOpacity onPress={handlePrev}>
+
+      {/* Range toggles */}
+      <View style={styles.toggleContainer}>
+        {(['week', 'month', 'year'] as RangeType[]).map(r => (
+          <TouchableOpacity
+            key={r}
+            style={[
+              styles.toggleButton,
+              selectedRange === r && styles.toggleSelected,
+            ]}
+            onPress={() => {
+              setSelectedRange(r);
+              setPageIndex(0);
+            }}
+          >
+            <Text style={styles.toggleText}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Range label / month nav */}
+      {selectedRange === 'month' ? (
+        <View style={styles.navContainer}>
+          <TouchableOpacity onPress={prevPage}>
             <Text style={styles.arrow}>{'<'}</Text>
           </TouchableOpacity>
-          <Text style={styles.rangeLabel}>Month {rangeIndex + 1}</Text>
-          <TouchableOpacity onPress={handleNext}>
+          <Text style={styles.rangeLabel}>{getRangeLabel()}</Text>
+          <TouchableOpacity onPress={nextPage}>
             <Text style={styles.arrow}>{'>'}</Text>
           </TouchableOpacity>
         </View>
+      ) : (
+        <Text style={[styles.rangeLabel, { textAlign: 'center' }]}>
+          {getRangeLabel()}
+        </Text>
       )}
+
+      {/* LineChart */}
       <LineChart
-        data={chartDataSet}
-        spacing={screenWidth / chartDataSet.length}
-        noOfSections={sectionCount}
+
+        data={chartData}
+        spacing={spacing}
+        textColor="white"
+        noOfSections={4}
         xAxisColor="grey"
         yAxisColor="white"
         backgroundColor="transparent"
         hideDataPoints
         xAxisTextNumberOfLines={0}
-        yAxisThickness={0}
+        yAxisTextStyle={{ color: 'white' }}
         rulesType="solid"
         rulesColor="gray"
-        yAxisTextStyle={{ color: 'white' }}
         color={chartColor}
         thickness={2}
         areaChart
@@ -164,20 +164,19 @@ const RangeChart: React.FC<Props> = ({
         endFillColor={chartColor}
         startOpacity={0.5}
         endOpacity={0.05}
-        overflowTop={10}
+        overflowTop={30}
         pointerConfig={{
-          pointerStripHeight: 160,
+          pointerStripHeight: chartHeight,
           pointerStripColor: 'lightgray',
           pointerStripWidth: 2,
           pointerColor: 'lightgray',
           radius: 6,
-          pointerLabelWidth: 100,
-          pointerLabelHeight: 90,
           activatePointersOnLongPress: true,
           autoAdjustPointerLabelPosition: false,
-          pointerLabelComponent: items => {
-            if (!items?.[0]) return null;
-            return (
+          pointerLabelComponent: pts => {
+            const pt = pts?.[0];
+            if (!pt) return null;
+             return (
               <View
                 style={{
                   height: 90,
@@ -187,7 +186,7 @@ const RangeChart: React.FC<Props> = ({
                   marginLeft: -40,
                 }}>
                 <Text style={{ color: 'white', fontSize: 14, marginBottom: 6, textAlign: 'center' }}>
-                  {chartDataSet[items[0].index]?.label}
+                  {chartData[pt.index].label}
                 </Text>
                 <View
                   style={{
@@ -197,7 +196,7 @@ const RangeChart: React.FC<Props> = ({
                     backgroundColor: 'white',
                   }}>
                   <Text style={{ fontWeight: 'bold', textAlign: 'center' }}>
-                    {items[0].value}
+                    {pt.value}
                   </Text>
                 </View>
               </View>
@@ -213,9 +212,7 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     width: '100%',
-    backgroundColor: 'transparent',
-    marginTop: 20,
-    marginBottom: 20
+    marginVertical: 20,
   },
   title: {
     color: 'white',
@@ -226,14 +223,11 @@ const styles = StyleSheet.create({
   underline: {
     height: 1,
     backgroundColor: 'white',
-    marginTop: 4,
-    marginBottom: 16,
+    marginVertical: 8,
   },
   toggleContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    borderRadius: 20,
-    padding: 4,
     marginBottom: 8,
   },
   toggleButton: {
@@ -246,10 +240,10 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     color: '#fff',
-    fontWeight: '500',
     fontSize: 13,
+    fontWeight: '500',
   },
-  rangeContainer: {
+  navContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -258,11 +252,33 @@ const styles = StyleSheet.create({
   rangeLabel: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '500',
   },
   arrow: {
     color: '#fff',
     fontSize: 18,
     paddingHorizontal: 12,
+  },
+  pointer: {
+    position: 'absolute',
+    top: -100,
+    left: -40,
+    alignItems: 'center',
+  },
+  pointerLabel: {
+    color: 'white',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  pointerBubble: {
+    backgroundColor: 'white',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  pointerValue: {
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
 
