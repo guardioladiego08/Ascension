@@ -42,6 +42,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
+    marginTop: 30
   },
   backText: {
     color: '#FFFFFF',

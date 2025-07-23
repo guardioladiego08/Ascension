@@ -1,65 +1,70 @@
 // components/CustomTabBar.tsx
 import { AntDesign } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { usePathname } from 'expo-router';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '../constants/Colors'; // Adjust if needed
+import { Colors } from '../constants/Colors';
 
+const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
+  // get the current path, e.g. "/new", "/new/strength-train", etc.
+  const pathname = usePathname() ?? '';
 
-const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
   return (
     <SafeAreaView style={styles.wrapper} edges={['bottom']}>
-        <View style={styles.tabBar}>
+      <View style={styles.tabBar}>
         {['home', 'new', 'stats'].map((routeName) => {
-            const index = state.routes.findIndex((r) => r.name === routeName);
-            if (index === -1) return null;
+          const index = state.routes.findIndex(r => r.name === routeName);
+          if (index === -1) return null;
 
-            const route = state.routes[index];
-            const isFocused = state.index === index;
+          // For "new" tab: highlight whenever we're anywhere under /new
+          const isNewTab = routeName === 'new';
+          const isFocused = isNewTab
+            ? pathname.startsWith('/new')
+            : state.index === index;
 
-            const onPress = () => {
-                const event = navigation.emit({
-                    type: 'tabPress',
-                    target: route.key,
-                    canPreventDefault: true,
-                  });
-                if (!isFocused && !event.defaultPrevented) {
-                navigation.navigate(route.name);
-                }
-            };
-
-            let iconName: keyof typeof AntDesign.glyphMap;
-
-            switch (route.name) {
-                case 'home':
-                iconName = 'home';
-                break;
-                case 'new':
-                iconName = 'plus';
-                break;
-                case 'stats':
-                iconName = 'piechart';
-                break;
-                default:
-                iconName = 'question';
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: state.routes[index].key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(state.routes[index].name);
             }
+          };
 
-            return (
-                <TouchableOpacity
-                key={route.key}
-                onPress={onPress}
-                style={styles.tabButton}
-                >
-                <AntDesign
-                    name={iconName}
-                    size={30}
-                    color={isFocused ? Colors.dark.highlight1 : Colors.dark.text}
-                />
-                </TouchableOpacity>
-            );
-            })}
-        </View>
+          let iconName: keyof typeof AntDesign.glyphMap;
+          switch (routeName) {
+            case 'home':
+              iconName = 'home';
+              break;
+            case 'new':
+              iconName = 'plus';
+              break;
+            case 'stats':
+              iconName = 'piechart';
+              break;
+            default:
+              iconName = 'question';
+          }
+
+          return (
+            <TouchableOpacity
+              key={routeName}
+              onPress={onPress}
+              style={styles.tabButton}
+            >
+              <AntDesign
+                name={iconName}
+                size={30}
+                color={isFocused ? Colors.dark.highlight1 : Colors.dark.text}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </SafeAreaView>
   );
 };
@@ -79,28 +84,8 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   tabButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
     flex: 1,
-  },
-  centerButton: {
-    position: 'absolute',
-    top: 0,
-    left: '50%',
-    transform: [{ translateX: -16 }],
-    backgroundColor: Colors.dark.highlight1,
-    borderRadius: 30,
-    width: 32,
-    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
-  },
-  centerIcon: {
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 10,
   },
 });
-

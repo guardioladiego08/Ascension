@@ -22,22 +22,22 @@ const NewActivity: React.FC = () => {
       <Text style={styles.header}>NEW ACTIVITY</Text>
       <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
-          <MaterialCommunityIcons name="shoe-sneaker" size={24} color="#FF7D0A" />
+          <MaterialCommunityIcons name="shoe-sneaker" size={75} color="#FF950A" />
           <Text style={styles.buttonText}>Go For A Run</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={() => router.push('/new/strengthTrain')}>
-          <MaterialCommunityIcons name="dumbbell" size={24} color="#FF7D0A" />
+          <MaterialCommunityIcons name="dumbbell" size={75} color="#FF950A" />
           <Text style={styles.buttonText}>Strength Train</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={() => router.push('/new/newMeal')}>
-          <MaterialCommunityIcons name="silverware-fork-knife" size={24} color="#FF7D0A" />
+          <MaterialCommunityIcons name="silverware-fork-knife" size={75} color="#FF950A" />
           <Text style={styles.buttonText}>Add A Meal</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={() => router.push('/new/weighIn')}>
-          <MaterialCommunityIcons name="scale-bathroom" size={24} color="#FF7D0A" />
+          <MaterialCommunityIcons name="scale-bathroom" size={75} color="#FF950A" />
           <Text style={styles.buttonText}>Weight In</Text>
         </TouchableOpacity>
       </View>
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   },
   header: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: 'bold',
     letterSpacing: 1,
     alignSelf: 'center',
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 26,
     marginLeft: 16,
   },
   modalOverlay: {
