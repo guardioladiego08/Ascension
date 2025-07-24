@@ -1,15 +1,15 @@
 // app/(tabs)/new/index.tsx
 import LogoHeader from '@/components/Header/LogoHeader';
+import RunTypeModal from '@/components/New/Run/RunTypeModal';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  Modal,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 const NewActivity: React.FC = () => {
@@ -42,27 +42,11 @@ const NewActivity: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <Modal
+      <RunTypeModal
         visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Go For A Run</Text>
-            <Text style={styles.modalBody}>
-              Start your run session here.
-            </Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setModalVisible(false)}
+      />
+      
     </SafeAreaView>
   );
 };
