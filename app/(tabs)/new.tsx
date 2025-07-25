@@ -1,15 +1,16 @@
 // app/(tabs)/new/index.tsx
 import LogoHeader from '@/components/Header/LogoHeader';
-import RunTypeModal from '@/components/New/Run/RunTypeModal';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+  Modal,
   SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  TouchableWithoutFeedback,
+  View,
 } from 'react-native';
 
 const NewActivity: React.FC = () => {
@@ -42,11 +43,45 @@ const NewActivity: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <RunTypeModal
+      <Modal
         visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-      />
-      
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.backdrop}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContainer}>
+                <TouchableOpacity
+                  style={styles.button}
+                  //onPress={}
+                >
+                  <Text style={styles.buttonText}>INDOOR WALK</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  //onPress={}
+                >
+                  <Text style={styles.buttonText}>OUTDOOR WALK</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  //onPress={}
+                >
+                  <Text style={styles.buttonText}>INDOOR RUN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.button}
+                  //onPress={}
+                >
+                  <Text style={styles.buttonText}>OUTDOOR RUN</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -85,37 +120,13 @@ const styles = StyleSheet.create({
     fontSize: 26,
     marginLeft: 16,
   },
-  modalOverlay: {
+  backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(128,128,128,0.8)', // grey at 80% opacity
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
+  modalContainer: {
     width: '80%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  modalBody: {
-    fontSize: 16,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  closeButton: {
-    backgroundColor: '#FF7D0A',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  closeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
   },
 });
