@@ -18,7 +18,7 @@ const styles = StyleSheet.create({
   container: {
     paddingTop: 30, // To avoid the notch/status bar
     alignItems: 'center',
-    zIndex: 10,
+
   },
   logo: {
     width: 85,

@@ -34,11 +34,10 @@ const NewActivityScreen = () => {
   return (
     
     <GestureHandlerRootView style={styles.container}>
-      
-      <LogoHeader></LogoHeader>
-      <Text style={styles.header}>NEW ACTIVITY</Text>
        <View style={styles.buttonsContainer}>
         <BottomSheetModalProvider>
+          <LogoHeader></LogoHeader>
+          <Text style={styles.header}>NEW ACTIVITY</Text>
           <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
             <MaterialCommunityIcons name="shoe-sneaker" size={75} color="#FF950A" />
             <Text style={styles.buttonText}>Go For A Run</Text>
@@ -133,7 +132,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#333333',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
   header: {
     color: '#FFFFFF',
