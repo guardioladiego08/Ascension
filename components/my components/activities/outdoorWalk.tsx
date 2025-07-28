@@ -5,18 +5,17 @@ import {
 } from '@gorhom/bottom-sheet';
 import { StyleSheet, Text } from 'react-native';
 
-const StrengthTraining = forwardRef<BottomSheetModal>((_, ref) => {
+const OutdoorWalk = forwardRef<BottomSheetModal>((_, ref) => {
   return (
     <BottomSheetModal ref={ref} snapPoints={['25%', '90%']}>
       <BottomSheetView style={styles.content}>
-        <Text style={styles.text}>🚀 This is strenth</Text>
-
+        <Text style={styles.text}>Outdoor Walk</Text>
       </BottomSheetView>
     </BottomSheetModal>
   );
 });
 
-export default StrengthTraining;
+export default OutdoorWalk;
 
 const styles = StyleSheet.create({
   content: { flex: 1, justifyContent: 'center', alignItems: 'center' },
