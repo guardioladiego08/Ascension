@@ -7,7 +7,6 @@ import { Slot } from 'expo-router';
 
 export default function RootLayout() {
   return (
-    // <-- Ensure every gesture handler lives under this
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <BottomSheetModalProvider>

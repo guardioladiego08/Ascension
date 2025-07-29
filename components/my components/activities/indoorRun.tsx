@@ -75,7 +75,7 @@ const IndoorRun = forwardRef<BottomSheetModal>((_, ref) => {
   return (
     <BottomSheetModal
       ref={bottomSheetRef}
-      snapPoints={['5%', '100%']}
+      snapPoints={['15%', '100%']}
       index={1}
       enablePanDownToClose={false}
       backgroundStyle={{ borderRadius: 0 }}

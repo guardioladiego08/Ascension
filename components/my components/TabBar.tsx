@@ -74,6 +74,7 @@ export default CustomTabBar;
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: Colors.dark.background,
+    zIndex: 10
   },
   tabBar: {
     flexDirection: 'row',

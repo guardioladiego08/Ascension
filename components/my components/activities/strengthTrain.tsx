@@ -35,8 +35,6 @@ const EXERCISES = [
   'Barbell Row',
 ];
 
-const FOOTER_HEIGHT = 100; // adjust if you change footer padding
-
 const StrengthTraining = forwardRef<BottomSheetModal>((_, ref) => {
   const sheetRef = useRef<BottomSheetModal>(null);
 
@@ -45,24 +43,22 @@ const StrengthTraining = forwardRef<BottomSheetModal>((_, ref) => {
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
 
-  // expose present/dismiss
   useImperativeHandle(ref, () => ({
     present: () => {
-      sheetRef.current?.present();              // opens at initial snap
+      sheetRef.current?.present();
       setSeconds(0);
       setRunning(true);
     },
     dismiss: () => {
-      sheetRef.current?.dismiss();
+      sheetRef.current?.dismiss();AV
       setRunning(false);
     },
   }));
 
-  // timer effect
   useEffect(() => {
     if (!running) return;
-    const iv = setInterval(() => setSeconds(s => s + 1), 1000);
-    return () => clearInterval(iv);
+    const interval = setInterval(() => setSeconds(s => s + 1), 1000);
+    return () => clearInterval(interval);
   }, [running]);
 
   const formatTime = (s: number) => {
@@ -152,86 +148,81 @@ const StrengthTraining = forwardRef<BottomSheetModal>((_, ref) => {
         </View>
       </Modal>
 
-      {/* Full-screen bottom sheet with two snap positions: 5% or 100% */}
+      {/* Full-screen bottom sheet */}
       <BottomSheetModal
         ref={sheetRef}
-        snapPoints={['5%', '100%']}
-        initialSnapIndex={1}           // start open at 100%
+        snapPoints={['15%', '100%']}
+        index={1}
         enablePanDownToClose={false}
         backgroundStyle={{ backgroundColor: '#222' }}
       >
         <BottomSheetView style={styles.container}>
-          {/* 1) Scrollable exercises list */}
-          <View style={styles.scrollWrapper}>
-            <BottomSheetScrollView
-              contentContainerStyle={[
-                styles.scrollContent,
-                { paddingBottom: FOOTER_HEIGHT + 16 },
-              ]}
-              showsVerticalScrollIndicator={false}
-            >
-              {exercises.map(ex => (
-                <View key={ex.id} style={styles.section}>
-                  <Text style={styles.sectionTitle}>{ex.name}</Text>
-                  <View style={styles.headerRow}>
-                    <Text style={styles.headerCell}>SET</Text>
-                    <Text style={styles.headerCell}>WEIGHT</Text>
-                    <Text style={styles.headerCell}>REPS</Text>
-                  </View>
-                  {ex.sets.map((st, i) => (
-                    <View key={i} style={styles.dataRow}>
-                      <Text style={styles.cell}>{i + 1}</Text>
-                      <TextInput
-                        style={styles.input}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor="#888"
-                        value={st.weight}
-                        onChangeText={v => updateSet(ex.id, i, 'weight', v)}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        placeholderTextColor="#888"
-                        value={st.reps}
-                        onChangeText={v => updateSet(ex.id, i, 'reps', v)}
-                      />
-                    </View>
-                  ))}
-                  <TouchableOpacity
-                    style={styles.addSetBtn}
-                    onPress={() => addSet(ex.id)}
-                  >
-                    <MaterialIcons
-                      name="add-circle-outline"
-                      size={20}
-                      color="white"
+          {/* Scrollable region */}
+          <BottomSheetScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {exercises.map(ex => (
+              <View key={ex.id} style={styles.section}>
+                <Text style={styles.sectionTitle}>{ex.name}</Text>
+                <View style={styles.headerRow}>
+                  <Text style={styles.headerCell}>SET</Text>
+                  <Text style={styles.headerCell}>WEIGHT</Text>
+                  <Text style={styles.headerCell}>REPS</Text>
+                </View>
+                {ex.sets.map((st, i) => (
+                  <View key={i} style={styles.dataRow}>
+                    <Text style={styles.cell}>{i + 1}</Text>
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#888"
+                      value={st.weight}
+                      onChangeText={v => updateSet(ex.id, i, 'weight', v)}
                     />
-                    <Text style={styles.addSetText}>Add Set</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
+                    <TextInput
+                      style={styles.input}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#888"
+                      value={st.reps}
+                      onChangeText={v => updateSet(ex.id, i, 'reps', v)}
+                    />
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={styles.addSetBtn}
+                  onPress={() => addSet(ex.id)}
+                >
+                  <MaterialIcons
+                    name="add-circle-outline"
+                    size={20}
+                    color="white"
+                  />
+                  <Text style={styles.addSetText}>Add Set</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
 
-              {!exercises.length && (
-                <View style={styles.noExercise}>
-                  <Text style={styles.noExerciseText}>
-                    No exercises yet. Tap below to add.
-                  </Text>
-                </View>
-              )}
+            {exercises.length === 0 && (
+              <View style={styles.noExercise}>
+                <Text style={styles.noExerciseText}>
+                  No exercises yet. Tap below to add.
+                </Text>
+              </View>
+            )}
 
-              <TouchableOpacity
-                style={styles.addExerciseBtn}
-                onPress={() => setPickerVisible(true)}
-              >
-                <MaterialIcons name="add" size={20} color="white" />
-                <Text style={styles.addExerciseText}>Add Exercise</Text>
-              </TouchableOpacity>
-            </BottomSheetScrollView>
-          </View>
+            <TouchableOpacity
+              style={styles.addExerciseBtn}
+              onPress={() => setPickerVisible(true)}
+            >
+              <MaterialIcons name="add" size={20} color="white" />
+              <Text style={styles.addExerciseText}>Add Exercise</Text>
+            </TouchableOpacity>
+          </BottomSheetScrollView>
 
-          {/* 2) Pinned footer */}
+          {/* Fixed footer */}
           <View style={styles.footer}>
             <View style={styles.totalsRow}>
               <View>
@@ -242,9 +233,7 @@ const StrengthTraining = forwardRef<BottomSheetModal>((_, ref) => {
               </View>
               <View>
                 <Text style={styles.footerLabel}>TOTAL WEIGHT</Text>
-                <Text style={styles.footerValue}>
-                  {totalWeight} lbs
-                </Text>
+                <Text style={styles.footerValue}>{totalWeight} lbs</Text>
               </View>
             </View>
             <View style={styles.buttonsRow}>
@@ -280,7 +269,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#222',
   },
-  scrollWrapper: {
+  scrollArea: {
     flex: 1,
   },
   scrollContent: {
@@ -318,7 +307,7 @@ const styles = StyleSheet.create({
     borderColor: '#888',
     color: 'white',
     textAlign: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   addSetBtn: {
     flexDirection: 'row',
@@ -340,7 +329,6 @@ const styles = StyleSheet.create({
   addExerciseText: { color: 'white', marginLeft: 8, fontSize: 16 },
 
   footer: {
-    height: FOOTER_HEIGHT,
     borderTopWidth: 1,
     borderColor: '#444',
     paddingVertical: 12,
@@ -368,7 +356,7 @@ const styles = StyleSheet.create({
   },
   footerBtnText: { color: 'white', fontSize: 16, fontWeight: '600' },
 
-  // picker modal
+  // Picker modal
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
