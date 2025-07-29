@@ -177,15 +177,22 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 'bold',
-    marginBottom: 24,
+    marginTop: 35,
+    marginBottom: 30,
     textAlign: 'center',
   },
   metric2container:{
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  metricBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    alignItems: 'center'
   },
   metricBox2: {
     flexDirection: 'column',
@@ -287,6 +294,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: Colors.dark.text,
     marginTop: 4,
-    marginBottom: 16,
+    marginBottom: 26,
   },
 });
