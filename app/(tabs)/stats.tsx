@@ -1,53 +1,56 @@
-import React, { useCallback, useRef, useMemo } from "react";
+// app/(tabs)/stats.tsx (or wherever this screen lives)
+import React, { useCallback, useMemo, useRef } from "react";
 import { StyleSheet, View, Text, Button } from "react-native";
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 
-const Stats = () => {
-  // hooks
+const Stats: React.FC = () => {
+  // ref
   const sheetRef = useRef<BottomSheet>(null);
 
-  // variables
+  // data
   const data = useMemo(
-    () =>
-      Array(50)
-        .fill(0)
-        .map((_, index) => `index-${index}`),
+    () => Array.from({ length: 50 }, (_, i) => `index-${i}`),
     []
   );
-  const snapPoints = useMemo(() => ["25%", "50%", "90%"], []);
 
-  // callbacks
-  const handleSheetChange = useCallback((index) => {
-    console.log("handleSheetChange", index);
-  }, []);
-  const handleSnapPress = useCallback((index) => {
-    sheetRef.current?.snapToIndex(index);
-  }, []);
-  const handleClosePress = useCallback(() => {
-    sheetRef.current?.close();
+  // only one snap point: 100% (full screen)
+  const snapPoints = useMemo(() => ["100%"], []);
+
+  // handlers
+  const handleOpen = useCallback(() => {
+    // either expand() or snapToIndex(0) — both go to the only snap point (100%)
+    sheetRef.current?.expand();
   }, []);
 
-  // render
+  const handleSheetChange = useCallback((index: number) => {
+    console.log("sheet index changed:", index);
+  }, []);
+
   const renderItem = useCallback(
-    (item) => (
+    (item: string) => (
       <View key={item} style={styles.itemContainer}>
         <Text>{item}</Text>
       </View>
     ),
     []
   );
+
   return (
     <GestureHandlerRootView style={styles.container}>
-      <Button title="Snap To 90%" onPress={() => handleSnapPress(2)} />
-      <Button title="Snap To 50%" onPress={() => handleSnapPress(1)} />
-      <Button title="Snap To 25%" onPress={() => handleSnapPress(0)} />
-      <Button title="Close" onPress={() => handleClosePress()} />
+      <View style={styles.header}>
+        <Button title="Open Stats" onPress={handleOpen} />
+      </View>
+
       <BottomSheet
         ref={sheetRef}
-        index={1}
+        // start closed
+        index={-1}
+        // only full-screen snap point
         snapPoints={snapPoints}
         enableDynamicSizing={false}
+        // allow user to dismiss by swiping down if you want; set to false to force full-screen until closed programmatically
+        enablePanDownToClose
         onChange={handleSheetChange}
       >
         <BottomSheetScrollView contentContainerStyle={styles.contentContainer}>
@@ -62,14 +65,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: 200,
+    backgroundColor: "#f7f7f7",
+  },
+  header: {
+    paddingHorizontal: 16,
   },
   contentContainer: {
     backgroundColor: "white",
+    paddingVertical: 8,
   },
   itemContainer: {
-    padding: 6,
-    margin: 6,
+    padding: 8,
+    marginHorizontal: 12,
+    marginVertical: 6,
     backgroundColor: "#eee",
+    borderRadius: 8,
   },
 });
 
