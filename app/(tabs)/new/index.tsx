@@ -18,7 +18,6 @@ import IndoorWalk from '@/components/my components/activities/indoorWalk';
 import OutdoorWalk from '@/components/my components/activities/outdoorWalk';
 import IndoorRun from '@/components/my components/activities/indoorRun';
 import OutdoorRun from '@/components/my components/activities/outdoorRun';
-import AddMeal from '@/components/my components/activities/addMeal';
 import WeighIn from '@/components/my components/activities/weighIn';
 
 const NewActivityScreen: React.FC = () => {
@@ -27,7 +26,6 @@ const NewActivityScreen: React.FC = () => {
   const outdoorWalkRef = useRef<BottomSheetModal>(null);
   const indoorRunRef = useRef<BottomSheetModal>(null);
   const outdoorRunRef = useRef<BottomSheetModal>(null);
-  const addMealRef = useRef<BottomSheetModal>(null);
   const weighInRef = useRef<BottomSheetModal>(null);
 
   return (
@@ -49,7 +47,7 @@ const NewActivityScreen: React.FC = () => {
         <Text style={styles.buttonText}>Strength Train</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => addMealRef.current?.present()}>
+      <TouchableOpacity style={styles.button} onPress={() => router.push('/(tabs)/new/AddMeal')}>
         <MaterialCommunityIcons name="silverware-fork-knife" size={75} color="#FF950A" />
         <Text style={styles.buttonText}>Add A Meal</Text>
       </TouchableOpacity>
@@ -116,7 +114,6 @@ const NewActivityScreen: React.FC = () => {
       <OutdoorWalk ref={outdoorWalkRef} />
       <IndoorRun ref={indoorRunRef} />
       <OutdoorRun ref={outdoorRunRef} />
-      <AddMeal ref={addMealRef} />
       <WeighIn ref={weighInRef} />
     </GestureHandlerRootView>
   );

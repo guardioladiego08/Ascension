@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
+import LogoHeader from '@/components/my components/logoHeader';
 
 type SetType = { weight: string; reps: string };
 type ExerciseType = { id: string; name: string; sets: SetType[] };
@@ -133,6 +134,7 @@ const StrengthTrain: React.FC = () => {
 
       {/* PAGE */}
       <View style={styles.page}>
+        <LogoHeader></LogoHeader>
         {/* Static header */}
         <View style={styles.containerHeader}>
           <Text style={styles.title}>STRENGTH TRAINING</Text>
