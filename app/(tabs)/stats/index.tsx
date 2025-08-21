@@ -33,7 +33,7 @@ export default function Stats() {
           <Text style={styles.cardText}>NUTRITION</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => go('body-composition')}>
+        <TouchableOpacity style={styles.card} onPress={() => go('BodyComposition')}>
           <Text style={styles.cardText}>BODY{"\n"}COMPOSITION</Text>
         </TouchableOpacity>
       </View>
