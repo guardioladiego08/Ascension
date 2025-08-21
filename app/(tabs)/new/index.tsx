@@ -14,19 +14,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import IndoorWalk from '@/components/my components/activities/indoorWalk';
-import OutdoorWalk from '@/components/my components/activities/outdoorWalk';
-import IndoorRun from '@/components/my components/activities/indoorRun';
-import OutdoorRun from '@/components/my components/activities/outdoorRun';
-import WeighIn from '@/components/my components/activities/weighIn';
+
 
 const NewActivityScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
-  const indoorWalkRef = useRef<BottomSheetModal>(null);
-  const outdoorWalkRef = useRef<BottomSheetModal>(null);
-  const indoorRunRef = useRef<BottomSheetModal>(null);
-  const outdoorRunRef = useRef<BottomSheetModal>(null);
-  const weighInRef = useRef<BottomSheetModal>(null);
+
+
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -35,7 +28,7 @@ const NewActivityScreen: React.FC = () => {
 
       <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
         <MaterialCommunityIcons name="shoe-sneaker" size={75} color="#FF950A" />
-        <Text style={styles.buttonText}>Go For A Run</Text>
+        <Text style={styles.buttonText}>CARDIO</Text>
       </TouchableOpacity>
 
       {/* ❗️Use absolute href that matches the actual file name */}
@@ -52,7 +45,7 @@ const NewActivityScreen: React.FC = () => {
         <Text style={styles.buttonText}>Add A Meal</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.button} onPress={() => weighInRef.current?.present()}>
+      <TouchableOpacity style={styles.button} onPress={() => router.push('/(tabs)/new/WeighIn')}>
         <MaterialCommunityIcons name="scale-bathroom" size={75} color="#FF950A" />
         <Text style={styles.buttonText}>Weigh In</Text>
       </TouchableOpacity>
@@ -69,39 +62,15 @@ const NewActivityScreen: React.FC = () => {
               <View style={styles.modalContainer}>
                 <TouchableOpacity
                   style={styles.button}
-                  onPress={() => {
-                    setModalVisible(false);
-                    indoorWalkRef.current?.present();
-                  }}
+                  onPress={() => router.push('/(tabs)/new/IndoorSession')}
                 >
-                  <Text style={styles.buttonText}>INDOOR WALK</Text>
+                  <Text style={styles.buttonText}>INDOOR SESSION</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.button}
-                  onPress={() => {
-                    setModalVisible(false);
-                    outdoorWalkRef.current?.present();
-                  }}
+                  onPress={() => router.push('/(tabs)/new/OutdoorSession')}
                 >
-                  <Text style={styles.buttonText}>OUTDOOR WALK</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={() => {
-                    setModalVisible(false);
-                    indoorRunRef.current?.present();
-                  }}
-                >
-                  <Text style={styles.buttonText}>INDOOR RUN</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={() => {
-                    setModalVisible(false);
-                    outdoorRunRef.current?.present();
-                  }}
-                >
-                  <Text style={styles.buttonText}>OUTDOOR RUN</Text>
+                  <Text style={styles.buttonText}>OUTDOOR SESSION</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -110,11 +79,6 @@ const NewActivityScreen: React.FC = () => {
       </Modal>
 
       {/* mount once */}
-      <IndoorWalk ref={indoorWalkRef} />
-      <OutdoorWalk ref={outdoorWalkRef} />
-      <IndoorRun ref={indoorRunRef} />
-      <OutdoorRun ref={outdoorRunRef} />
-      <WeighIn ref={weighInRef} />
     </GestureHandlerRootView>
   );
 };
