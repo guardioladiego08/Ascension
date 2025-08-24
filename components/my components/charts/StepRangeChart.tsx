@@ -1,8 +1,14 @@
-// components/charts/StepLayeredCompositionChart.tsx
-// Step-style, multi-layer (macros) chart like your screenshot.
-// Renders 3 macro series (protein, carbs, fat) as step lines + optional total calories line.
-// We overlay 3 LineCharts so we control each fill/line style independently.
-
+// components/my components/charts/StepRangeChart.tsx
+// Step-style layered composition chart (Protein, Carbs, Fat + Calories line).
+// ✔ Only ONE Y-AXIS is rendered (on the base chart). All overlays hide their y-axis.
+//    - Base (fat) shows the y-axis + grid.
+//    - Protein/Carbs/Calories overlays: yAxisThickness=0, x/y axes transparent.
+// Data shape: MacroDataset { dailyData[7], monthlyData[~60], yearlyData[12] }
+// Labels: Week=ddd, Month=day of month, Year=MMM.
+//
+// Usage:
+//   <StepLayeredCompositionChart dataset={macrosDataset} initialRange="month" />
+//
 import moment from 'moment';
 import React, { useMemo, useState } from 'react';
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -11,31 +17,28 @@ import { LineChart } from 'react-native-gifted-charts';
 type Range = 'week' | 'month' | 'year';
 
 export type MacroPoint = {
-  /** ISO like 'YYYY-MM-DD' for week/month. For year, any month anchor date. */
-  label: string;
-  protein: number; // grams
-  carbs: number;   // grams
-  fat: number;     // grams
-  /** If not provided we compute 4p+4c+9f */
-  calories?: number;
+  label: string;   // YYYY-MM-DD
+  protein: number; // g
+  carbs: number;   // g
+  fat: number;     // g
+  calories?: number; // optional; will be computed if missing
 };
 
 export interface MacroDataset {
-  dailyData: MacroPoint[];   // 7 pts (Mon–Sun)
-  monthlyData: MacroPoint[]; // ~30 pts; we page by 30
-  yearlyData: MacroPoint[];  // 12 pts (months)
+  dailyData: MacroPoint[];
+  monthlyData: MacroPoint[];
+  yearlyData: MacroPoint[];
 }
 
 interface Props {
   dataset: MacroDataset;
   initialRange?: Range;
   height?: number;
-  /** Colors that match your mock */
   colors?: {
-    caloriesLine: string; // top grey
-    carbs: string;        // bright yellow
-    protein: string;      // darker yellow
-    fat: string;          // base amber
+    caloriesLine: string;
+    carbs: string;
+    protein: string;
+    fat: string;
   };
   title?: string;
 }
@@ -57,7 +60,6 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
   const [range, setRange] = useState<Range>(initialRange);
   const [page, setPage] = useState(0);
 
-  // --- Helpers ---
   const slice = useMemo(() => {
     if (range === 'week') return dataset.dailyData;
     if (range === 'year') return dataset.yearlyData;
@@ -65,7 +67,6 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
     return dataset.monthlyData.slice(start, start + 30);
   }, [dataset, page, range]);
 
-  // Create step-series from a numeric array
   type StepDatum = { value: number; index: number; label: string };
   const toStep = (vals: number[], labels: string[]): StepDatum[] => {
     if (!vals.length) return [];
@@ -79,25 +80,23 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
 
     out.push({ value: vals[0], index: 0, label: lab(0) });
     for (let i = 1; i < vals.length; i++) {
-      out.push({ value: vals[i - 1], index: i, label: '' }); // horizontal
-      out.push({ value: vals[i], index: i, label: lab(i) });  // vertical
+      out.push({ value: vals[i - 1], index: i, label: '' });
+      out.push({ value: vals[i], index: i, label: lab(i) });
     }
     return out;
   };
 
-  // Base labels and macro arrays
   const labels = slice.map(p => p.label);
   const protein = slice.map(p => p.protein);
   const carbs = slice.map(p => p.carbs);
   const fat = slice.map(p => p.fat);
-  const calories = slice.map(p => (p.calories ?? (p.protein * 4 + p.carbs * 4 + p.fat * 9)));
+  const calories = slice.map(p => p.calories ?? (p.protein * 4 + p.carbs * 4 + p.fat * 9));
 
   const proteinStep = useMemo(() => toStep(protein, labels), [protein, labels]);
   const carbsStep   = useMemo(() => toStep(carbs, labels), [carbs, labels]);
   const fatStep     = useMemo(() => toStep(fat, labels), [fat, labels]);
   const calStep     = useMemo(() => toStep(calories, labels), [calories, labels]);
 
-  // Axis spacing
   const count = Math.max(proteinStep.length, carbsStep.length, fatStep.length, calStep.length);
   const spacing = Math.max(W / Math.max(1, count), 18);
 
@@ -117,7 +116,6 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
     setPage(p => Math.min(max, p + 1));
   };
 
-  // One shared pointer config for the bottom-most chart; we’ll reuse indices to show labels
   const pointerCfg = (series: StepDatum[]) => ({
     pointerStripHeight: height,
     pointerStripColor: 'lightgray',
@@ -128,11 +126,9 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
     pointerLabelComponent: (pts: any[]) => {
       const p = pts?.[0];
       if (!p) return null;
-      // Find the closest "labeled" index for x (skip our blank duplicates).
       const lbl = series[p.index]?.label ?? '';
       if (!lbl) return null;
-      // Compose macro values for that x index (original index before step-doubling)
-      const origIndex = series[p.index].index; // we set index == x in gift chart; here it already is the same
+      const origIndex = series[p.index].index;
       const macroIdx = Math.min(origIndex, labels.length - 1);
       const pr = protein[macroIdx] ?? 0;
       const cb = carbs[macroIdx] ?? 0;
@@ -153,7 +149,6 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
     },
   });
 
-  // Render
   return (
     <View style={[styles.wrap, { height: height + 120 }]}>
       <Text style={styles.title}>{title.toUpperCase()}</Text>
@@ -181,19 +176,23 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
         <Text style={[styles.rangeTxt, { textAlign: 'center' }]}>{rangeLabel}</Text>
       )}
 
-      {/* Chart stack: render FAT first (bottom), then PROTEIN, then CARBS, then CALORIES line on top */}
+      {/* Chart stack: only the base chart shows the Y axis */}
       <View style={{ height, position: 'relative' }}>
-        {/* BASE AXES chart (fat) */}
+        {/* BASE: FAT (area) — SHOWS Y-AXIS */}
         <LineChart
-          data={fatStep}
+          data={proteinStep}
+          data2={fatStep}
+          data3={carbsStep}
+          height={250}
           areaChart
-          dataPointsColor="transparent"
           hideDataPoints
-          color={colors.fat}
+          color1="#FF7D0A"
+          color2='#FFAF0A'
+          color3='#f1ed00ff'
           startFillColor={colors.fat}
           endFillColor={colors.fat}
-          startOpacity={0.3}
-          endOpacity={0.06}
+          startOpacity={0.06}
+          endOpacity={0.3}
           thickness={2}
           spacing={spacing}
           noOfSections={5}
@@ -202,6 +201,7 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
           yAxisTextStyle={{ color: 'white' }}
           xAxisColor="grey"
           yAxisColor="white"
+          yAxisThickness={1}
           rulesType="solid"
           rulesColor="gray"
           backgroundColor="transparent"
@@ -209,66 +209,7 @@ const StepLayeredCompositionChart: React.FC<Props> = ({
           overflowTop={24}
         />
 
-        {/* Overlay protein */}
-        <View style={StyleSheet.absoluteFill}>
-          <LineChart
-            data={proteinStep}
-            areaChart
-            hideDataPoints
-            color={colors.protein}
-            startFillColor={colors.protein}
-            endFillColor={colors.protein}
-            startOpacity={0.3}
-            endOpacity={0.05}
-            thickness={2}
-            spacing={spacing}
-            noOfSections={5}
-            xAxisColor="transparent"
-            yAxisColor="transparent"
-            rulesColor="transparent"
-            backgroundColor="transparent"
-            overflowTop={24}
-          />
-        </View>
 
-        {/* Overlay carbs */}
-        <View style={StyleSheet.absoluteFill}>
-          <LineChart
-            data={carbsStep}
-            areaChart
-            hideDataPoints
-            color={colors.carbs}
-            startFillColor={colors.carbs}
-            endFillColor={colors.carbs}
-            startOpacity={0.35}
-            endOpacity={0.08}
-            thickness={2}
-            spacing={spacing}
-            noOfSections={5}
-            xAxisColor="transparent"
-            yAxisColor="transparent"
-            rulesColor="transparent"
-            backgroundColor="transparent"
-            overflowTop={24}
-          />
-        </View>
-
-        {/* Top calories line only (no area) */}
-        <View style={StyleSheet.absoluteFill}>
-          <LineChart
-            data={calStep}
-            hideDataPoints
-            color={colors.caloriesLine}
-            thickness={2}
-            spacing={spacing}
-            noOfSections={5}
-            xAxisColor="transparent"
-            yAxisColor="transparent"
-            rulesColor="transparent"
-            backgroundColor="transparent"
-            overflowTop={24}
-          />
-        </View>
       </View>
 
       {/* Legend */}
@@ -300,7 +241,7 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   arrow: { color: 'white', fontSize: 18, paddingHorizontal: 12 },
   rangeTxt: { color: 'white', fontSize: 14, fontWeight: '500' },
-  legendRow: { flexDirection: 'row', marginTop: 8 },
+  legendRow: { flexDirection: 'row', marginTop: 80 },
 });
 
 export default StepLayeredCompositionChart;

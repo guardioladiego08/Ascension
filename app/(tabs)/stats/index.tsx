@@ -29,7 +29,7 @@ export default function Stats() {
           <Text style={styles.cardText}>CARDIO</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => go('nutrition')}>
+        <TouchableOpacity style={styles.card} onPress={() => go('MacrosTracking')}>
           <Text style={styles.cardText}>NUTRITION</Text>
         </TouchableOpacity>
 
