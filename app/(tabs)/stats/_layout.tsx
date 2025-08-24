@@ -15,6 +15,7 @@ export default function StatsStackLayout() {
       <Stack.Screen name="cardio" />
       <Stack.Screen name="nutrition" />
       <Stack.Screen name="BodyComposition" />
+      <Stack.Screen name="meals" />
     </Stack>
   );
 }

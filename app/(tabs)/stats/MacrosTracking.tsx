@@ -1,12 +1,5 @@
 // app/(tabs)/stats/macros-tracking.tsx
-// NEW SCREEN: “Macros Tracking”
-// - Shows the StepLayeredCompositionChart only.
-// - Data is imported from a separate dataset file: `@/assets/data/macrosData`.
-// - Keeps the tab bar visible via your existing Stats stack layout.
-//
-// Make sure deps are installed (already used elsewhere in your app):
-//   yarn add react-native-gifted-charts moment
-//
+// UPDATED: adds a "View Meals" button that routes to /stats/meals
 import React from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,7 +10,6 @@ import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 
-const BG = '#3f3f3f';
 const WHITE = '#FFFFFF';
 
 export default function MacrosTracking() {
@@ -25,14 +17,19 @@ export default function MacrosTracking() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <LogoHeader></LogoHeader>
-        
+      <LogoHeader />
+
+      <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backTxt}>{'‹'}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>MACROS TRACKING</Text>
 
- 
+        <TouchableOpacity style={styles.viewMealsBtn} onPress={() => router.push('/stats/meals')}>
+          <Text style={styles.viewMealsTxt}>VIEW MEALS</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <StepLayeredCompositionChart
@@ -47,6 +44,7 @@ export default function MacrosTracking() {
               fat: '#B5892E',
             }}
           />
+
           <View style={styles.chartArea}>
             <RangeChart
               dataset={caloriesBurnedData}
@@ -57,19 +55,29 @@ export default function MacrosTracking() {
             />
           </View>
         </View>
-        
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: Colors.dark.background,},
-  topBar: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backTxt: { color: WHITE, fontSize: 24, fontWeight: '800' },
-  title: { color: WHITE, fontSize: 18, fontWeight: '800', letterSpacing: 1 },
-  section: { paddingTop: 60, paddingBottom: 40,  gap: 20, },
-  sectionTitle: { color: WHITE, fontWeight: '700', letterSpacing: 1 },
-  hr: { height: 1, backgroundColor: WHITE, marginVertical: 8, opacity: 0.85 },
-  chartArea: {paddingTop:  70}
+  container: { flex: 1, backgroundColor: Colors.dark.background },
+  headerRow: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backTxt: { color: WHITE, fontSize: 26, fontWeight: '800' },
+  title: { color: WHITE, fontSize: 18, fontWeight: '800', letterSpacing: 1, flex: 1 },
+  viewMealsBtn: {
+    backgroundColor: '#FF950A',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  viewMealsTxt: { color: '#1a1a1a', fontWeight: '800', letterSpacing: 0.5 },
+  section: { paddingTop: 24, paddingBottom: 40, gap: 20, paddingHorizontal: 16 },
+  chartArea: { paddingTop: 16 },
 });
