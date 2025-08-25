@@ -21,7 +21,7 @@ export default function Stats() {
       </View>
 
       <View style={styles.buttons}>
-        <TouchableOpacity style={styles.card} onPress={() => go('strength')}>
+        <TouchableOpacity style={styles.card} onPress={() => go('Strength')}>
           <Text style={styles.cardText}>STRENGTH</Text>
         </TouchableOpacity>
 

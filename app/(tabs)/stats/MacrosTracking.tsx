@@ -79,5 +79,5 @@ const styles = StyleSheet.create({
   },
   viewMealsTxt: { color: '#1a1a1a', fontWeight: '800', letterSpacing: 0.5 },
   section: { paddingTop: 24, paddingBottom: 40, gap: 20, paddingHorizontal: 16 },
-  chartArea: { paddingTop: 16 },
+  chartArea: { paddingTop: 70 },
 });
