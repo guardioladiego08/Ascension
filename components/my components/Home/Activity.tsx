@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 export interface ActivityStatsProps {
   totalActivities: number;
@@ -17,29 +18,29 @@ const ActivityStats: React.FC<ActivityStatsProps> = ({
   totalCal,
 }) => {
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>ACTIVITY</Text>
-      <View style={styles.separator} />
+    <View style={GlobalStyles.container}>
+      <Text style={GlobalStyles.subtitle}>ACTIVITY</Text>
+      <View style={GlobalStyles.underline} />
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
-          <Text style={styles.label}>Total{'\n'}Activities</Text>
-          <Text style={styles.value}>{totalActivities}</Text>
+          <Text style={[styles.label, GlobalStyles.text]}>Total{'\n'}Activities</Text>
+          <Text style={[styles.value, GlobalStyles.textBold]}>{totalActivities}</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.label}>Total{'\n'}Weight</Text>
-          <Text style={styles.value}>{totalWeight}</Text>
+          <Text style={[styles.label, GlobalStyles.text]}>Total{'\n'}Weight</Text>
+          <Text style={[styles.value, GlobalStyles.textBold]}>{totalWeight}</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.label}>Total{'\n'}Distance</Text>
-          <Text style={styles.value}>{totalDistance}</Text>
+          <Text style={[styles.label, GlobalStyles.text]}>Total{'\n'}Distance</Text>
+          <Text style={[styles.value, GlobalStyles.textBold]}>{totalDistance}</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.label}>Total{'\n'}Time</Text>
-          <Text style={styles.value}>{totalTime}</Text>
+          <Text style={[styles.label, GlobalStyles.text]}>Total{'\n'}Time</Text>
+          <Text style={[styles.value, GlobalStyles.textBold]}>{totalTime}</Text>
         </View>
         <View style={styles.statBox}>
-          <Text style={styles.label}>Total{'\n'}Cal</Text>
-          <Text style={styles.value}>{totalCal}</Text>
+          <Text style={[styles.label, GlobalStyles.text]}>Total{'\n'}Cal</Text>
+          <Text style={[styles.value, GlobalStyles.textBold]}>{totalCal}</Text>
         </View>
       </View>
     </View>
@@ -47,21 +48,6 @@ const ActivityStats: React.FC<ActivityStatsProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
-    borderRadius: 8,
-  },
-  header: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginBottom: 8,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#888888',
-    marginBottom: 12,
-  },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -71,15 +57,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   label: {
-    color: '#CCCCCC',
-    fontSize: 12,
     textAlign: 'center',
-    lineHeight: 14,
   },
   value: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 16,
     marginTop: 4,
   },
 });

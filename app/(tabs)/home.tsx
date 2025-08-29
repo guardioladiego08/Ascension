@@ -7,6 +7,7 @@ import StatsComparison from '@/components/my components/Home/ActivityComparison'
 import MacroTracker from '@/components/my components/Home/MacrosPieChart';
 import ProfileCard from '@/components/my components/Home/ProfileCard';
 import { Colors } from '@/constants/Colors';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 import React from 'react';
 import {
   FlatList,
@@ -50,7 +51,7 @@ export default function Home() {
       case 'activity':
         return <ActivityStats {...activityStatsData} />;
       case 'macros':
-        return <MacroTracker protein={50} carbs={30} fats={20} />;
+        return <MacroTracker protein={50} carbs={30} fats={20}  />;
       case 'weightChart':
         return <TotalWeightChart />;
       case 'milesRan':
@@ -91,8 +92,8 @@ export default function Home() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LogoHeader />
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      <LogoHeader/>
       <FlatList
         data={DATA}
         renderItem={renderItem}
@@ -107,10 +108,7 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.background,
-  },
+
   listContent: {
     padding: 20,
     gap: 20,

@@ -1,12 +1,26 @@
 // components/LogoHeader.tsx
 import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-const LogoHeader = () => {
+interface LogoHeaderProps {
+  showBackButton?: boolean;   // <- optional flag
+}
+
+const LogoHeader: React.FC<LogoHeaderProps> = ({ showBackButton = false }) => {
+  const router = useRouter();
+
   return (
     <View style={styles.container}>
+      {showBackButton && (
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={{ color: 'white', fontSize: 45 }}>{'‹'}</Text>
+        </TouchableOpacity> 
+      )}
+
       <Image
-        source={require('../../assets/images/Logo.png')} // replace with your logo path
+        source={require('../../assets/images/Logo.png')}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -16,13 +30,20 @@ const LogoHeader = () => {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 30, // To avoid the notch/status bar
+    paddingTop: 50, // notch / status bar padding
     alignItems: 'center',
-
+    justifyContent: 'center',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    top: 35,
+    padding: 4,
+    zIndex: 1,
   },
   logo: {
-    width: 85,
-    height: 85,
+    width: 90,
+    height: 90,
   },
 });
 

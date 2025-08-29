@@ -21,11 +21,11 @@ export default function Stats() {
       </View>
 
       <View style={styles.buttons}>
-        <TouchableOpacity style={styles.card} onPress={() => go('Strength')}>
+        <TouchableOpacity style={styles.card} onPress={() => go('strength/Strength')}>
           <Text style={styles.cardText}>STRENGTH</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} onPress={() => go('cardio')}>
+        <TouchableOpacity style={styles.card} onPress={() => go('cardio/Cardio')}>
           <Text style={styles.cardText}>CARDIO</Text>
         </TouchableOpacity>
 

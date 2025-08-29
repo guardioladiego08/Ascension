@@ -12,7 +12,8 @@ export default function StatsStackLayout() {
       <Stack.Screen name="index" />
       {/* Child pages this screen routes to */}
       <Stack.Screen name="strength" />
-      <Stack.Screen name="cardio" />
+      <Stack.Screen name="Cardio" />
+      <Stack.Screen name="allCardioActivities" />
       <Stack.Screen name="nutrition" />
       <Stack.Screen name="BodyComposition" />
       <Stack.Screen name="meals" />
