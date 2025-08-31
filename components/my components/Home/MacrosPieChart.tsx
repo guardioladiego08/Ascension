@@ -82,7 +82,7 @@ const LegendItem: React.FC<{ label: string; color: string }> = ({
 /* ---------- styles ---------- */
 const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingTop: 10 },
   legend: { marginLeft: 24 },
   legendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   colorBox: { width: 10, height: 10, borderRadius: 2, marginRight: 8 },

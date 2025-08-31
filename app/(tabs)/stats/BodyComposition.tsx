@@ -4,7 +4,7 @@
 import React from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import RangeChart from '@/components/my components/charts/ChartComponent';
+import RangeChart from '@/components/my components/charts/RangeChart';
 import LogoHeader from '@/components/my components/logoHeader';
 
 const BG = '#3f3f3f';

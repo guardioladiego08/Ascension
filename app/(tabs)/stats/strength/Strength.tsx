@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
-import RangeChart from '@/components/my components/charts/ChartComponent';
+import RangeChart from '@/components/my components/charts/RangeChart';
 import { Colors } from '@/constants/Colors';
 
 // Data (manually generated files)

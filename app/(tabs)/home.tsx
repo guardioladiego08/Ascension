@@ -1,13 +1,11 @@
 // app/(tabs)/home.tsx
-import TotalWeightChart from '@/components/my components/charts/Chart1';
-import RangeChart from '@/components/my components/charts/ChartComponent';
-import LogoHeader from '@/components/my components/logoHeader';
-import ActivityStats from '@/components/my components/Home/Activity';
-import StatsComparison from '@/components/my components/Home/ActivityComparison';
-import MacroTracker from '@/components/my components/Home/MacrosPieChart';
-import ProfileCard from '@/components/my components/Home/ProfileCard';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
+// =====================================================================
+// 🔄 REPLACES TotalWeightChart with the new RangeDrivenChart.
+// - Remove the old import for Chart1 (TotalWeightChart).
+// - Add RangeDrivenChart + weightRangeData imports.
+// - Nothing else on the page needs to change.
+// =====================================================================
+
 import React from 'react';
 import {
   FlatList,
@@ -16,11 +14,32 @@ import {
   StyleSheet
 } from 'react-native';
 
+import LogoHeader from '@/components/my components/logoHeader';
+import ActivityStats from '@/components/my components/Home/Activity';
+import StatsComparison from '@/components/my components/Home/ActivityComparison';
+import MacroTracker from '@/components/my components/Home/MacrosPieChart';
+import ProfileCard from '@/components/my components/Home/ProfileCard';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+
+// ⛔️ OLD (remove):
+// import TotalWeightChart from '@/components/my components/charts/Chart1';
+
+// ✅ Keep your existing RangeChart usages for other cards
+import RangeChart from '@/components/my components/charts/RangeChart';
+
+// ✅ NEW: the range-driven step chart system (you added these files)
+import RangeDrivenChart from '@/components/my components/charts/RangeDrivenChart';
+
+
+
+// Existing data for the other tiles
 import activityStatsData from '@/assets/data/activityStatsData';
 import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
 import statsComparisonData from '@/assets/data/ComparisonData';
 import milesRanData from '@/assets/data/milesRanData';
 import weightLiftedData from '@/assets/data/weightLiftedData';
+
+import BasicChart from '@/components/my components/charts/BasicChart';
 
 type HomeItem =
   | { key: 'profile' }
@@ -36,7 +55,7 @@ const DATA: HomeItem[] = [
   { key: 'profile' },
   { key: 'activity' },
   { key: 'macros' },
-  { key: 'weightChart' },
+  { key: 'weightChart' },     // ← this now renders RangeDrivenChart
   { key: 'milesRan' },
   { key: 'weightLifted' },
   { key: 'caloriesBurned' },
@@ -48,12 +67,15 @@ export default function Home() {
     switch (item.key) {
       case 'profile':
         return <ProfileCard />;
+
       case 'activity':
         return <ActivityStats {...activityStatsData} />;
+
       case 'macros':
-        return <MacroTracker protein={50} carbs={30} fats={20}  />;
-      case 'weightChart':
-        return <TotalWeightChart />;
+        return <MacroTracker protein={50} carbs={30} fats={20} />;
+
+
+
       case 'milesRan':
         return (
           <RangeChart
@@ -64,6 +86,7 @@ export default function Home() {
             title="Miles Ran"
           />
         );
+
       case 'weightLifted':
         return (
           <RangeChart
@@ -74,6 +97,7 @@ export default function Home() {
             title="Weight Lifted"
           />
         );
+
       case 'caloriesBurned':
         return (
           <RangeChart
@@ -84,8 +108,10 @@ export default function Home() {
             title="Calories Burned"
           />
         );
+
       case 'comparison':
         return <StatsComparison data={statsComparisonData} />;
+
       default:
         return null;
     }
@@ -93,13 +119,13 @@ export default function Home() {
 
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader/>
+      <LogoHeader />
+      <BasicChart title="Body Weight" color="#6AE5E5" />
       <FlatList
         data={DATA}
         renderItem={renderItem}
-        keyExtractor={item => item.key}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={styles.listContent}
-        // optional: tweak performance
         removeClippedSubviews
         initialNumToRender={4}
       />
@@ -108,7 +134,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-
   listContent: {
     padding: 20,
     gap: 20,

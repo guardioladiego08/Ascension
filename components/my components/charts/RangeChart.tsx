@@ -173,7 +173,7 @@ const RangeChart: React.FC<Props> = ({
           radius: 6,
           activatePointersOnLongPress: true,
           autoAdjustPointerLabelPosition: false,
-          pointerLabelComponent: pts => {
+          pointerLabelComponent: (pts: any[]) => {
             const pt = pts?.[0];
             if (!pt) return null;
              return (

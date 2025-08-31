@@ -4,7 +4,7 @@ import React from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import StepLayeredCompositionChart from '@/components/my components/charts/StepRangeChart';
-import RangeChart from '@/components/my components/charts/ChartComponent';
+import RangeChart from '@/components/my components/charts/RangeChart';
 import macrosDataset from '@/assets/data/macrosData';
 import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
 import { Colors } from '@/constants/Colors';
