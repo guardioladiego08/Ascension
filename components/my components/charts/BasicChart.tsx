@@ -1,36 +1,32 @@
 // components/charts/BasicChart.tsx
 // --------------------------------------------------------------------
-// BasicChart — shows selected value (from enablePanGesture) at TOP-RIGHT
-// outside of <LineGraph/> while scrubbing. Includes a bottom range selector.
-//
-// Ranges: Week(7), Month(30), 6M(182), Year(365)
-// - For all ranges we slice the data so the last point is today's value
-//   (if today exists in your dataset), otherwise the latest available.
-// - animated={true} for LineGraph
-// - No x-axis labels rendered
-//
-// Deps (current & maintained):
-//   npm i react-native-graph @shopify/react-native-skia react-native-reanimated react-native-gesture-handler moment
-//   // If using Expo, rebuild dev client for Skia/Reanimated.
+// BasicChart — receives props from parent (home.tsx):
+//   - title (chart name)
+//   - color (line + fill color)
+//   - data  (array of { label: 'YYYY-MM-DD', value: number })
+// Includes a bottom range selector (Week / Month / 6M / Year).
+// When range is Week/Month/6M/Year, the slice ends on “today” if present,
+// otherwise ends on the latest available point. animated={true}.
+// No x-axis labels are rendered.
 // --------------------------------------------------------------------
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import moment from 'moment';
 import { LineGraph, type GraphPoint } from 'react-native-graph';
 
-// Import your generated data + type
-import {
-  weightData as generatedWeightData,
-  type WeightPoint,
-} from '@/assets/data/home/weightRangeData.tsx';
+export type WeightPoint = { label: string; value: number };
 
 type RangeKey = 'week' | 'month' | '6m' | 'year';
 
 type Props = {
-  title?: string;
-  color?: string;
+  /** Header title shown above the chart */
+  title: string;
+  /** Line/fill color for the chart */
+  color: string;
+  /** Chart height (px) */
   height?: number;
-  data?: WeightPoint[]; // optional override
+  /** Data to plot (must be YYYY-MM-DD ascending ideally) */
+  data: WeightPoint[];
 };
 
 const RANGE_TO_DAYS: Record<RangeKey, number> = {
@@ -41,27 +37,36 @@ const RANGE_TO_DAYS: Record<RangeKey, number> = {
 };
 
 export default function BasicChart({
-  title = 'Weight',
-  color = '#6AE5E5',
+  title,
+  color,
   height = 220,
-  data = generatedWeightData,
+  data,
 }: Props) {
   const [range, setRange] = useState<RangeKey>('month');
-  const [selected, setSelected] = useState<GraphPoint | null>(null); // <- current pan selection
+  const [selected, setSelected] = useState<GraphPoint | null>(null);
+
+  // Ensure we’re working with a stable ascending list by date (safety)
+  const sorted = useMemo<WeightPoint[]>(() => {
+    if (!data?.length) return [];
+    return [...data].sort((a, b) =>
+      a.label < b.label ? -1 : a.label > b.label ? 1 : 0
+    );
+  }, [data]);
 
   // Slice the dataset so it ends at "today" if present, else last point
   const sliced: WeightPoint[] = useMemo(() => {
-    if (!data?.length) return [];
+    if (!sorted.length) return [];
     const todayStr = moment().format('YYYY-MM-DD');
-    let endIndex = data.findIndex((d) => d.label === todayStr);
-    if (endIndex === -1) endIndex = data.length - 1;
+
+    let endIndex = sorted.findIndex((d) => d.label === todayStr);
+    if (endIndex === -1) endIndex = sorted.length - 1;
 
     const days = RANGE_TO_DAYS[range];
     const startIndex = Math.max(0, endIndex - (days - 1));
-    return data.slice(startIndex, endIndex + 1);
-  }, [data, range]);
+    return sorted.slice(startIndex, endIndex + 1);
+  }, [sorted, range]);
 
-  // Convert to GraphPoint[]
+  // Convert to react-native-graph points
   const points: GraphPoint[] = useMemo(
     () =>
       sliced.map((pt) => ({
@@ -71,7 +76,7 @@ export default function BasicChart({
     [sliced]
   );
 
-  // Y-range padding ±5 for breathing room
+  // Padded y-range (±5)
   const yRange = useMemo(() => {
     if (!points.length) return undefined as undefined | { min: number; max: number };
     const vals = points.map((p) => p.value);
@@ -87,7 +92,7 @@ export default function BasicChart({
     return { min: lo, max: hi };
   }, [points]);
 
-  // Header date range
+  // Header’s date range text
   const rangeLabel = useMemo(() => {
     if (!sliced.length) return '';
     const first = moment(sliced[0].label).format('MMM D');
@@ -95,8 +100,8 @@ export default function BasicChart({
     return `${first} – ${last}`;
   }, [sliced]);
 
-  // ✅ What to show at TOP-RIGHT (outside the graph)
-  // Show the *selected* value while scrubbing; otherwise show latest value
+  // Top-right badge text (outside graph). Shows selected while scrubbing,
+  // otherwise shows the latest value in the current slice.
   const topRightText = useMemo(() => {
     const fmt = (p: GraphPoint) =>
       `${moment(p.date).format('MMM D')}  •  ${p.value}`;
@@ -126,9 +131,8 @@ export default function BasicChart({
           animated
           color={color}
           style={{ height, width: '100%' }}
-          gradientFillColors={[color, color]}
-          gradientFillStartOpacity={0.5}
-          gradientFillEndOpacity={0.05}
+          gradientFillColors={[color, 'rgba(255, 255, 255, 0.26)']} 
+
           range={{
             y: yRange,
             x:
@@ -137,8 +141,8 @@ export default function BasicChart({
                 : undefined,
           }}
           enablePanGesture
-          onPointSelected={(p) => setSelected(p)}  // <- update outside badge while panning
-          onGestureEnd={() => setSelected(null)}   // <- revert to latest after pan ends
+          onPointSelected={(p) => setSelected(p)}
+          onGestureEnd={() => setSelected(null)}
         />
       </View>
 
@@ -164,13 +168,13 @@ export default function BasicChart({
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingBottom: 12 },
+  wrap: { paddingHorizontal: 16, paddingTop: 100 },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
   title: { color: 'white', fontSize: 18, fontWeight: '700', letterSpacing: 1 },
   under: { height: 1, backgroundColor: 'white', marginVertical: 8 },
   range: { color: '#fff', fontSize: 14 },
 
-  // ✅ Top-right readout outside the graph
+  // Top-right readout outside the graph
   topRightBadge: {
     marginTop: 2,
     marginLeft: 8,

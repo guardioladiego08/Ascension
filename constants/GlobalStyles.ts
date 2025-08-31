@@ -12,7 +12,8 @@ export const GlobalStyles = StyleSheet.create({
 
   container: {
     flex: 1,
-    padding: 10
+    padding: 10,
+    justifyContent: 'space-between'
   },
   title: {
     color: Colors.dark.text,
