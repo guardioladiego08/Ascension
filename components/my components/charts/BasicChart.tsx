@@ -13,6 +13,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import moment from 'moment';
 import { LineGraph, type GraphPoint } from 'react-native-graph';
+import { SelectionDot } from './CustomSelectionDot';
 
 export type WeightPoint = { label: string; value: number };
 
@@ -143,6 +144,7 @@ export default function BasicChart({
           enablePanGesture
           onPointSelected={(p) => setSelected(p)}
           onGestureEnd={() => setSelected(null)}
+          SelectionDot={SelectionDot}
         />
       </View>
 
