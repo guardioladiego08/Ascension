@@ -3,6 +3,7 @@ import { Colors } from '@/constants/Colors';
 import { AntDesign } from '@expo/vector-icons';
 import React from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 type WeekData = {
   totalActivities: number;
@@ -27,6 +28,8 @@ const METRICS = [
   { key: 'weight', label: 'Body Weight' },
 ] as const;
 
+const LIGHT_GREY = '#C2C2C2';
+
 const StatsComparison: React.FC<StatsComparisonProps> = ({ data }) => {
   const renderCard = ({ item }: { item: typeof METRICS[number] }) => {
     const prev = data.lastWeek[item.key];
@@ -44,20 +47,14 @@ const StatsComparison: React.FC<StatsComparisonProps> = ({ data }) => {
           <View
             style={[
               styles.badge,
-              { backgroundColor: improved ? Colors.dark.successLight : Colors.dark.errorLight },
+              { backgroundColor: improved ? `${LIGHT_GREY}20` : `${LIGHT_GREY}10` },
             ]}>
             <AntDesign
               name={improved ? 'arrowup' : 'arrowdown'}
               size={12}
-              color={improved ? Colors.dark.success : Colors.dark.error}
+              color={LIGHT_GREY}
             />
-            <Text
-              style={[
-                styles.badgeText,
-                { color: improved ? Colors.dark.success : Colors.dark.error },
-              ]}>
-              {Math.abs(pct)}%
-            </Text>
+            <Text style={[styles.badgeText]}>{Math.abs(pct)}%</Text>
           </View>
         </View>
 
@@ -70,7 +67,7 @@ const StatsComparison: React.FC<StatsComparisonProps> = ({ data }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Weekly Progress</Text>
+      <Text style={GlobalStyles.subtitle}>WEEKLY PROGRESS</Text>
       <FlatList
         data={METRICS}
         keyExtractor={(m) => m.key}
@@ -91,7 +88,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '600',
-    color: Colors.dark.text,
+    color: LIGHT_GREY,
     marginBottom: 12,
   },
   list: {
@@ -103,14 +100,16 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: Colors.dark.card ?? '#222',
+    borderRadius: 12,
+    padding: 16,
     marginHorizontal: 4,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   metricLabel: {
     fontSize: 14,
-    color: Colors.dark.text,
+    color: LIGHT_GREY,
     marginBottom: 6,
   },
   metricValues: {
@@ -120,7 +119,7 @@ const styles = StyleSheet.create({
   currentValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.dark.text,
+    color: LIGHT_GREY,
   },
   badge: {
     flexDirection: 'row',
@@ -134,14 +133,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
+    color: LIGHT_GREY,
   },
   subText: {
     fontSize: 12,
-    color: Colors.dark.text,
+    color: LIGHT_GREY,
     marginTop: 4,
   },
   prevValue: {
-    color: Colors.dark.text,
+    color: LIGHT_GREY,
     fontWeight: '600',
   },
 });

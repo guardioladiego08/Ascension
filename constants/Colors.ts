@@ -11,6 +11,8 @@ export const Colors = {
     macroProtein:    '#9e9e9e',   // light-grey
     macroCarbs:      '#d4af0f',   // yellow
     macroFats:       '#cd8c34',   // orange
+    milesRan:        '#cd7134ff',
+    weightLifted:        '#f1d63aff',
     text: '#ffffff',
     link: '#1e90ff',
     tab: '#2B2B2B',

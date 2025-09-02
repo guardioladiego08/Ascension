@@ -1,60 +1,77 @@
 // app/(tabs)/home.tsx
-// =====================================================================
-// 🔄 REPLACES TotalWeightChart with the new RangeDrivenChart.
-// - Remove the old import for Chart1 (TotalWeightChart).
-// - Add RangeDrivenChart + weightRangeData imports.
-// - Nothing else on the page needs to change.
-// =====================================================================
-
 import React from 'react';
 import {
   SafeAreaView,
-  View,
-  Text,
+  ScrollView,
   StyleSheet,
-  TouchableOpacity,
-  FlatList,
 } from 'react-native';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import ActivityStats from '@/components/my components/Home/Activity';
-import StatsComparison from '@/components/my components/Home/ActivityComparison';
 import MacroTracker from '@/components/my components/Home/MacrosPieChart';
 import ProfileCard from '@/components/my components/Home/ProfileCard';
 import BasicChart from '@/components/my components/charts/BasicChart';
+import ActivityStats from '@/components/my components/Home/Activity';
+import StatsComparison from '@/components/my components/Home/ActivityComparison';
 import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
-
-
-// Existing data for the other tiles
-// Import your generated data + type
-import weightData, {
-  weightData as generatedWeightData,
-  type WeightPoint,
-} from '@/assets/data/home/weightRangeData.tsx';
-import activityStatsData from '@/assets/data/activityStatsData';
-import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
-import statsComparisonData from '@/assets/data/ComparisonData';
-import milesRanData from '@/assets/data/milesRanData';
-import weightLiftedData from '@/assets/data/weightLiftedData';
-
+import weightData from '@/assets/data/home/weightRangeData.tsx';
+import activityStatsData from '@/assets/data/home/activityStatsData';
+import milesRanData from '@/assets/data/home/milesRanData';
+import weightLiftedData from '@/assets/data/home/weightLiftedData';
+import statsComparisonData from '@/assets/data/home/ComparisonData';
 
 export default function Home() {
-  
-
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader />
-      <ProfileCard></ProfileCard>
-      <MacroTracker protein={50} carbs={30} fats={20} />
-      <BasicChart
-        title="Body Weight"
-        color="#6AE5E5"
-        data={weightData}
-        height={220}
-      />
-      
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent} 
+        showsVerticalScrollIndicator={false}
+      >
+        <LogoHeader />
+        <ProfileCard />
+        <MacroTracker protein={50} carbs={30} fats={20} />
+        <BasicChart
+          title="Body Weight"
+          color={Colors.dark.highlight2}
+          data={weightData}
+          height={250}
+        />
+        <ActivityStats
+          {...activityStatsData} 
+        />
+        <BasicChart
+          title="Miles Ran"
+          color={Colors.dark.milesRan}
+          data={milesRanData}
+          height={175}
+        />
+        <BasicChart
+          title="Miles Ran"
+          color={Colors.dark.weightLifted}
+          data={weightLiftedData}
+          height={175}
+        />
+        <StatsComparison
+  data={{
+    lastWeek: { totalActivities: 8, totalWeight: 14500, totalDistance: 12.4, totalCal: 9800, weight: 222.4 },
+    thisWeek: { totalActivities: 10, totalWeight: 16750, totalDistance: 15.1, totalCal: 11200, weight: 221.6 },
+  }}
+  units={{
+    totalWeight: { suffix: ' lb' },
+    totalDistance: { suffix: ' mi' },
+    totalCal: { suffix: ' kcal' },
+    weight: { suffix: ' lb' },
+  }}
+  onPressMetric={(m) => console.log('Pressed:', m)}
+/>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 40, // adds space at bottom
+  },
+});

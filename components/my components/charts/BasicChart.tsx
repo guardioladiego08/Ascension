@@ -1,19 +1,10 @@
-// components/charts/BasicChart.tsx
-// --------------------------------------------------------------------
-// BasicChart — receives props from parent (home.tsx):
-//   - title (chart name)
-//   - color (line + fill color)
-//   - data  (array of { label: 'YYYY-MM-DD', value: number })
-// Includes a bottom range selector (Week / Month / 6M / Year).
-// When range is Week/Month/6M/Year, the slice ends on “today” if present,
-// otherwise ends on the latest available point. animated={true}.
-// No x-axis labels are rendered.
-// --------------------------------------------------------------------
+// components/my componentscharts/BasicChart.tsx
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import moment from 'moment';
 import { LineGraph, type GraphPoint } from 'react-native-graph';
 import { SelectionDot } from './CustomSelectionDot';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 export type WeightPoint = { label: string; value: number };
 
@@ -112,16 +103,15 @@ export default function BasicChart({
   }, [selected, points]);
 
   return (
-    <View style={styles.wrap}>
+    <View style={GlobalStyles.Chart.wrap}>
       {/* Header with top-right selected/last value */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{title.toUpperCase()}</Text>
-          <View style={styles.under} />
-          <Text style={styles.range}>{rangeLabel}</Text>
+          <Text style={GlobalStyles.subtitle}>{title.toUpperCase()}</Text>
+          <Text style={GlobalStyles.text}>{rangeLabel}</Text>
         </View>
-        <View style={styles.topRightBadge}>
-          <Text style={styles.badgeText}>{topRightText}</Text>
+        <View style={GlobalStyles.Chart.badge}>
+          <Text style={GlobalStyles.Chart.text}>{topRightText}</Text>
         </View>
       </View>
 
@@ -170,25 +160,10 @@ export default function BasicChart({
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingHorizontal: 16, paddingTop: 100 },
+  
   headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  title: { color: 'white', fontSize: 18, fontWeight: '700', letterSpacing: 1 },
-  under: { height: 1, backgroundColor: 'white', marginVertical: 8 },
-  range: { color: '#fff', fontSize: 14 },
 
   // Top-right readout outside the graph
-  topRightBadge: {
-    marginTop: 2,
-    marginLeft: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#111',
-    borderWidth: 1,
-    borderColor: '#333',
-    alignSelf: 'flex-start',
-  },
-  badgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 
   graphBox: {
     width: '100%',
@@ -207,7 +182,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: '#C2C2C2',
     backgroundColor: 'transparent',
   },
   selBtnActive: {

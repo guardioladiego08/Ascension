@@ -13,7 +13,7 @@ import RangeChart from '@/components/my components/charts/RangeChart';
 import { Colors } from '@/constants/Colors';
 
 // Data (manually generated files)
-import weightLiftedData from '@/assets/data/weightLiftedData';
+import weightLiftedData from '@/assets/data/home/weightLiftedData';
 import sessions from '@/assets/data/strength/StrengthProgressList';
 
 type Range = 'Day' | 'Week' | 'Month';

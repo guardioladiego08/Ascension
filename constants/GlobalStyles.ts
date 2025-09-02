@@ -9,11 +9,9 @@ export const GlobalStyles = StyleSheet.create({
     backgroundColor: Colors.dark.background,
 
   },
-
   container: {
     flex: 1,
     padding: 10,
-    justifyContent: 'space-between'
   },
   title: {
     color: Colors.dark.text,
@@ -45,25 +43,27 @@ export const GlobalStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  card: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#000',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  cardText: {
-    fontSize: 24,
-    fontWeight: '900',
-    textAlign: 'center',
-    letterSpacing: 0.5,
+  Chart: {
+    wrap: { 
+      paddingHorizontal: 16, 
+      paddingTop: 15, 
+      paddingBottom:15 
+    },
+    badge: {
+      marginTop: 2,
+      marginLeft: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: '#111',
+      borderWidth: 1,
+      borderColor: '#333',
+      alignSelf: 'flex-start',
+    },
+    text: {
+      color: Colors.dark.text,
+      fontWeight: '600',
+      fontSize: 12,
+    },
   },
 });
