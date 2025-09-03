@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 const WeighIn: React.FC = () => {
   const router = useRouter();
@@ -29,13 +30,8 @@ const WeighIn: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={{ color: 'white', fontSize: 40 }}>{'‹'}</Text>
-            </TouchableOpacity> 
-      </View>
-      <LogoHeader />
+    <SafeAreaView style={GlobalStyles.container}>
+      <LogoHeader showBackButton/>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.select({ ios: 'padding', android: undefined })}
@@ -46,13 +42,13 @@ const WeighIn: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           bounces={false}
         >
-          <Text style={styles.title}>WEIGH IN</Text>
+          <Text style={GlobalStyles.header}>WEIGH IN</Text>
 
           {/* Weight */}
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>WEIGHT</Text>
+            <Text style={GlobalStyles.text}>WEIGHT</Text>
             <TextInput
-              style={styles.input}
+              style={GlobalStyles.textInput}
               value={weight}
               onChangeText={setWeight}
               placeholder="225.6 lbs"
@@ -64,9 +60,9 @@ const WeighIn: React.FC = () => {
 
           {/* Body Fat */}
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>BODY FAT</Text>
+            <Text style={GlobalStyles.text}>BODY FAT</Text>
             <TextInput
-              style={styles.input}
+              style={GlobalStyles.textInput}
               value={bodyFat}
               onChangeText={setBodyFat}
               placeholder="20.2 %"
@@ -78,9 +74,9 @@ const WeighIn: React.FC = () => {
 
           {/* Bone Mass */}
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>BONE MASS</Text>
+            <Text style={GlobalStyles.text}>BONE MASS</Text>
             <TextInput
-              style={styles.input}
+              style={GlobalStyles.textInput}
               value={boneMass}
               onChangeText={setBoneMass}
               placeholder="15.6 %"
@@ -92,9 +88,9 @@ const WeighIn: React.FC = () => {
 
           {/* Muscle Mass */}
           <View style={styles.fieldBlock}>
-            <Text style={styles.label}>MUSCLE MASS</Text>
+            <Text style={GlobalStyles.text}>MUSCLE MASS</Text>
             <TextInput
-              style={styles.input}
+              style={GlobalStyles.textInput}
               value={muscleMass}
               onChangeText={setMuscleMass}
               placeholder="64.2 %"
@@ -106,7 +102,7 @@ const WeighIn: React.FC = () => {
           </View>
 
           {/* Save Button */}
-          <TouchableOpacity onPress={onSave} activeOpacity={0.9} style={styles.saveButton}>
+          <TouchableOpacity onPress={onSave} activeOpacity={0.9} style={GlobalStyles.button}>
             <Text style={styles.saveText}>SAVE</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -118,30 +114,7 @@ const WeighIn: React.FC = () => {
 export default WeighIn;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#333333' },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24 },
-  headerRow: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    position: 'absolute',
-    left: 0,
-    top: 30,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    zIndex: 20,
-  },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    alignSelf: 'center',
-    marginVertical: 16,
-  },
   fieldBlock: { marginBottom: 16 },
   label: {
     color: '#FFFFFF',
@@ -149,21 +122,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  input: {
-    backgroundColor: '#FFFFFF',
-    color: '#000000',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-  },
   saveButton: {
-    alignSelf: 'center',
-    marginTop: 12,
-    backgroundColor: '#222222',
-    borderRadius: 10,
-    paddingHorizontal: 32,
-    paddingVertical: 12,
+
   },
   saveText: {
     color: '#FFFFFF',

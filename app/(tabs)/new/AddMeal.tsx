@@ -15,6 +15,7 @@ import MacroSection from '@/components/my components/activities/add meal/MacroSe
 import MealsActions from '@/components/my components/activities/add meal/MealsActions';
 import CreateNewMeal, { MealData } from '@/components/my components/activities/add meal/CreateNewMeal';
 import FromRecipePopup from '@/components/my components/activities/add meal/FromRecipePopup';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 export default function AddMealScreen() {
   const router = useRouter();
@@ -44,16 +45,10 @@ export default function AddMealScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Back + Logo */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={{ color: C.text, fontSize: 40 }}>{'‹'}</Text>
-        </TouchableOpacity>
-        
-      </View>
-      <LogoHeader />
-      <Text style={styles.title}>ADD A MEAL</Text>
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      {/*Logo */}
+      <LogoHeader showBackButton/>
+      <Text style={GlobalStyles.header}>ADD A MEAL</Text>
 
       {/* Month + Week chips with arrows */}
       <WeekNavigator days={days} selectedIndex={selectedIndex} onSelectDay={setSelectedIndex} />
@@ -122,29 +117,6 @@ export default function AddMealScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg, paddingHorizontal: 16 },
-  headerRow: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backBtn: {
-    position: 'absolute',
-    left: 0,
-    top: 30,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    zIndex: 20,
-  },
-  title: {
-    alignSelf: 'center',
-    color: C.text,
-    fontSize: 26,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-    marginTop: 2,
-    marginBottom: 10,
-  },
   card: { backgroundColor: C.bg, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 10 },
   hr: { height: 1, backgroundColor: C.line, marginTop: 12 },
   sectionTitle: {

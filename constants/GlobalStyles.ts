@@ -7,11 +7,19 @@ export const GlobalStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.dark.background,
-
+    paddingHorizontal: 15
   },
   container: {
     flex: 1,
     padding: 10,
+    backgroundColor: Colors.dark.background,
+  },
+  header: {
+    color: Colors.dark.text, 
+    fontSize: 32, 
+    fontWeight: 'bold', 
+    alignSelf: 'center', 
+    marginVertical: 2
   },
   title: {
     color: Colors.dark.text,
@@ -36,12 +44,29 @@ export const GlobalStyles = StyleSheet.create({
     color: Colors.dark.text,
     fontFamily: Fonts.regular,
     fontSize: 14,
+
   },
   textBold: {
     color: Colors.dark.text,
     fontFamily: Fonts.regular,
     fontSize: 16,
     fontWeight: '700',
+  },
+  textInput: {
+    backgroundColor: '#FFFFFF',
+    color: '#000000',
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 15,
+  },
+  button: {
+    alignSelf: 'center',
+    marginTop: 12,
+    backgroundColor: '#222222',
+    borderRadius: 10,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
   },
   Chart: {
     wrap: { 

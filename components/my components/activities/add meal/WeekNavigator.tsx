@@ -3,7 +3,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { AM_COLORS as C } from './theme';
-import type { DayMealData } from './data';
+import type { DayMealData } from '@/assets/data/addMealData';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 

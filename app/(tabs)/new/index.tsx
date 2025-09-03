@@ -9,11 +9,10 @@ import {
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-
 import LogoHeader from '@/components/my components/logoHeader';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 
 const NewActivityScreen: React.FC = () => {
@@ -22,13 +21,13 @@ const NewActivityScreen: React.FC = () => {
 
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <GestureHandlerRootView style={GlobalStyles.container}>
       <LogoHeader />
-      <Text style={styles.header}>NEW ACTIVITY</Text>
+      <Text style={[GlobalStyles.header, { marginBottom: 30 }]}>NEW ACTIVITY</Text>
 
       <TouchableOpacity style={styles.button} onPress={() => setModalVisible(true)}>
         <MaterialCommunityIcons name="shoe-sneaker" size={75} color="#FF950A" />
-        <Text style={styles.buttonText}>CARDIO</Text>
+        <Text style={[GlobalStyles.title, { marginLeft: 16 }]}>CARDIO</Text>
       </TouchableOpacity>
 
       {/* ❗️Use absolute href that matches the actual file name */}
@@ -37,17 +36,17 @@ const NewActivityScreen: React.FC = () => {
         onPress={() => router.push('/(tabs)/new/StrengthTrain')}
       >
         <MaterialCommunityIcons name="dumbbell" size={75} color="#FF950A" />
-        <Text style={styles.buttonText}>Strength Train</Text>
+        <Text style={[GlobalStyles.title, { marginLeft: 16 }]}>Strength Train</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={() => router.push('/(tabs)/new/AddMeal')}>
         <MaterialCommunityIcons name="silverware-fork-knife" size={75} color="#FF950A" />
-        <Text style={styles.buttonText}>Add A Meal</Text>
+        <Text style={[GlobalStyles.title, { marginLeft: 16 }]}>Add A Meal</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={() => router.push('/(tabs)/new/WeighIn')}>
         <MaterialCommunityIcons name="scale-bathroom" size={75} color="#FF950A" />
-        <Text style={styles.buttonText}>Weigh In</Text>
+        <Text style={[GlobalStyles.title, { marginLeft: 16 }]}>Weigh In</Text>
       </TouchableOpacity>
 
       <Modal
@@ -64,13 +63,13 @@ const NewActivityScreen: React.FC = () => {
                   style={styles.button}
                   onPress={() => router.push('/(tabs)/new/IndoorSession')}
                 >
-                  <Text style={styles.buttonText}>INDOOR SESSION</Text>
+                  <Text style={GlobalStyles.subtitle}>INDOOR SESSION</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.button}
                   onPress={() => router.push('/(tabs)/new/OutdoorSession')}
                 >
-                  <Text style={styles.buttonText}>OUTDOOR SESSION</Text>
+                  <Text style={GlobalStyles.subtitle}>OUTDOOR SESSION</Text>
                 </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
@@ -87,9 +86,7 @@ export default NewActivityScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#333333', paddingHorizontal: 8 },
-  header: { color: '#FFFFFF', fontSize: 32, fontWeight: 'bold', alignSelf: 'center', marginVertical: 24 },
   button: { flexDirection: 'row', alignItems: 'center', borderColor: '#FFFFFF', borderWidth: 1, borderRadius: 12, padding: 16, marginVertical: 8 },
-  buttonText: { color: '#FFFFFF', fontSize: 26, marginLeft: 16 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(128,128,128,0.8)', justifyContent: 'center', alignItems: 'center' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(128, 128, 128, 0.85)', justifyContent: 'center', alignItems: 'center' },
   modalContainer: { width: '80%' },
 });
