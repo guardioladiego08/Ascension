@@ -1,11 +1,18 @@
 // components/my components/activities/add meal/CreateNewMeal.tsx
-// UPDATED: onFinish now also saves the meal into the global savedMealsStore.
+// FIXED & HARDENED:
+// - Guarded + disabled FINISH until mealName + at least 1 ingredient
+// - Stronger numeric parsing + validation (rejects NaN/empty/negative)
+// - Defensive try/catch around savedMealsStore.add so UI still updates
+// - Small UX: shows inline validation hints and prevents silent no-ops
+// - Minor perf: useCallback for handlers
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View, FlatList } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Popup from './Popup';
 import { AM_COLORS as C } from './theme';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 import { savedMealsStore } from '../../../../assets/data/savedMealStore';
 
 export type Macro = { protein: number; carbs: number; fats: number };
@@ -25,6 +32,11 @@ type Props = {
   onFinish: (meal: MealData) => void;
 };
 
+const toNum = (s: string) => {
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+};
+
 const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
   const [mealName, setMealName] = useState('');
   const [ingredientName, setIngredientName] = useState('');
@@ -32,56 +44,99 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const p = toNum(protein);
+  const c = toNum(carbs);
+  const f = toNum(fats);
+
+  const validNumbers = Number.isFinite(p) && Number.isFinite(c) && Number.isFinite(f) && p >= 0 && c >= 0 && f >= 0;
 
   const canQueue =
     ingredientName.trim().length > 0 &&
-    protein !== '' && carbs !== '' && fats !== '' &&
-    !Number.isNaN(Number(protein)) && !Number.isNaN(Number(carbs)) && !Number.isNaN(Number(fats));
+    protein.trim() !== '' &&
+    carbs.trim() !== '' &&
+    fats.trim() !== '' &&
+    validNumbers;
 
   const totals = useMemo(() => {
-    const p = ingredients.reduce((s, i) => s + i.macros.protein, 0);
-    const c = ingredients.reduce((s, i) => s + i.macros.carbs, 0);
-    const f = ingredients.reduce((s, i) => s + i.macros.fats, 0);
-    return { protein: p, carbs: c, fats: f, calories: calcCalories({ protein: p, carbs: c, fats: f }) };
+    const sum = ingredients.reduce(
+      (acc, i) => {
+        acc.protein += i.macros.protein;
+        acc.carbs += i.macros.carbs;
+        acc.fats += i.macros.fats;
+        return acc;
+      },
+      { protein: 0, carbs: 0, fats: 0 }
+    );
+    return { ...sum, calories: calcCalories(sum) };
   }, [ingredients]);
 
-  const queueIngredient = () => {
-    if (!canQueue) return;
-    const macros = { protein: Number(protein), carbs: Number(carbs), fats: Number(fats) };
+  const queueIngredient = useCallback(() => {
+    setError(null);
+    if (!canQueue) {
+      setError('Fill ingredient + valid macros (non-negative numbers).');
+      return;
+    }
+    const macros = { protein: p, carbs: c, fats: f };
     setIngredients(prev => [
       ...prev,
       { id: `${Date.now()}`, name: ingredientName.trim(), macros, calories: calcCalories(macros) },
     ]);
-    setIngredientName(''); setProtein(''); setCarbs(''); setFats('');
-  };
+    setIngredientName('');
+    setProtein('');
+    setCarbs('');
+    setFats('');
+  }, [canQueue, c, f, p, ingredientName]);
 
-  const finish = () => {
-    if (!mealName.trim() || ingredients.length === 0) return;
+  const canFinish = mealName.trim().length > 0 && ingredients.length > 0;
+
+  const finish = useCallback(() => {
+    setError(null);
+    if (!canFinish) {
+      setError('Add a meal name and at least one ingredient.');
+      return;
+    }
     const meal: MealData = {
       id: `${Date.now()}`,
       name: mealName.trim(),
       ingredients,
       totals,
     };
-    // 1) Return to the day list
-    onFinish(meal);
-    // 2) Save globally for "From Recipe"
-    savedMealsStore.add(meal);
 
-    // Reset and close
-    setMealName(''); setIngredientName(''); setProtein(''); setCarbs(''); setFats(''); setIngredients([]);
+    // 1) Update today list in parent immediately
+    onFinish(meal);
+
+    // 2) Save to global recipes (best-effort; do not block UI)
+    try {
+      if (savedMealsStore?.add) {
+        savedMealsStore.add(meal);
+      }
+    } catch (e) {
+      console.warn('savedMealsStore.add failed:', e);
+      // non-fatal: user still sees meal added today
+    }
+
+    // 3) Reset + close popup
+    setMealName('');
+    setIngredientName('');
+    setProtein('');
+    setCarbs('');
+    setFats('');
+    setIngredients([]);
     onClose();
-  };
+  }, [canFinish, ingredients, mealName, onClose, onFinish, totals]);
 
   return (
     <Popup visible={visible} onClose={onClose} title="Create a New Meal">
       <View style={styles.container}>
         <TextInput
-          placeholder="ENTER MEAL NAME.."
+          placeholder="Enter a Meal Name.."
           placeholderTextColor={C.muted}
           value={mealName}
           onChangeText={setMealName}
-          style={styles.mealName}
+          style={GlobalStyles.textInput}
+          autoCapitalize="words"
         />
 
         {ingredients.length > 0 && (
@@ -89,21 +144,24 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
             data={ingredients}
             keyExtractor={i => i.id}
             ItemSeparatorComponent={() => <View style={styles.sep} />}
-            style={{ marginTop: 8 }}
+            style={{ marginTop: 8, maxHeight: 220 }}
             renderItem={({ item, index }) => (
               <View style={styles.row}>
-                <Text style={styles.index}>{index + 1}</Text>
+                <Text style={[GlobalStyles.text, { textAlign: 'center', marginRight: 8 }]}>{index + 1}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.ingName}>{item.name.toUpperCase()}</Text>
+                  <Text style={GlobalStyles.text}>{item.name.toUpperCase()}</Text>
                   <View style={styles.pillsRow}>
-                    <View style={[styles.pill, { backgroundColor: '#6AE5E5' }]}>
-                      <Text style={styles.pillLabel}>P</Text><Text style={styles.pillValue}>{item.macros.protein}g</Text>
+                    <View style={[styles.pill, { backgroundColor: Colors.dark.macroProtein }]}>
+                      <Text style={styles.pillLabel}>P</Text>
+                      <Text style={styles.pillValue}>{item.macros.protein}g</Text>
                     </View>
-                    <View style={[styles.pill, { backgroundColor: '#FFD400' }]}>
-                      <Text style={styles.pillLabel}>C</Text><Text style={styles.pillValue}>{item.macros.carbs}g</Text>
+                    <View style={[styles.pill, { backgroundColor: Colors.dark.macroCarbs }]}>
+                      <Text style={styles.pillLabel}>C</Text>
+                      <Text style={styles.pillValue}>{item.macros.carbs}g</Text>
                     </View>
-                    <View style={[styles.pill, { backgroundColor: '#F79E1B' }]}>
-                      <Text style={styles.pillLabel}>F</Text><Text style={styles.pillValue}>{item.macros.fats}g</Text>
+                    <View style={[styles.pill, { backgroundColor: Colors.dark.macroFats }]}>
+                      <Text style={styles.pillLabel}>F</Text>
+                      <Text style={styles.pillValue}>{item.macros.fats}g</Text>
                     </View>
                   </View>
                 </View>
@@ -121,11 +179,13 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
         <View style={{ marginTop: 12 }}>
           <View style={styles.ingredientRow}>
             <TextInput
-              placeholder="INGREDIENT .."
+              placeholder="Ingredient .."
               placeholderTextColor={C.muted}
               value={ingredientName}
               onChangeText={setIngredientName}
-              style={[styles.input, { flex: 1 }]}
+              style={[GlobalStyles.textInput, { flex: 1 }]}
+              autoCapitalize="words"
+              returnKeyType="done"
             />
             <TouchableOpacity
               onPress={queueIngredient}
@@ -137,21 +197,48 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
           </View>
 
           <View style={styles.macroRow}>
-            <TextInput placeholder="PROTEIN.." placeholderTextColor={C.muted} keyboardType="numeric"
-              value={protein} onChangeText={setProtein} style={[styles.input, styles.small]} />
-            <TextInput placeholder="CARBS.." placeholderTextColor={C.muted} keyboardType="numeric"
-              value={carbs} onChangeText={setCarbs} style={[styles.input, styles.small]} />
-            <TextInput placeholder="FATS.." placeholderTextColor={C.muted} keyboardType="numeric"
-              value={fats} onChangeText={setFats} style={[styles.input, styles.small]} />
+            <TextInput
+              placeholder="Protein.."
+              placeholderTextColor={C.muted}
+              keyboardType="numeric"
+              inputMode="decimal"
+              value={protein}
+              onChangeText={setProtein}
+              style={[GlobalStyles.textInput, styles.small]}
+            />
+            <TextInput
+              placeholder="Carbs.."
+              placeholderTextColor={C.muted}
+              keyboardType="numeric"
+              inputMode="decimal"
+              value={carbs}
+              onChangeText={setCarbs}
+              style={[GlobalStyles.textInput, styles.small]}
+            />
+            <TextInput
+              placeholder="Fats.."
+              placeholderTextColor={C.muted}
+              keyboardType="numeric"
+              inputMode="decimal"
+              value={fats}
+              onChangeText={setFats}
+              style={[GlobalStyles.textInput, styles.small]}
+            />
           </View>
         </View>
 
         <View style={styles.totalsRow}>
-          <Text style={styles.totalsText}>P {totals.protein}g   C {totals.carbs}g   F {totals.fats}g</Text>
-          <Text style={styles.totalsText}>CAL {totals.calories}</Text>
+          <Text style={GlobalStyles.textBold}>P {totals.protein}g   C {totals.carbs}g   F {totals.fats}g</Text>
+          <Text style={GlobalStyles.textBold}>CAL {totals.calories}</Text>
         </View>
 
-        <TouchableOpacity onPress={finish} style={styles.finishBtn}>
+        {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+        <TouchableOpacity
+          onPress={finish}
+          disabled={!canFinish}
+          style={[styles.finishBtn, !canFinish && { opacity: 0.5 }]}
+        >
           <Text style={styles.finishText}>FINISH</Text>
         </TouchableOpacity>
       </View>
@@ -163,11 +250,8 @@ export default CreateNewMeal;
 
 const styles = StyleSheet.create({
   container: { paddingHorizontal: 12 },
-  mealName: { backgroundColor: '#E9E9E9', color: '#333', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16 },
   sep: { height: 1, backgroundColor: C.line, opacity: 0.7, marginVertical: 8 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  index: { color: C.text, width: 18, fontWeight: '800', textAlign: 'center', marginRight: 8 },
-  ingName: { color: C.text, fontWeight: '800', letterSpacing: 0.5 },
   pillsRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
   pill: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
   pillLabel: { color: '#333', fontWeight: '900', marginRight: 4, fontSize: 12 },
@@ -175,12 +259,11 @@ const styles = StyleSheet.create({
   rightTop: { color: C.text, fontWeight: '700' },
   rightBot: { color: C.text, fontWeight: '700', opacity: 0.9 },
   ingredientRow: { flexDirection: 'row', alignItems: 'center' },
-  input: { backgroundColor: '#E9E9E9', color: '#333', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   small: { flex: 1, marginTop: 8, marginRight: 8 },
   checkBtn: { marginLeft: 10, backgroundColor: '#D2D2D2', borderRadius: 999, padding: 10 },
   macroRow: { flexDirection: 'row', alignItems: 'center' },
   totalsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
-  totalsText: { color: C.text, fontWeight: '900', letterSpacing: 0.5 },
-  finishBtn: { marginTop: 16, backgroundColor: '#FF950A', paddingVertical: 12, borderRadius: 18, alignItems: 'center' },
+  finishBtn: { marginTop: 16, backgroundColor: Colors.dark.highlight1, paddingVertical: 12, borderRadius: 18, alignItems: 'center' },
   finishText: { color: '#2D2D2D', fontWeight: '900', letterSpacing: 1, fontSize: 16 },
+  errorText: { color: '#ff7676', marginTop: 8, fontWeight: '600' },
 });

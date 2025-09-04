@@ -3,7 +3,9 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { AM_COLORS as C } from './theme';
-import type { DayMealData } from './data';
+import type { DayMealData } from '@/assets/data/addMealData';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
 type Props = { data: DayMealData };
 const pct = (value: number, goal: number) => (goal <= 0 ? 0 : Math.max(0, Math.min(1, value / goal)));
@@ -12,11 +14,11 @@ const MacroBar: React.FC<{ label: string; value: number; goal: number; style?: a
   const p = pct(value, goal);
   return (
     <View style={[styles.macroBlock, style]}>
-      <Text style={styles.macroLabel}>{label}</Text>
+      <Text style={[GlobalStyles.text, {marginBottom:5}]}>{label}</Text>
       <View style={styles.barTrack}>
         <View style={[styles.barFill, { width: `${p * 100}%` }]} />
       </View>
-      <Text style={styles.macroValue}>
+      <Text style={GlobalStyles.subtext}>
         {value}/{goal}
       </Text>
     </View>
@@ -68,9 +70,9 @@ const MacroSection: React.FC<Props> = ({ data }) => {
       </View>
 
       <View style={styles.calsRight}>
-        <Text style={styles.macroLabel}>CALORIES</Text>
+        <Text style={[GlobalStyles.text,{marginBottom: 5}]}>CALORIES</Text>
         <CaloriesRing value={calories.value} goal={calories.goal} size={70} stroke={7} />
-        <Text style={styles.calsText}>
+        <Text style={[GlobalStyles.subtext, {marginTop: 8}]}>
           {calories.value}/{calories.goal}
         </Text>
       </View>
@@ -86,7 +88,6 @@ const styles = StyleSheet.create({
   macroLabel: { color: C.subText, fontSize: 10, marginBottom: 4 },
   macroValue: { color: C.text, fontSize: 11, marginTop: 4 },
   barTrack: { width: '100%', height: 12, borderRadius: 6, backgroundColor: C.barTrack, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: C.orange, borderRadius: 6 },
+  barFill: { height: '100%', backgroundColor: Colors.dark.highlight1, borderRadius: 6 },
   calsRight: { width: 110, alignItems: 'center', paddingTop: 6 },
-  calsText: { color: C.text, fontWeight: '700', marginTop: 8 },
 });

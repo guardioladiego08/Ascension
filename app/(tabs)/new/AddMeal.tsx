@@ -61,7 +61,7 @@ export default function AddMealScreen() {
         <View style={styles.hr} />
 
         {/* Meals header and action buttons */}
-        <Text style={styles.sectionTitle}>MEALS</Text>
+        <Text style={[GlobalStyles.subtitle,  {alignSelf: 'center', marginTop: 12, marginBottom: 12}]}>MEALS</Text>
         <MealsActions
           onOpenFromRecipe={() => setFromRecipeOpen(true)}
           onOpenCreateNew={() => setCreateNewOpen(true)}
@@ -70,7 +70,7 @@ export default function AddMealScreen() {
 
         {/* List under MacroSection */}
         {todaysMeals.length === 0 ? (
-          <Text style={styles.empty}>No meals added yet.</Text>
+          <Text style={[GlobalStyles.text, {marginTop: 10, alignSelf: 'center' }]}>No meals added yet.</Text>
         ) : (
           <View style={{ marginTop: 10 }}>
             {todaysMeals.map(m => (
@@ -116,8 +116,8 @@ export default function AddMealScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg, paddingHorizontal: 16 },
-  card: { backgroundColor: C.bg, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 10 },
+  safe: { flex: 1,  paddingHorizontal: 16 },
+  card: {  borderRadius: 12, paddingVertical: 10, paddingHorizontal: 10 },
   hr: { height: 1, backgroundColor: C.line, marginTop: 12 },
   sectionTitle: {
     color: C.text, fontWeight: 'bold', alignSelf: 'center', marginTop: 12, marginBottom: 12, letterSpacing: 1,

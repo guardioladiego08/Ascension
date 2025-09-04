@@ -44,7 +44,11 @@ export const GlobalStyles = StyleSheet.create({
     color: Colors.dark.text,
     fontFamily: Fonts.regular,
     fontSize: 14,
-
+  },
+    subtext: {
+    color: Colors.dark.text,
+    fontFamily: Fonts.regular,
+    fontSize: 12,
   },
   textBold: {
     color: Colors.dark.text,

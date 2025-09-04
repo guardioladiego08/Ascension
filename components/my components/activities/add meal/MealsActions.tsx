@@ -2,6 +2,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AM_COLORS as C } from './theme';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 type Props = { onOpenFromRecipe: () => void; onOpenCreateNew: () => void };
 
@@ -9,10 +10,10 @@ const MealsActions: React.FC<Props> = ({ onOpenFromRecipe, onOpenCreateNew }) =>
   return (
     <View style={styles.row}>
       <TouchableOpacity style={styles.btn} onPress={onOpenFromRecipe}>
-        <Text style={styles.btnText}>FROM RECIPE</Text>
+        <Text style={GlobalStyles.textBold}>FROM RECIPE</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.btn} onPress={onOpenCreateNew}>
-        <Text style={styles.btnText}>CREATE NEW</Text>
+        <Text style={GlobalStyles.textBold}>CREATE NEW</Text>
       </TouchableOpacity>
     </View>
   );
@@ -30,5 +31,4 @@ const styles = StyleSheet.create({
     minWidth: 140,
     alignItems: 'center',
   },
-  btnText: { color: C.text, fontWeight: 'bold' },
 });

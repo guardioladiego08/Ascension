@@ -6,14 +6,16 @@ export const Colors = {
   },
   dark: {
     background: '#525252',
+    offset1: '#6C6C6C',
     highlight1: '#FF950A',
     highlight2: '#6AE5E5',
-    macroProtein:    '#9e9e9e',   // light-grey
-    macroCarbs:      '#d4af0f',   // yellow
-    macroFats:       '#cd8c34',   // orange
-    milesRan:        '#cd7134ff',
+    macroProtein:    '#b6b5b5ff',   // light-grey
+    macroCarbs:      '#f3cf30ff',   // yellow
+    macroFats:       '#f3a435ff',   // orange
+    milesRan:        '#f5873eff',
     weightLifted:        '#f1d63aff',
     text: '#ffffff',
+    blkText: '#000000ff',
     link: '#1e90ff',
     tab: '#2B2B2B',
   },
