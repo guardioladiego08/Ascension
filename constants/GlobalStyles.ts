@@ -45,7 +45,7 @@ export const GlobalStyles = StyleSheet.create({
     fontFamily: Fonts.regular,
     fontSize: 14,
   },
-    subtext: {
+  subtext: {
     color: Colors.dark.text,
     fontFamily: Fonts.regular,
     fontSize: 12,
