@@ -193,14 +193,6 @@ const ExerciseCard: React.FC<Props> = ({
   );
 };
 
-const LegendDot: React.FC<{ color: string; label: string }> = ({ color, label }) => {
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: color }]} />
-      <Text style={styles.legendText}>{label}</Text>
-    </View>
-  );
-};
 
 const ModeOption: React.FC<{
   icon: keyof typeof MaterialIcons.glyphMap;
