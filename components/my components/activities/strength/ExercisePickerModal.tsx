@@ -15,6 +15,8 @@ import {
   FlatList,
   StyleSheet,
 } from 'react-native';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
 type Props = {
   visible: boolean;
@@ -28,14 +30,14 @@ const ExercisePickerModal: React.FC<Props> = ({ visible, items, onPick, onClose 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.pickerContainer}>
-          <Text style={styles.pickerTitle}>Select Exercise</Text>
+          <Text style={[GlobalStyles.subtitle, {alignSelf: 'center'}]}>Select Exercise</Text>
 
           <FlatList
             data={items}
             keyExtractor={(item) => item}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.pickerItem} onPress={() => onPick(item)}>
-                <Text style={styles.pickerText}>{item}</Text>
+                <Text style={GlobalStyles.text}>{item}</Text>
               </TouchableOpacity>
             )}
           />
@@ -64,15 +66,8 @@ const styles = StyleSheet.create({
     maxHeight: '80%',
     padding: 16,
   },
-  pickerTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
   pickerItem: { paddingVertical: 12, borderBottomWidth: 1, borderColor: '#444' },
   pickerText: { color: 'white', fontSize: 16 },
   pickerClose: { marginTop: 12, alignItems: 'center' },
-  pickerCloseText: { color: '#FF950A', fontSize: 16 },
+  pickerCloseText: { color: Colors.dark.highlight1, fontSize: 16 },
 });

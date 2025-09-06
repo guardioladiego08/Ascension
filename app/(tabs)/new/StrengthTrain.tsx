@@ -1,6 +1,8 @@
 // app/(tabs)/new/StrengthTrain.tsx
 // -----------------------------------------------------------------------------
 // MAIN SCREEN – orchestrates state and composes the split components
+// Now supports per-set "mode" (normal | warmup | dropset | failure).
+// Tap a set number (or the mode pill) in ExerciseCard to change its mode.
 // -----------------------------------------------------------------------------
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -9,13 +11,14 @@ import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import LogoHeader from '@/components/my components/logoHeader';
 import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 import ExercisePickerModal from '@/components/my components/activities/strength/ExercisePickerModal';
 import StrengthHeader from '@/components/my components/activities/strength/StrengthHeader';
 import ExerciseCard from '@/components/my components/activities/strength/ExerciseCard';
 import EmptyState from '@/components/my components/activities/strength/EmptyState';
 import FooterActions from '@/components/my components/activities/strength/FooterActions';
 import ConfirmOverlay from '@/components/my components/activities/strength/ConfirmOverlay';
-import type { ExerciseType } from '@/components/my components/activities/strength/types';
+import type { ExerciseType, SetMode } from '@/components/my components/activities/strength/types';
 
 const EXERCISES = [
   'Bench Press (Barbell)',
@@ -87,14 +90,21 @@ const StrengthTrain: React.FC = () => {
 
   // Actions
   const addExercise = (name: string) => {
-    setExercises((es) => [...es, { id: String(Date.now()), name, sets: [] }]);
+    const id = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    setExercises((es) => [...es, { id, name, sets: [] }]);
     setPickerVisible(false);
   };
 
   const addSet = (exId: string) =>
     setExercises((es) =>
       es.map((ex) =>
-        ex.id === exId ? { ...ex, sets: [...ex.sets, { weight: '', reps: '' }] } : ex
+        ex.id === exId
+          ? {
+              ...ex,
+              // Default a new set to 'normal' so it "continues counting" unless user changes it
+              sets: [...ex.sets, { weight: '', reps: '', mode: 'normal' }],
+            }
+          : ex
       )
     );
 
@@ -103,6 +113,19 @@ const StrengthTrain: React.FC = () => {
       es.map((ex) =>
         ex.id === exId
           ? { ...ex, sets: ex.sets.map((st, i) => (i === idx ? { ...st, [field]: val } : st)) }
+          : ex
+      )
+    );
+
+  // NEW: update a set's mode (normal | warmup | dropset | failure)
+  const updateSetMode = (exId: string, idx: number, mode: SetMode) =>
+    setExercises((es) =>
+      es.map((ex) =>
+        ex.id === exId
+          ? {
+              ...ex,
+              sets: ex.sets.map((st, i) => (i === idx ? { ...st, mode } : st)),
+            }
           : ex
       )
     );
@@ -144,6 +167,7 @@ const StrengthTrain: React.FC = () => {
               onDelete={removeExercise}
               onAddSet={addSet}
               onUpdateSet={updateSet}
+              onUpdateSetMode={updateSetMode}
             />
           ))}
 
@@ -152,7 +176,7 @@ const StrengthTrain: React.FC = () => {
 
           {/* Add Exercise */}
           <TouchableOpacity style={styles.addExerciseBtn} onPress={() => setPickerVisible(true)}>
-            <MaterialIcons name="add" size={20} color="white" />
+            <MaterialIcons name="add" size={20} color= {Colors.dark.blkText} />
             <Text style={styles.addExerciseText}>Add Exercise</Text>
           </TouchableOpacity>
 
@@ -187,5 +211,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  addExerciseText: { color: 'white', marginLeft: 8, fontSize: 16 },
+  addExerciseText: { color: Colors.dark.blkText, marginLeft: 8, fontSize: 16 },
 });
