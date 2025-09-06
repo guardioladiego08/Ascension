@@ -27,6 +27,7 @@ export const GlobalStyles = StyleSheet.create({
     fontSize: 23,
     fontWeight: '800',
     letterSpacing: 1,
+    alignSelf: 'center'
   },
   subtitle: {
     color: Colors.dark.text,

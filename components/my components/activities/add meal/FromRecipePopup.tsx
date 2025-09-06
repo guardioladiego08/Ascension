@@ -27,7 +27,7 @@ import {
   useSavedMeals,
 } from '../../../../assets/data/savedMealStore'; // Hook to read saved meals
 import { GlobalStyles } from '@/constants/GlobalStyles'; // Shared text styles (e.g., bold, subtext)
-
+import { Colors } from '@/constants/Colors';
 /**
  * Props expected by FromRecipePopup.
  * - visible: controls whether the popup is shown.
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   // ADD button styling: bright brand color, rounded pill
   addBtn: {
     marginTop: 10,
-    backgroundColor: '#FF950A',
+    backgroundColor: Colors.dark.highlight1,
     borderRadius: 14,
     alignSelf: 'center',
     paddingHorizontal: 26,
