@@ -3,6 +3,7 @@
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 
@@ -12,12 +13,12 @@ export default function Stats() {
   const go = (path: string) => router.push(`/stats/${path}`);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={GlobalStyles.safeArea}>
       <LogoHeader />
 
       <View style={styles.headerBlock}>
-        <Text style={styles.headerLine}>CHECK YOUR</Text>
-        <Text style={styles.headerLine}>PROGRESS</Text>
+        <Text style={GlobalStyles.header}>CHECK YOUR</Text>
+        <Text style={GlobalStyles.header}>PROGRESS</Text>
       </View>
 
       <View style={styles.buttons}>
@@ -41,19 +42,11 @@ export default function Stats() {
   );
 }
 
-const ORANGE = '#FF950A';
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors?.dark?.background ?? '#3f3f3f',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
+
   headerBlock: {
-    marginTop: 8,
     marginBottom: 12,
-    alignItems: 'center',
   },
   headerLine: {
     color: '#fff',
@@ -81,7 +74,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardText: {
-    color: ORANGE,
+    color: Colors.dark.highlight1,
     fontSize: 24,
     fontWeight: '900',
     textAlign: 'center',

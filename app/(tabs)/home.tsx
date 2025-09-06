@@ -47,7 +47,7 @@ export default function Home() {
           height={175}
         />
         <BasicChart
-          title="Miles Ran"
+          title="Weight Lifted"
           color={Colors.dark.weightLifted}
           data={weightLiftedData}
           height={175}

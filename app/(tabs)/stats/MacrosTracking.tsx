@@ -1,76 +1,58 @@
 // app/(tabs)/stats/macros-tracking.tsx
 // UPDATED: adds a "View Meals" button that routes to /stats/meals
-import React from 'react';
+import React, { useMemo } from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import StepLayeredCompositionChart from '@/components/my components/charts/StepRangeChart';
-import RangeChart from '@/components/my components/charts/RangeChart';
-import macrosDataset from '@/assets/data/macrosData';
-import caloriesBurnedData from '@/assets/data/caloriesBurnedData';
+import BasicChart from '@/components/my components/charts/BasicChart';
+import macrosDataset from '@/assets/data/stats/macrosDataset';
+import { 
+  toProteinSeries,
+  toCarbsSeries,
+  toFatsSeries,
+  toCaloriesSeries 
+} from '@/assets/data/stats/macrosSeries';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 
-const WHITE = '#FFFFFF';
+  const proteinData = useMemo(() => toProteinSeries(macrosDataset), []);
+  const carbsData   = useMemo(() => toCarbsSeries(macrosDataset), []);
+  const fatsData    = useMemo(() => toFatsSeries(macrosDataset), []);
+  const caloriesData= useMemo(() => toCaloriesSeries(macrosDataset), []);
 
 export default function MacrosTracking() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LogoHeader />
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      <LogoHeader showBackButton/>
+      <ScrollView 
+              contentContainerStyle={styles.scrollContent} 
+              showsVerticalScrollIndicator={false}
+      >
+        <Text style={GlobalStyles.header}>NUTRITION TRACKING</Text>
+        <BasicChart title="Protein"  color="#5887FF" data={proteinData}  height={220} />
+        <BasicChart title="Carbs"    color="#FF950A" data={carbsData}    height={220} />
+        <BasicChart title="Fats"     color="#2ECC71" data={fatsData}     height={220} />
+        <BasicChart title="Calories" color="#E74C3C" data={caloriesData} height={220} />
+        
 
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backTxt}>{'‹'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>MACROS TRACKING</Text>
 
-        <TouchableOpacity style={styles.viewMealsBtn} onPress={() => router.push('/stats/meals')}>
-          <Text style={styles.viewMealsTxt}>VIEW MEALS</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.section}>
-          <StepLayeredCompositionChart
-            dataset={macrosDataset}
-            initialRange="month"
-            height={200}
-            title=""
-            colors={{
-              caloriesLine: '#D7D7D7',
-              carbs: '#F3C969',
-              protein: '#E0B64F',
-              fat: '#B5892E',
-            }}
-          />
-
-          <View style={styles.chartArea}>
-            <RangeChart
-              dataset={caloriesBurnedData}
-              chartColor="#6AE5E5"
-              chartHeight={200}
-              initialRange="month"
-              title="Calories"
-            />
-          </View>
-        </View>
+          <TouchableOpacity style={styles.viewMealsBtn} onPress={() => router.push('/stats/meals')}>
+            <Text style={styles.viewMealsTxt}>VIEW MEALS</Text>
+          </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.dark.background },
-  headerRow: {
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+    scrollContent: {
+    paddingBottom: 40, // adds space at bottom
   },
-  backTxt: { color: WHITE, fontSize: 26, fontWeight: '800' },
-  title: { color: WHITE, fontSize: 18, fontWeight: '800', letterSpacing: 1, flex: 1 },
+
+  backTxt: { color: Colors.dark.text, fontSize: 26, fontWeight: '800' },
+  title: { color: Colors.dark.text, fontSize: 18, fontWeight: '800', letterSpacing: 1, flex: 1 },
   viewMealsBtn: {
     backgroundColor: '#FF950A',
     paddingHorizontal: 14,
