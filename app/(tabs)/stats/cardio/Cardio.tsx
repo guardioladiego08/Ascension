@@ -24,13 +24,14 @@ import {
   TouchableOpacity,
   FlatList,
   Modal,
-  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { format } from 'date-fns';
 import { Svg, Rect } from 'react-native-svg';
 
 import LogoHeader from '@/components/my components/logoHeader';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
 import activitiesData, { CardioActivity, CardioType } from '@/assets/data/cardio/cardioActivities';
 import AchievementCarousel from '@/components/my components/cardio/AchievementCarousel';
@@ -39,8 +40,6 @@ import IndoorActivityModal from '@/components/my components/cardio/IndoorActivit
 import OutdoorActivityModal from '@/components/my components/cardio/OutdoorActivityModal';
 
 const BG = '#3f3f3f';
-const WHITE = '#FFFFFF';
-const ORANGE = '#f58025';
 const CARD = '#5a5a5a';
 
 export default function Cardio() {
@@ -57,14 +56,11 @@ export default function Cardio() {
 
   return (
     <SafeAreaView style={styles.safe}>
-        <LogoHeader></LogoHeader>
-      <StatusBar barStyle="light-content" />
+        <LogoHeader showBackButton></LogoHeader>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Logo + Title */}
-        <View style={styles.headerWrap}>
-          {/* Replace this with your LogoHeader if you prefer */}
-          <Text style={styles.title}>RUNS</Text>
-        </View>
+      {/* Logo + Title */}
+      <Text style={GlobalStyles.header}>CARDIO</Text>
+
 
         {/* Achievements */}
         <AchievementCarousel
@@ -77,13 +73,7 @@ export default function Cardio() {
 
         {/* Activity header with tiny filter icon (visual only here) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>ACTIVITY</Text>
-          <TouchableOpacity
-            onPress={() => router.push('/(tabs)/stats/cardio/all-activities')}
-            accessibilityLabel="Open filters in full list"
-          >
-            <View style={styles.filterGlyph} />
-          </TouchableOpacity>
+          <Text style={GlobalStyles.subtitle}>ACTIVITY</Text>
         </View>
 
         {/* Recent cards */}
@@ -121,17 +111,8 @@ export default function Cardio() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
   container: { paddingHorizontal: 16 },
-  headerWrap: { alignItems: 'center', gap: 8, paddingTop: 8, paddingBottom: 10 },
-  logoBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: ORANGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoA: { color: WHITE, fontWeight: '800' },
-  title: { color: WHITE, fontSize: 24, fontWeight: '800', letterSpacing: 1.2 },
+  logoA: { color: Colors.dark.text, fontWeight: '800' },
+  title: { color: Colors.dark.text, fontSize: 24, fontWeight: '800', letterSpacing: 1.2 },
   sectionHeader: {
     marginTop: 16,
     marginBottom: 10,
@@ -140,24 +121,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: { color: WHITE, fontWeight: '800', letterSpacing: 1, fontSize: 16 },
   filterGlyph: {
     width: 18,
     height: 18,
     borderLeftWidth: 2,
     borderRightWidth: 2,
     borderBottomWidth: 2,
-    borderColor: WHITE,
+    borderColor: Colors.dark.text,
     transform: [{ rotate: '45deg' }],
     opacity: 0.7,
   },
   viewAllBtn: {
     marginTop: 16,
     alignSelf: 'center',
-    backgroundColor: ORANGE,
+    backgroundColor: Colors.dark.highlight1,
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 10,
   },
-  viewAllText: { color: WHITE, fontWeight: '700', letterSpacing: 0.5 },
+  viewAllText: { color: Colors.dark.blkText, fontWeight: '700', letterSpacing: 0.5 },
 });

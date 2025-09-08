@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { isWithinInterval, parseISO } from 'date-fns';
+import LogoHeader from '@/components/my components/logoHeader';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 import activitiesData, { CardioActivity, CardioType } from '@/assets/data/cardio/cardioActivities';
 import ActivityCard from '@/components/my components/cardio/ActivityCard';
@@ -55,12 +57,10 @@ export default function CardioAllActivities() {
   }, [query, type, dateFrom, dateTo]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      <LogoHeader showBackButton/>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>{'‹'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.h1}>All Activities</Text>
+        <Text style={GlobalStyles.header}>All Activities</Text>
         <TouchableOpacity onPress={() => setShowFilter(true)}>
           <Text style={styles.filter}>Filter</Text>
         </TouchableOpacity>
@@ -71,7 +71,7 @@ export default function CardioAllActivities() {
           value={query}
           onChangeText={setQuery}
           placeholder="Search by activity name"
-          placeholderTextColor="#cfcfcf"
+          placeholderTextColor="#777777ff"
           style={styles.search}
         />
       </View>
@@ -164,7 +164,6 @@ export default function CardioAllActivities() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
   header: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -173,12 +172,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  back: { color: WHITE, fontSize: 24, padding: 4 },
-  h1: { color: WHITE, fontSize: 18, fontWeight: '800' },
   filter: { color: WHITE, opacity: 0.9 },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   search: {
-    backgroundColor: '#505050',
+    backgroundColor: '#e6e6e6ff',
     color: WHITE,
     borderRadius: 10,
     paddingHorizontal: 12,

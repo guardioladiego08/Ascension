@@ -28,6 +28,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import LogoHeader from '@/components/my components/logoHeader';
 import sessions, { StrengthSession } from '@/assets/data/strength/StrengthProgressList';
 import { Colors } from '@/constants/Colors';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 const BG = Colors?.dark?.background ?? '#3f3f3f';
 const ORANGE = '#FF950A';
@@ -195,15 +196,12 @@ const AllActivities: React.FC = () => {
   }, [query, dateRange]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={GlobalStyles.safeArea}>
       {/* Logo + top header row */}
-      <LogoHeader />
+      <LogoHeader  showBackButton/>
 
       <View style={styles.topRow}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color="#fff" />
-          <Text style={styles.backTxt}>Back</Text>
-        </TouchableOpacity>
+
 
         <View style={{ flex: 1 }} />
 
@@ -299,22 +297,12 @@ const AllActivities: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG, paddingHorizontal: 16 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
     marginBottom: 8,
   },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  backTxt: { color: '#fff', fontWeight: '800', letterSpacing: 0.3, fontSize: 13 },
-
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',

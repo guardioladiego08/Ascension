@@ -9,13 +9,13 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
-import RangeChart from '@/components/my components/charts/RangeChart';
+import BasicChart from '@/components/my components/charts/BasicChart';
 import { Colors } from '@/constants/Colors';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 // Data (manually generated files)
-import weightLiftedData from '@/assets/data/home/weightLiftedData';
 import sessions from '@/assets/data/strength/StrengthProgressList';
-
+import weightLiftedData from '@/assets/data/home/weightLiftedData';
 type Range = 'Day' | 'Week' | 'Month';
 
 const ORANGE = '#FF950A';
@@ -35,29 +35,20 @@ const StrengthStats: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <LogoHeader />
-
-      {/* PAGE TITLE */}
-      <View style={{ marginTop: 2, marginBottom: 10 }}>
-        <Text style={styles.pageTitle}>STRENGTH</Text>
-      </View>
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      <LogoHeader showBackButton/>
+      <Text style={GlobalStyles.header}>STRENGTH</Text>
 
       {/* "TOTAL WEIGHT" SECTION + CHART SHELL */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>TOTAL WEIGHT</Text>
-
-
         {/* CHART SHELL (placeholder) */}
-  
-              <RangeChart
-                dataset={weightLiftedData}
-                initialRange="month"
-                title="Total Weight"
-                chartColor="#6AE5E5"
-              />
-          
-
+          <BasicChart
+            title="Weight Lifted"
+            color={Colors.dark.weightLifted}
+            data={weightLiftedData}
+            height={175}
+          />
       </View>
 
       {/* ACTIVITY HEADER */}
@@ -121,19 +112,6 @@ const StrengthStats: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: BG,
-    paddingHorizontal: 16,
-    paddingTop: 6,
-  },
-  pageTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
   card: {
     backgroundColor: 'transparent',
     borderRadius: 12,
