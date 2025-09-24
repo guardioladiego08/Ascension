@@ -134,7 +134,6 @@ export default function BasicChart({
           enablePanGesture
           onPointSelected={(p) => setSelected(p)}
           onGestureEnd={() => setSelected(null)}
-          SelectionDot={SelectionDot}
         />
       </View>
 
