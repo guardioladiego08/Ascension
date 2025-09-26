@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
 import { GlobalStyles } from '@/constants/GlobalStyles';
+import { supabase } from '@/lib/supabase'; // make sure you have this
 
 const WeighIn: React.FC = () => {
   const router = useRouter();
@@ -23,10 +24,41 @@ const WeighIn: React.FC = () => {
   const [boneMass, setBoneMass] = useState<string>('');
   const [muscleMass, setMuscleMass] = useState<string>('');
 
-  const onSave = () => {
-    // TODO: persist to your store / API here
-    // e.g., saveWeighIn({ weight, bodyFat, boneMass, muscleMass })
-    router.back(); // go back to previous screen after saving
+  
+  const onSave = async () => {
+    try {
+      // Get the current user
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        alert('You must be signed in to save a weigh-in.');
+        return;
+      }
+
+      const { error } = await supabase.from('body_comp').insert([
+        {
+          user_id: user.id,
+          weight: weight ? parseFloat(weight) : null,
+          body_fat: bodyFat ? parseFloat(bodyFat) : null,
+          bone_mass: boneMass ? parseFloat(boneMass) : null,
+          muscle_mass: muscleMass ? parseFloat(muscleMass) : null,
+        },
+      ]);
+
+      if (error) {
+        console.error('Error saving weigh-in:', error.message);
+        alert('Could not save weigh-in.');
+      } else {
+        alert('Weigh-in saved!');
+        router.back(); // go back after save
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Unexpected error.');
+    }
   };
 
   return (

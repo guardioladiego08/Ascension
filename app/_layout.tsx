@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
+// app/_layout.tsx
 function SessionRouterGuard() {
   const router = useRouter();
   const segments = useSegments();
@@ -18,15 +19,18 @@ function SessionRouterGuard() {
 
   useEffect(() => {
     let mounted = true;
+
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session ?? null);
       setReady(true);
     });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
       if (!mounted) return;
       setSession(s ?? null);
     });
+
     return () => {
       mounted = false;
       sub.subscription?.unsubscribe();
@@ -35,13 +39,17 @@ function SessionRouterGuard() {
 
   useEffect(() => {
     if (!ready || !navState?.key) return;
+
     const inAuth = segments[0] === 'auth';
-    const inHome = segments[0] === 'home' || segments[1] === 'home'; // safety for nested
 
     if (!session && !inAuth) {
+      // not logged in → push them to auth
       router.replace('/auth');
-    } else if (session && !inHome) {
-      router.replace('/home'); // ✅ go to a real screen
+    }
+
+    if (session && inAuth) {
+      // logged in but still on auth → send to a safe default
+      router.replace('/home'); // ✅ only when they’re on /auth
     }
   }, [ready, navState?.key, session, segments, router]);
 
