@@ -1,9 +1,5 @@
 // app/(tabs)/home.tsx
-// ✅ Fixes "VirtualizedLists should never be nested inside plain ScrollViews".
-//    We replace the <ScrollView> with a single <FlatList> that drives the page scroll.
-//    All non-list UI lives in ListHeaderComponent / ListFooterComponent.
-
-import React, { useMemo } from 'react';
+import * as React from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -12,41 +8,82 @@ import {
   Text,
   View,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import MacroTracker from '@/components/my components/Home/MacrosPieChart';
 import ProfileCard from '@/components/my components/Home/ProfileCard';
-import BasicChart from '@/components/my components/charts/BasicChart';
+import BasicChart, { WeightPoint } from '@/components/my components/charts/BasicChart';
 import ActivityStats from '@/components/my components/Home/Activity';
 import StatsComparison from '@/components/my components/Home/ActivityComparison';
-import { GlobalStyles } from '@/constants/GlobalStyles';
-import { Colors } from '@/constants/Colors';
 
-import weightData from '@/assets/data/home/weightRangeData.tsx';
 import activityStatsData from '@/assets/data/home/activityStatsData';
 import milesRanData from '@/assets/data/home/milesRanData';
 import weightLiftedData from '@/assets/data/home/weightLiftedData';
 import statsComparisonData from '@/assets/data/home/ComparisonData';
 
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
+
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'expo-router';
 
-export default function Home(): JSX.Element {
+export default function HomeScreen() {
   const router = useRouter();
+  const [weightData, setWeightData] = React.useState<WeightPoint[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
+  /** Logout */
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
       Alert.alert('Error', error.message);
     } else {
-      // RootLayout listens for session changes and will render <Auth />
       router.replace('/');
     }
   };
 
-  // We use an empty array for data; the screen is composed via header/footer.
-  const data = useMemo(() => [], []);
+  /** Fetch weight history from Supabase */
+  React.useEffect(() => {
+    const fetchWeights = async () => {
+      setLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setWeightData([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('body_comp')
+        .select('created_at, weight')
+        .eq('user_id', user.id) // optional (policy already enforces it)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching body_comp:', error);
+        Alert.alert('Error', error.message);
+      } else if (data) {
+        const mapped: WeightPoint[] = data.map((row) => ({
+          label: row.created_at.split('T')[0], // e.g. 2025-09-26
+          value: row.weight,
+        }));
+        setWeightData(mapped);
+      }
+
+      setLoading(false);
+    };
+
+    fetchWeights();
+  }, []);
+
+  /** FlatList needs some data */
+  const data = React.useMemo(() => [], []);
 
   const ListHeader = () => (
     <View style={styles.stack}>
@@ -54,12 +91,20 @@ export default function Home(): JSX.Element {
       <ProfileCard />
       <MacroTracker protein={50} carbs={30} fats={20} />
 
-      <BasicChart
-        title="Body Weight"
-        color={Colors.dark.highlight2}
-        data={weightData}
-        height={250}
-      />
+      {loading ? (
+        <ActivityIndicator size="large" color="#fff" />
+      ) : weightData.length > 0 ? (
+        <BasicChart
+          title="Body Weight"
+          color={Colors.dark.highlight2}
+          data={weightData}
+          height={250}
+        />
+      ) : (
+        <Text style={{ color: '#fff', textAlign: 'center' }}>
+          No weight data yet
+        </Text>
+      )}
 
       <ActivityStats {...activityStatsData} />
 
@@ -78,22 +123,18 @@ export default function Home(): JSX.Element {
       />
 
       <StatsComparison
-        data={statsComparisonData ?? {
-          lastWeek: { totalActivities: 8, totalWeight: 14500, totalDistance: 12.4, totalCal: 9800, weight: 222.4 },
-          thisWeek: { totalActivities: 10, totalWeight: 16750, totalDistance: 15.1, totalCal: 11200, weight: 221.6 },
-        }}
+        data={statsComparisonData}
         units={{
           totalWeight: { suffix: ' lb' },
           totalDistance: { suffix: ' mi' },
           totalCal: { suffix: ' kcal' },
           weight: { suffix: ' lb' },
         }}
-        onPressMetric={(m) => console.log('Pressed:', m)}
+        onPressMetric={(m) => console.log('Pressed metric:', m)}
       />
     </View>
   );
 
-  // Place Logout at the bottom of the screen
   const ListFooter = () => (
     <View style={styles.footer}>
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -108,30 +149,20 @@ export default function Home(): JSX.Element {
       <FlatList
         data={data}
         keyExtractor={(_, idx) => `empty-${idx}`}
-        renderItem={null as unknown as any} // no rows; header/footer only
+        renderItem={null as unknown as any}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        removeClippedSubviews
-        windowSize={7}
-        initialNumToRender={1}
-        maxToRenderPerBatch={1}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  listContent: {
-    paddingBottom: 40,
-  },
-  stack: {
-    gap: 16,
-  },
-  footer: {
-    paddingTop: 8,
-  },
+  listContent: { paddingBottom: 40 },
+  stack: { gap: 16 },
+  footer: { paddingTop: 8 },
   logoutButton: {
     backgroundColor: '#E53935',
     paddingVertical: 14,

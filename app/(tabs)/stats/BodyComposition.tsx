@@ -10,7 +10,7 @@ import BasicChart from '@/components/my components/charts/BasicChart';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 
-import weightData from '@/assets/data/home/weightRangeData.tsx';
+import weightData from '@/assets/data/home/weightRangeData';
 
 export default function BodyCompositionScreen() {
   const router = useRouter();
