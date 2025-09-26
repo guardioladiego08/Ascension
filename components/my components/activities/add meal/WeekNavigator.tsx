@@ -4,51 +4,54 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
-import type { DayMealData } from '@/assets/data/addMealData';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 
 // Labels for days of the week, abbreviated
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-// Props expected by this component
 type Props = {
-  days: DayMealData[];             // Array of days with meal data
-  selectedIndex: number;           // Index of the currently selected day
-  onSelectDay: (index: number) => void; // Callback when a day is selected
+  selectedDate: Date; // currently selected day
+  onSelectDate: (date: Date) => void;
 };
 
-// Utility function: keeps a number within min/max bounds
-const clamp = (n: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, n));
+// Utility: clamp between two dates
+const addDays = (date: Date, days: number) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+};
 
-const WeekNavigator: React.FC<Props> = ({ days, selectedIndex, onSelectDay }) => {
-  // Calculate which week the selected day belongs to
-  const weekStart = Math.floor(selectedIndex / 7) * 7;     // first index of current week
-  const weekEnd = Math.min(weekStart + 6, days.length - 1); // last index of current week
-  const visible = days.slice(weekStart, weekEnd + 1);       // subset of days to show in UI
+const startOfWeek = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
-  // Generate a label for the month/year of the selected day
-  const monthLabel = new Date(days[selectedIndex].dateISO).toLocaleDateString(
-    undefined,
-    {
-      month: 'long', // e.g. "September"
-      year: 'numeric', // e.g. "2025"
-    }
+const WeekNavigator: React.FC<Props> = ({ selectedDate, onSelectDate }) => {
+  // find start of current week
+  const weekStart = startOfWeek(selectedDate);
+  const visible: Date[] = Array.from({ length: 7 }).map((_, i) =>
+    addDays(weekStart, i)
   );
 
-  // Navigation handlers: move by week while staying in range
-  const goPrevWeek = () =>
-    onSelectDay(clamp(selectedIndex - 7, 0, days.length - 1));
-  const goNextWeek = () =>
-    onSelectDay(clamp(selectedIndex + 7, 0, days.length - 1));
+  // month label
+  const monthLabel = selectedDate.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const goPrevWeek = () => onSelectDate(addDays(selectedDate, -7));
+  const goNextWeek = () => onSelectDate(addDays(selectedDate, 7));
 
   return (
     <View style={styles.container}>
-      {/* Row with month label and left/right arrows */}
+      {/* Month + arrows */}
       <View style={styles.monthRow}>
         <TouchableOpacity
           onPress={goPrevWeek}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} // easier to tap
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <MaterialIcons name="chevron-left" size={28} color={Colors.dark.text} />
         </TouchableOpacity>
@@ -63,7 +66,7 @@ const WeekNavigator: React.FC<Props> = ({ days, selectedIndex, onSelectDay }) =>
         </TouchableOpacity>
       </View>
 
-      {/* Row with day-of-week letters (S M T W T F S) */}
+      {/* DOW header */}
       <View style={styles.weekRow}>
         {DOW.map((label, i) => (
           <Text key={`dow-${i}`} style={GlobalStyles.text}>
@@ -72,41 +75,32 @@ const WeekNavigator: React.FC<Props> = ({ days, selectedIndex, onSelectDay }) =>
         ))}
       </View>
 
-      {/* Row with clickable day chips (numbers) */}
+      {/* day chips */}
       <View style={[styles.weekRow2, { marginTop: 4 }]}>
-        {visible.map((d, i) => {
-          const index = weekStart + i;              // absolute index in days array
-          const selected = index === selectedIndex; // check if this is the chosen day
+        {visible.map((d) => {
+          const selected =
+            d.toDateString() === selectedDate.toDateString();
+
           return (
             <TouchableOpacity
-              key={d.dateISO}
+              key={d.toISOString()}
               style={[
                 styles.dayChip,
-                selected && { backgroundColor: Colors.dark.highlight1 }, // highlight selected
+                selected && { backgroundColor: Colors.dark.highlight1 },
               ]}
-              onPress={() => onSelectDay(index)}          // callback on select
-              accessibilityRole="button"                  // for screen readers
-              accessibilityLabel={`Select day ${d.dayNum}`} // accessibility label
+              onPress={() => onSelectDate(d)}
             >
               <Text
                 style={[
                   styles.dayChipText,
-                  selected && { color: Colors.dark.blkText }, // text color for selected
+                  selected && { color: Colors.dark.blkText },
                 ]}
               >
-                {d.dayNum}
+                {d.getDate()}
               </Text>
             </TouchableOpacity>
           );
         })}
-
-        {/* If the last week doesn't have 7 days, pad with empty chips to align layout */}
-        {Array.from({ length: 7 - visible.length }).map((_, i) => (
-          <View
-            key={`pad-${i}`}
-            style={[styles.dayChip, { backgroundColor: 'transparent' }]}
-          />
-        ))}
       </View>
     </View>
   );
@@ -114,7 +108,6 @@ const WeekNavigator: React.FC<Props> = ({ days, selectedIndex, onSelectDay }) =>
 
 export default WeekNavigator;
 
-// Styles for layout, spacing, and colors
 const styles = StyleSheet.create({
   container: { marginBottom: 10 },
   monthRow: {
@@ -129,7 +122,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 10,
   },
-    weekRow2: {
+  weekRow2: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 0,
@@ -137,7 +130,7 @@ const styles = StyleSheet.create({
   dayChip: {
     height: 36,
     minWidth: 36,
-    borderRadius: 17, // makes it circular-ish
+    borderRadius: 17,
     backgroundColor: Colors.dark.offset1,
     alignItems: 'center',
     justifyContent: 'center',

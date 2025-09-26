@@ -1,19 +1,12 @@
-// components/my components/activities/add meal/CreateNewMeal.tsx
-// FIXED & HARDENED:
-// - Guarded + disabled FINISH until mealName + at least 1 ingredient
-// - Stronger numeric parsing + validation (rejects NaN/empty/negative)
-// - Defensive try/catch around savedMealsStore.add so UI still updates
-// - Small UX: shows inline validation hints and prevents silent no-ops
-// - Minor perf: useCallback for handlers
-
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, FlatList } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Popup from './Popup';
 import { AM_COLORS as C } from './theme';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import { savedMealsStore } from '../../../../assets/data/savedMealStore';
+import { supabase } from '@/lib/supabase';
 
 export type Macro = { protein: number; carbs: number; fats: number };
 export type Ingredient = { id: string; name: string; macros: Macro; calories: number };
@@ -30,6 +23,8 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onFinish: (meal: MealData) => void;
+  selectedDate: Date;
+  onAfterAdd?: () => void;     // ❇️ parent refetch hook
 };
 
 const toNum = (s: string) => {
@@ -37,7 +32,7 @@ const toNum = (s: string) => {
   return Number.isFinite(n) ? n : NaN;
 };
 
-const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
+const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish, selectedDate, onAfterAdd }) => {
   const [mealName, setMealName] = useState('');
   const [ingredientName, setIngredientName] = useState('');
   const [protein, setProtein] = useState('');
@@ -50,7 +45,8 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
   const c = toNum(carbs);
   const f = toNum(fats);
 
-  const validNumbers = Number.isFinite(p) && Number.isFinite(c) && Number.isFinite(f) && p >= 0 && c >= 0 && f >= 0;
+  const validNumbers =
+    Number.isFinite(p) && Number.isFinite(c) && Number.isFinite(f) && p >= 0 && c >= 0 && f >= 0;
 
   const canQueue =
     ingredientName.trim().length > 0 &&
@@ -74,29 +70,41 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
 
   const queueIngredient = useCallback(() => {
     setError(null);
+
     if (!canQueue) {
       setError('Fill ingredient + valid macros (non-negative numbers).');
       return;
     }
+
+    const exists = ingredients.some(
+      (i) => i.name.trim().toLowerCase() === ingredientName.trim().toLowerCase()
+    );
+    if (exists) {
+      setError('This ingredient has already been added.');
+      return;
+    }
+
     const macros = { protein: p, carbs: c, fats: f };
-    setIngredients(prev => [
+    setIngredients((prev) => [
       ...prev,
       { id: `${Date.now()}`, name: ingredientName.trim(), macros, calories: calcCalories(macros) },
     ]);
+
     setIngredientName('');
     setProtein('');
     setCarbs('');
     setFats('');
-  }, [canQueue, c, f, p, ingredientName]);
+  }, [canQueue, c, f, p, ingredientName, ingredients]);
 
   const canFinish = mealName.trim().length > 0 && ingredients.length > 0;
 
-  const finish = useCallback(() => {
+  const finish = useCallback(async () => {
     setError(null);
     if (!canFinish) {
       setError('Add a meal name and at least one ingredient.');
       return;
     }
+
     const meal: MealData = {
       id: `${Date.now()}`,
       name: mealName.trim(),
@@ -104,20 +112,70 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
       totals,
     };
 
-    // 1) Update today list in parent immediately
+    // Notify parent UI right away (optimistic)
     onFinish(meal);
 
-    // 2) Save to global recipes (best-effort; do not block UI)
     try {
-      if (savedMealsStore?.add) {
-        savedMealsStore.add(meal);
-      }
+      if (savedMealsStore?.add) savedMealsStore.add(meal);
     } catch (e) {
       console.warn('savedMealsStore.add failed:', e);
-      // non-fatal: user still sees meal added today
     }
 
-    // 3) Reset + close popup
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error('Not logged in');
+
+      const { data: mealRow, error: mealError } = await supabase
+        .from('meals')
+        .insert([
+          {
+            user_id: user.id,
+            name: meal.name,
+            total_protein: meal.totals.protein,
+            total_carbs: meal.totals.carbs,
+            total_fats: meal.totals.fats,
+            total_calories: meal.totals.calories,
+          },
+        ])
+        .select()
+        .single();
+
+      if (mealError) throw mealError;
+
+      const ingredientRows = ingredients.map((i) => ({
+        meal_id: mealRow.id,
+        name: i.name,
+        protein: i.macros.protein,
+        carbs: i.macros.carbs,
+        fats: i.macros.fats,
+        calories: i.calories,
+      }));
+
+      if (ingredientRows.length > 0) {
+        const { error: ingError } = await supabase.from('meal_ingredients').insert(ingredientRows);
+        if (ingError) throw ingError;
+      }
+
+      // normalize consumed_at to midnight of selectedDate (avoid TZ drift)
+      const consumedAt = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate()
+      ).toISOString();
+
+      const { error: logError } = await supabase.from('meals_log').insert([
+        { user_id: user.id, meal_id: mealRow.id, consumed_at: consumedAt },
+      ]);
+      if (logError) throw logError;
+
+      // ❇️ trigger parent refetch of totals + list
+      onAfterAdd?.();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to save meal.');
+    }
+
+    // Reset + close
     setMealName('');
     setIngredientName('');
     setProtein('');
@@ -125,7 +183,7 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
     setFats('');
     setIngredients([]);
     onClose();
-  }, [canFinish, ingredients, mealName, onClose, onFinish, totals]);
+  }, [canFinish, ingredients, mealName, totals, onFinish, selectedDate, onAfterAdd, onClose]);
 
   return (
     <Popup visible={visible} onClose={onClose} title="Create a New Meal">
@@ -140,14 +198,12 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
         />
 
         {ingredients.length > 0 && (
-          <FlatList
-            data={ingredients}
-            keyExtractor={i => i.id}
-            ItemSeparatorComponent={() => <View style={styles.sep} />}
-            style={{ marginTop: 8, maxHeight: 220 }}
-            renderItem={({ item, index }) => (
-              <View style={styles.row}>
-                <Text style={[GlobalStyles.text, { textAlign: 'center', marginRight: 8 }]}>{index + 1}</Text>
+          <View style={{ marginTop: 8, maxHeight: 220 }}>
+            {ingredients.map((item, index) => (
+              <View key={item.id} style={styles.row}>
+                <Text style={[GlobalStyles.text, { textAlign: 'center', marginRight: 8 }]}>
+                  {index + 1}
+                </Text>
                 <View style={{ flex: 1 }}>
                   <Text style={GlobalStyles.text}>{item.name.toUpperCase()}</Text>
                   <View style={styles.pillsRow}>
@@ -172,8 +228,8 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
                   <Text style={styles.rightBot}>CAL {item.calories}</Text>
                 </View>
               </View>
-            )}
-          />
+            ))}
+          </View>
         )}
 
         <View style={{ marginTop: 12 }}>
@@ -228,7 +284,9 @@ const CreateNewMeal: React.FC<Props> = ({ visible, onClose, onFinish }) => {
         </View>
 
         <View style={styles.totalsRow}>
-          <Text style={GlobalStyles.textBold}>P {totals.protein}g   C {totals.carbs}g   F {totals.fats}g</Text>
+          <Text style={GlobalStyles.textBold}>
+            P {totals.protein}g   C {totals.carbs}g   F {totals.fats}g
+          </Text>
           <Text style={GlobalStyles.textBold}>CAL {totals.calories}</Text>
         </View>
 
