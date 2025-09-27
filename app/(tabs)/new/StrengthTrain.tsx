@@ -1,12 +1,12 @@
 // app/(tabs)/new/StrengthTrain.tsx
 // -----------------------------------------------------------------------------
 // MAIN SCREEN – orchestrates state and composes the split components
-// Now supports per-set "mode" (normal | warmup | dropset | failure).
-// Tap a set number (or the mode pill) in ExerciseCard to change its mode.
+// Supports per-set "mode" (normal | warmup | dropset | failure).
+// On finish, writes to Supabase: strength_workouts → workout_exercises → sets
 // -----------------------------------------------------------------------------
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -19,22 +19,24 @@ import EmptyState from '@/components/my components/activities/strength/EmptyStat
 import FooterActions from '@/components/my components/activities/strength/FooterActions';
 import ConfirmOverlay from '@/components/my components/activities/strength/ConfirmOverlay';
 import type { ExerciseType, SetMode } from '@/components/my components/activities/strength/types';
+import { supabase } from '@/lib/supabase';
 
-const EXERCISES = [
-  'Bench Press (Barbell)',
-  'Incline Press (Dumbbell)',
-  'Back Squat (Barbell)',
-  'Deadlift',
-  'Overhead Press (Dumbbell)',
-  'Barbell Row',
-];
+// Database row shape (from exercises catalog)
+type ExerciseRow = {
+  id: string;
+  exercise_name: string;
+  info: string;
+};
 
 const StrengthTrain: React.FC = () => {
   // Modal
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  // Exercises
+  // Active workout log
   const [exercises, setExercises] = useState<ExerciseType[]>([]);
+
+  // Catalog from Supabase
+  const [dbExercises, setDbExercises] = useState<ExerciseRow[]>([]);
 
   // Timer
   const [seconds, setSeconds] = useState(0);
@@ -43,7 +45,7 @@ const StrengthTrain: React.FC = () => {
   // Finish confirmation
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Interval ref (RN returns number)
+  // Interval ref
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startTimer = () => {
@@ -67,12 +69,22 @@ const StrengthTrain: React.FC = () => {
     return stopTimer;
   }, []);
 
-  // Toggle running
+  // Timer toggle
   useEffect(() => {
     if (isRunning) startTimer();
     else stopTimer();
     return stopTimer;
   }, [isRunning]);
+
+  // Fetch exercise catalog
+  useEffect(() => {
+    const fetchExercises = async () => {
+      const { data, error } = await supabase.from('exercises').select('id, exercise_name, info');
+      if (error) console.error('Error fetching exercises:', error);
+      else setDbExercises(data || []);
+    };
+    fetchExercises();
+  }, []);
 
   // Derived: total weight
   const totalWeight = useMemo(
@@ -89,9 +101,9 @@ const StrengthTrain: React.FC = () => {
   );
 
   // Actions
-  const addExercise = (name: string) => {
+  const addExercise = (exerciseName: string) => {
     const id = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-    setExercises((es) => [...es, { id, name, sets: [] }]);
+    setExercises((es) => [...es, { id, name: exerciseName, sets: [] }]);
     setPickerVisible(false);
   };
 
@@ -99,11 +111,7 @@ const StrengthTrain: React.FC = () => {
     setExercises((es) =>
       es.map((ex) =>
         ex.id === exId
-          ? {
-              ...ex,
-              // Default a new set to 'normal' so it "continues counting" unless user changes it
-              sets: [...ex.sets, { weight: '', reps: '', mode: 'normal' }],
-            }
+          ? { ...ex, sets: [...ex.sets, { weight: '', reps: '', mode: 'normal' }] }
           : ex
       )
     );
@@ -117,15 +125,11 @@ const StrengthTrain: React.FC = () => {
       )
     );
 
-  // NEW: update a set's mode (normal | warmup | dropset | failure)
   const updateSetMode = (exId: string, idx: number, mode: SetMode) =>
     setExercises((es) =>
       es.map((ex) =>
         ex.id === exId
-          ? {
-              ...ex,
-              sets: ex.sets.map((st, i) => (i === idx ? { ...st, mode } : st)),
-            }
+          ? { ...ex, sets: ex.sets.map((st, i) => (i === idx ? { ...st, mode } : st)) }
           : ex
       )
     );
@@ -133,32 +137,83 @@ const StrengthTrain: React.FC = () => {
   const removeExercise = (exId: string) =>
     setExercises((es) => es.filter((e) => e.id !== exId));
 
-  const finishWorkout = () => {
-    setShowConfirm(false);
+  // Persist workout to Supabase
+  const saveWorkout = async () => {
+    // 1. Insert into strength_workouts
+    const { data: workout, error: workoutError } = await supabase
+      .from('strength_workouts')
+      .insert({ ended_at: new Date().toISOString() })
+      .select()
+      .single();
+
+    if (workoutError || !workout) {
+      console.error('Workout insert failed:', workoutError);
+      Alert.alert('Error', 'Could not save workout.');
+      return;
+    }
+
+    // 2. Insert exercises
+    for (let i = 0; i < exercises.length; i++) {
+      const ex = exercises[i];
+      // Find exercise_id from catalog
+      const match = dbExercises.find((d) => d.exercise_name === ex.name);
+      const exerciseId = match?.id || null;
+
+      const { data: we, error: exError } = await supabase
+        .from('workout_exercises')
+        .insert({
+          strength_workout_id: workout.id,
+          exercise_id: exerciseId,
+          order_num: i + 1,
+        })
+        .select()
+        .single();
+
+      if (exError || !we) {
+        console.error('Exercise insert failed:', exError);
+        continue;
+      }
+
+      // 3. Insert sets
+      const setRows = ex.sets.map((s, idx) => ({
+        workout_exercise_id: we.id,
+        set_number: idx + 1,
+        set_type: s.mode,
+        weight: parseFloat(s.weight) || 0,
+        reps: parseInt(s.reps, 10) || 0,
+      }));
+
+      if (setRows.length > 0) {
+        const { error: setError } = await supabase.from('sets').insert(setRows);
+        if (setError) console.error('Set insert failed:', setError);
+      }
+    }
+  };
+
+  const finishWorkout = async () => {
     stopTimer();
+    setShowConfirm(false);
+    await saveWorkout();
     router.back();
   };
 
   return (
     <>
-      {/* Picker modal */}
       <ExercisePickerModal
         visible={pickerVisible}
-        items={EXERCISES}
+        items={dbExercises}
         onPick={addExercise}
         onClose={() => setPickerVisible(false)}
       />
 
-      {/* Page */}
       <View style={GlobalStyles.container}>
         <LogoHeader showBackButton />
-
-        {/* Header (title + metrics) */}
         <StrengthHeader seconds={seconds} totalWeight={totalWeight} />
 
-        {/* Scrollable body */}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
-          {/* Exercise cards */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+        >
           {exercises.map((ex, idx) => (
             <ExerciseCard
               key={ex.id}
@@ -171,16 +226,13 @@ const StrengthTrain: React.FC = () => {
             />
           ))}
 
-          {/* Empty state */}
           {exercises.length === 0 && <EmptyState />}
 
-          {/* Add Exercise */}
           <TouchableOpacity style={styles.addExerciseBtn} onPress={() => setPickerVisible(true)}>
-            <MaterialIcons name="add" size={20} color= {Colors.dark.blkText} />
+            <MaterialIcons name="add" size={20} color={Colors.dark.blkText} />
             <Text style={styles.addExerciseText}>Add Exercise</Text>
           </TouchableOpacity>
 
-          {/* Footer actions */}
           <FooterActions
             isRunning={isRunning}
             onToggleTimer={() => setIsRunning((p) => !p)}
@@ -188,7 +240,6 @@ const StrengthTrain: React.FC = () => {
           />
         </ScrollView>
 
-        {/* Confirm finish */}
         <ConfirmOverlay
           visible={showConfirm}
           onCancel={() => setShowConfirm(false)}
