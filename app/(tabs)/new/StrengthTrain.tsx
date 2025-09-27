@@ -3,6 +3,7 @@
 // MAIN SCREEN – orchestrates state and composes the split components
 // Supports per-set "mode" (normal | warmup | dropset | failure).
 // On finish, writes to Supabase: strength_workouts → workout_exercises → sets
+// After saving, shows a Workout Summary popup; closing it returns to /new.
 // -----------------------------------------------------------------------------
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -18,15 +19,21 @@ import ExerciseCard from '@/components/my components/activities/strength/Exercis
 import EmptyState from '@/components/my components/activities/strength/EmptyState';
 import FooterActions from '@/components/my components/activities/strength/FooterActions';
 import ConfirmOverlay from '@/components/my components/activities/strength/ConfirmOverlay';
+import ExerciseSummaryPopup from '@/components/my components/activities/strength/ExerciseSummaryPopup';
 import type { ExerciseType, SetMode } from '@/components/my components/activities/strength/types';
 import { supabase } from '@/lib/supabase';
 
-// Database row shape (from exercises catalog)
+// -------------------------
+// DB Catalog Row
+// -------------------------
 type ExerciseRow = {
   id: string;
   exercise_name: string;
   info: string;
 };
+
+type SummarySet = { setNumber: number; reps: number; weight: number; mode: string };
+type SummaryExercise = { name: string; sets: SummarySet[] };
 
 const StrengthTrain: React.FC = () => {
   // Modal
@@ -42,8 +49,14 @@ const StrengthTrain: React.FC = () => {
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(true);
 
-  // Finish confirmation
+  // Finish + Summary
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryPayload, setSummaryPayload] = useState<{
+    date: string;
+    duration: string;
+    exercises: SummaryExercise[];
+  } | null>(null);
 
   // Interval ref
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -86,7 +99,7 @@ const StrengthTrain: React.FC = () => {
     fetchExercises();
   }, []);
 
-  // Derived: total weight
+  // Derived: total weight volume (weight * reps)
   const totalWeight = useMemo(
     () =>
       exercises.reduce((sumEx, ex) => {
@@ -99,6 +112,15 @@ const StrengthTrain: React.FC = () => {
       }, 0),
     [exercises]
   );
+
+  // Helpers
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  const secondsToHMMSS = (s: number) => {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0 ? `${h}h ${pad(m)}m ${pad(sec)}s` : `${m}m ${pad(sec)}s`;
+  };
 
   // Actions
   const addExercise = (exerciseName: string) => {
@@ -139,7 +161,6 @@ const StrengthTrain: React.FC = () => {
 
   // Persist workout to Supabase
   const saveWorkout = async () => {
-    // 1. Insert into strength_workouts
     const { data: workout, error: workoutError } = await supabase
       .from('strength_workouts')
       .insert({ ended_at: new Date().toISOString() })
@@ -149,13 +170,11 @@ const StrengthTrain: React.FC = () => {
     if (workoutError || !workout) {
       console.error('Workout insert failed:', workoutError);
       Alert.alert('Error', 'Could not save workout.');
-      return;
+      return null;
     }
 
-    // 2. Insert exercises
     for (let i = 0; i < exercises.length; i++) {
       const ex = exercises[i];
-      // Find exercise_id from catalog
       const match = dbExercises.find((d) => d.exercise_name === ex.name);
       const exerciseId = match?.id || null;
 
@@ -174,7 +193,6 @@ const StrengthTrain: React.FC = () => {
         continue;
       }
 
-      // 3. Insert sets
       const setRows = ex.sets.map((s, idx) => ({
         workout_exercise_id: we.id,
         set_number: idx + 1,
@@ -188,13 +206,44 @@ const StrengthTrain: React.FC = () => {
         if (setError) console.error('Set insert failed:', setError);
       }
     }
+
+    return workout;
   };
 
   const finishWorkout = async () => {
     stopTimer();
     setShowConfirm(false);
-    await saveWorkout();
-    router.back();
+
+    const summary = {
+      date: new Date().toLocaleDateString(),
+      duration: secondsToHMMSS(seconds),
+      exercises: exercises.map((ex) => ({
+        name: ex.name,
+        sets: ex.sets.map((s, idx) => ({
+          setNumber: idx + 1,
+          reps: parseInt(s.reps || '0', 10) || 0,
+          weight: parseFloat(s.weight || '0') || 0,
+          mode: s.mode,
+        })),
+      })),
+    };
+
+    const workout = await saveWorkout();
+    if (!workout) {
+      setIsRunning(true);
+      return;
+    }
+
+    setSummaryPayload(summary);
+    setShowSummary(true);
+  };
+
+  const handleCloseSummary = () => {
+    setShowSummary(false);
+    setExercises([]);
+    setSeconds(0);
+    setIsRunning(false);
+    router.replace('/new');
   };
 
   return (
@@ -246,6 +295,16 @@ const StrengthTrain: React.FC = () => {
           onConfirm={finishWorkout}
         />
       </View>
+
+      {summaryPayload && (
+        <ExerciseSummaryPopup
+          visible={showSummary}
+          onClose={handleCloseSummary}
+          date={summaryPayload.date}
+          duration={summaryPayload.duration}
+          exercises={summaryPayload.exercises}
+        />
+      )}
     </>
   );
 };
