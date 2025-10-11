@@ -2,10 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import BasicChart, { WeightPoint } from '@/components/my componentscharts/BasicChart';
+import CardioSummaryChart from '../charts/CardioSummaryChart';
 import { Colors } from '@/constants/Colors';
 
 const ORANGE = Colors.dark.highlight1;
+const BLUE = '#4DD0E1';
 const WHITE = '#FFFFFF';
 
 type Session = {
@@ -25,26 +26,42 @@ export default function IndoorActivityModal({
   session: Session;
   onClose: () => void;
 }) {
-  const [chartData, setChartData] = useState<WeightPoint[]>([]);
+  const [paceData, setPaceData] = useState<{ label: string; value: number }[]>([]);
+  const [elevationData, setElevationData] = useState<{ label: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 🔹 Fetch all sample data for this session
   useEffect(() => {
     const fetchSamples = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('cardio_samples')
-        .select('recorded_at, distance')
+        .select('recorded_at, pace, elevation')
         .eq('session_id', session.id)
         .order('recorded_at', { ascending: true });
 
       if (error) {
-        console.error(error);
+        console.error('Error loading cardio_samples:', error);
+      } else if (data && data.length) {
+        const pace = data
+          .filter((d: any) => d.pace !== null)
+          .map((d: any) => ({
+            label: d.recorded_at,
+            value: Number(d.pace),
+          }));
+
+        const elevation = data
+          .filter((d: any) => d.elevation !== null)
+          .map((d: any) => ({
+            label: d.recorded_at,
+            value: Number(d.elevation),
+          }));
+
+        setPaceData(pace);
+        setElevationData(elevation);
       } else {
-        const formatted = data.map((d: any) => ({
-          label: d.recorded_at.split('T')[0],
-          value: Number(d.distance),
-        }));
-        setChartData(formatted);
+        setPaceData([]);
+        setElevationData([]);
       }
       setLoading(false);
     };
@@ -52,7 +69,7 @@ export default function IndoorActivityModal({
     fetchSamples();
   }, [session.id]);
 
-  // Helper to format safely
+  // 🔹 Safe value formatting
   const safe = (val: number | null | undefined, unit = '', digits = 2) =>
     val === null || val === undefined || isNaN(Number(val))
       ? '—'
@@ -63,20 +80,43 @@ export default function IndoorActivityModal({
       <View style={styles.sheet}>
         <Text style={styles.title}>Indoor Run Summary</Text>
 
+        {/* --- Summary metrics --- */}
         <View style={styles.row}>
           <Metric label="Distance" value={`${safe(session.total_distance, ' mi')}`} />
           <Metric label="Time" value={session.total_time ?? '—'} />
-          <Metric label="Pace" value={`${safe(session.avg_pace, ' /mi')}`} />
+          <Metric label="Avg Pace" value={`${safe(session.avg_pace, ' /mi')}`} />
         </View>
 
+        {/* --- Charts --- */}
         {loading ? (
           <ActivityIndicator color={ORANGE} style={{ marginTop: 16 }} />
-        ) : chartData.length > 0 ? (
-          <BasicChart title="Distance Over Time" color={ORANGE} data={chartData} />
         ) : (
-          <Text style={styles.noData}>No sample data available</Text>
+          <>
+            {paceData.length > 0 ? (
+              <CardioSummaryChart
+                title="Pace Over Time"
+                color="#4DD0E1"
+                data={paceData}
+                height={180}
+              />
+            ) : (
+              <Text style={styles.noData}>No pace data available</Text>
+            )}
+
+            {elevationData.length > 0 ? (
+              <CardioSummaryChart
+                title="Elevation Over Time"
+                color="#FF950A"
+                data={elevationData}
+                height={180}
+              />
+            ) : (
+              <Text style={styles.noData}>No elevation data available</Text>
+            )}
+          </>
         )}
 
+        {/* --- Close button --- */}
         <TouchableOpacity style={styles.btn} onPress={onClose}>
           <Text style={styles.btnText}>Close</Text>
         </TouchableOpacity>
@@ -85,6 +125,7 @@ export default function IndoorActivityModal({
   );
 }
 
+// ---------- Subcomponents ----------
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ alignItems: 'center' }}>
@@ -94,8 +135,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+// ---------- Styles ----------
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: '#0009', justifyContent: 'flex-end' },
+  backdrop: {
+    flex: 1,
+    backgroundColor: '#0009',
+    justifyContent: 'flex-end',
+  },
   sheet: {
     backgroundColor: '#2f2f2f',
     borderTopLeftRadius: 16,
@@ -103,16 +149,16 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
-  title: { color: WHITE, fontWeight: '800', fontSize: 16 },
+  title: { color: WHITE, fontWeight: '800', fontSize: 16, marginBottom: 6 },
   row: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 8 },
   metricLabel: { color: WHITE, opacity: 0.9, fontSize: 12 },
   metricVal: { color: WHITE, fontWeight: '800', marginTop: 2 },
+  noData: { color: '#bbb', textAlign: 'center', marginTop: 12 },
   btn: {
     backgroundColor: ORANGE,
     borderRadius: 10,
     paddingVertical: 12,
-    marginTop: 10,
+    marginTop: 12,
   },
   btnText: { color: WHITE, textAlign: 'center', fontWeight: '800' },
-  noData: { color: '#bbb', textAlign: 'center', marginTop: 12 },
 });
