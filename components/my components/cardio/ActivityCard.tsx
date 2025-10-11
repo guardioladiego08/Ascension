@@ -1,50 +1,50 @@
-// components/cardio/ActivityCard.tsx
-// Reusable card that visually matches your mock: left title, right date/location,
-// bottom row with distance/time/pace.
-
+// components/my components/cardio/ActivityCard.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
-import { CardioActivity } from '@/assets/data/cardio/cardioActivities';
 import { format } from 'date-fns';
-
 
 const WHITE = '#FFFFFF';
 
-export default function ActivityCard({
-  activity,
-  onPress,
-  style,
-}: {
-  activity: CardioActivity;
+type Props = {
+  session: {
+    id: string;
+    type: 'indoor' | 'outdoor';
+    started_at: string;
+    total_distance: number;
+    total_time: string;
+    avg_pace: number;
+  };
   onPress?: () => void;
   style?: ViewStyle;
-}) {
-  const dateStr = format(new Date(activity.date), 'yyyy-MM-dd');
+};
+
+export default function ActivityCard({ session, onPress, style }: Props) {
+  const dateStr = format(new Date(session.started_at), 'MMM d, yyyy');
+  const timeStr = session.total_time?.replace('minutes', 'min');
   return (
     <TouchableOpacity style={[styles.card, style]} onPress={onPress}>
       <View style={styles.row}>
-        <Text style={styles.name}>{activity.name.toUpperCase()}</Text>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.date}>{dateStr}</Text>
-          <Text style={styles.loc}>{activity.location}</Text>
-        </View>
+        <Text style={styles.name}>
+          {session.type.toUpperCase()} RUN
+        </Text>
+        <Text style={styles.date}>{dateStr}</Text>
       </View>
 
       <View style={styles.metricsRow}>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>DISTANCE</Text>
-          <Text style={styles.metricVal}>{activity.distance.toFixed(2)} mi</Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>TIME</Text>
-          <Text style={styles.metricVal}>{activity.time}</Text>
-        </View>
-        <View style={styles.metric}>
-          <Text style={styles.metricLabel}>PACE</Text>
-          <Text style={styles.metricVal}>{activity.pace} /mi</Text>
-        </View>
+        <Metric label="DISTANCE" value={`${session.total_distance?.toFixed(2)} mi`} />
+        <Metric label="TIME" value={timeStr} />
+        <Metric label="PACE" value={`${session.avg_pace?.toFixed(2)} /mi`} />
       </View>
     </TouchableOpacity>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricVal}>{value}</Text>
+    </View>
   );
 }
 
@@ -55,8 +55,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   name: { color: WHITE, fontSize: 16, fontWeight: '800', letterSpacing: 0.8 },
-  date: { color: WHITE, opacity: 0.9, fontSize: 12 },
-  loc: { color: WHITE, opacity: 0.7, fontSize: 12 },
+  date: { color: WHITE, opacity: 0.8, fontSize: 12 },
   metricsRow: {
     marginTop: 10,
     backgroundColor: '#77777755',

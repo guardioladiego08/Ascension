@@ -1,6 +1,6 @@
 // components/Auth.tsx
 // after successful sign-in, navigate to '/home' (not '/(tabs)')
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
@@ -21,6 +21,19 @@ const Auth: React.FC = () => {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+  const test = async () => {
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/health`);
+      const txt = await res.text();
+      console.log('SUPABASE HEALTH:', txt);
+    } catch (err) {
+      console.log('SUPABASE TEST FAILED:', err);
+    }
+  };
+  test();
+}, []);
 
   const onSubmit = async () => {
     setMsg(null);

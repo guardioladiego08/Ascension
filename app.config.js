@@ -39,7 +39,10 @@ export default {
       },
     },
 
-    plugins: [],
+    plugins: [
+      "expo-router",
+      "expo-web-browser"
+    ],
 
     extra: {
       ANDROID_MAPS_API_KEY: process.env.ANDROID_MAPS_API_KEY,
