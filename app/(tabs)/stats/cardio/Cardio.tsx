@@ -10,6 +10,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import { GlobalStyles } from '@/constants/GlobalStyles';
@@ -32,6 +33,7 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
   const [sessions, setSessions] = useState<CardioSession[]>([]);
   const [selected, setSelected] = useState<CardioSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchSessions = async () => {
@@ -51,7 +53,7 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
   return (
     <SafeAreaView style={styles.safe}>
       <LogoHeader showBackButton />
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
         <Text style={GlobalStyles.header}>CARDIO</Text>
 
         <View style={styles.sectionHeader}>
@@ -74,7 +76,17 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
         )}
       </ScrollView>
 
-      {/* Modal for Indoor Sessions */}
+      {/* --- Bottom Button --- */}
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={styles.allBtn}
+          onPress={() => router.push('/(tabs)/stats/cardio/allCardioActivities')}
+        >
+          <Text style={styles.allBtnText}>View All Activities</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* --- Indoor Activity Modal --- */}
       <Modal visible={!!selected && selected.type === 'indoor'} transparent animationType="slide">
         <IndoorActivityModal session={selected!} onClose={() => setSelected(null)} />
       </Modal>
@@ -92,5 +104,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
+  allBtn: {
+    backgroundColor: Colors.dark.highlight1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  allBtnText: {
+    color: Colors.dark.blkText,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

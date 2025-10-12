@@ -1,163 +1,248 @@
-// app/(tabs)/stats/cardio/all-activities.tsx
-// "View All Activities" screen with search + filter (date & type), like your search-exercise UX.
-// - Filters by text (activity name) and type (indoor/outdoor) and optional date range.
-// - Tapping an item opens the same modals used on Cardio.tsx.
-
-import React, { useMemo, useState } from 'react';
+// app/(tabs)/stats/cardio/allCardioActivities.tsx
+import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   StyleSheet,
-  TextInput,
-  FlatList,
   TouchableOpacity,
+  FlatList,
   Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { isWithinInterval, parseISO } from 'date-fns';
+import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
-import { GlobalStyles } from '@/constants/GlobalStyles';
-
-import activitiesData, { CardioActivity, CardioType } from '@/assets/data/cardio/cardioActivities';
 import ActivityCard from '@/components/my components/cardio/ActivityCard';
 import IndoorActivityModal from '@/components/my components/cardio/IndoorActivityModal';
 import OutdoorActivityModal from '@/components/my components/cardio/OutdoorActivityModal';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
-const BG = '#3f3f3f';
 const WHITE = '#FFFFFF';
+const ORANGE = Colors.dark.highlight1;
 const CARD = '#5a5a5a';
-const ORANGE = '#f58025';
 
-export default function CardioAllActivities() {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [type, setType] = useState<CardioType | 'all'>('all');
-  const [dateFrom, setDateFrom] = useState<string | null>(null);
-  const [dateTo, setDateTo] = useState<string | null>(null);
+export default function AllCardioActivities() {
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-  const [selected, setSelected] = useState<CardioActivity | null>(null);
 
-  const data = useMemo(() => {
-    return activitiesData
-      .filter((a) => (type === 'all' ? true : a.type === type))
-      .filter((a) =>
-        query.trim().length ? a.name.toLowerCase().includes(query.trim().toLowerCase()) : true
-      )
-      .filter((a) => {
-        if (dateFrom && dateTo) {
-          return isWithinInterval(parseISO(a.date), {
-            start: parseISO(dateFrom),
-            end: parseISO(dateTo),
-          });
-        }
-        return true;
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [query, type, dateFrom, dateTo]);
+  // --- Filter inputs ---
+  const [minDistance, setMinDistance] = useState('');
+  const [maxDistance, setMaxDistance] = useState('');
+  const [minTime, setMinTime] = useState('');
+  const [maxTime, setMaxTime] = useState('');
+  const [minPace, setMinPace] = useState('');
+  const [maxPace, setMaxPace] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+
+  // --- Fetch sessions from Supabase ---
+  const fetchSessions = async (filters?: {
+    minDistance?: number;
+    maxDistance?: number;
+    minTime?: number;
+    maxTime?: number;
+    minPace?: number;
+    maxPace?: number;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    setLoading(true);
+
+    let query = supabase
+      .from('cardio_sessions')
+      .select('*')
+      .order('started_at', { ascending: false });
+
+    if (filters?.minDistance) query = query.gte('total_distance', filters.minDistance);
+    if (filters?.maxDistance) query = query.lte('total_distance', filters.maxDistance);
+    if (filters?.minTime) query = query.gte('total_time', `${filters.minTime} minutes`);
+    if (filters?.maxTime) query = query.lte('total_time', `${filters.maxTime} minutes`);
+    if (filters?.minPace) query = query.gte('avg_pace', filters.minPace);
+    if (filters?.maxPace) query = query.lte('avg_pace', filters.maxPace);
+    if (filters?.startDate) query = query.gte('started_at', filters.startDate);
+    if (filters?.endDate) query = query.lte('started_at', filters.endDate);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('Error fetching sessions:', error);
+    } else {
+      setSessions(data || []);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  const applyFilters = () => {
+    const filters = {
+      minDistance: minDistance ? Number(minDistance) : undefined,
+      maxDistance: maxDistance ? Number(maxDistance) : undefined,
+      minTime: minTime ? Number(minTime) : undefined,
+      maxTime: maxTime ? Number(maxTime) : undefined,
+      minPace: minPace ? Number(minPace) : undefined,
+      maxPace: maxPace ? Number(maxPace) : undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    };
+    fetchSessions(filters);
+    setShowFilter(false);
+  };
 
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader showBackButton/>
+      <LogoHeader showBackButton />
       <View style={styles.header}>
-        <Text style={GlobalStyles.header}>All Activities</Text>
+        <Text style={GlobalStyles.header}>All Cardio Sessions</Text>
         <TouchableOpacity onPress={() => setShowFilter(true)}>
-          <Text style={styles.filter}>Filter</Text>
+          <Text style={styles.filterText}>Filter</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchWrap}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search by activity name"
-          placeholderTextColor="#777777ff"
-          style={styles.search}
+      {loading ? (
+        <ActivityIndicator size="large" color={ORANGE} style={{ marginTop: 20 }} />
+      ) : (
+        <FlatList
+          data={sessions}
+          keyExtractor={(it) => it.id}
+          contentContainerStyle={{ padding: 16, gap: 12 }}
+          renderItem={({ item }) => (
+            <ActivityCard
+              session={item}
+              onPress={() => setSelected(item)}
+              style={{ backgroundColor: CARD }}
+            />
+          )}
         />
-      </View>
+      )}
 
-      <FlatList
-        data={data}
-        keyExtractor={(it) => it.id}
-        contentContainerStyle={{ padding: 16, gap: 12 }}
-        renderItem={({ item }) => (
-          <ActivityCard activity={item} onPress={() => setSelected(item)} style={{ backgroundColor: CARD }} />
-        )}
-      />
-
-      {/* Filter Modal (simple template to mirror your search-exercise feel) */}
+      {/* --- Filter Modal --- */}
       <Modal visible={showFilter} animationType="slide" transparent>
-        <View style={styles.sheetBackdrop}>
+        <View style={styles.backdrop}>
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Filters</Text>
+            <Text style={styles.title}>Filter Cardio Sessions</Text>
 
-            <View style={{ height: 12 }} />
+            {/* Distance */}
+            <Text style={styles.label}>Distance (mi)</Text>
             <View style={styles.row}>
-              {(['all', 'indoor', 'outdoor'] as const).map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => setType(t)}
-                  style={[styles.pill, type === t && styles.pillActive]}
-                >
-                  <Text style={[styles.pillText, type === t && styles.pillTextActive]}>
-                    {t.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <TextInput
+                placeholder="Min"
+                keyboardType="numeric"
+                value={minDistance}
+                onChangeText={setMinDistance}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="Max"
+                keyboardType="numeric"
+                value={maxDistance}
+                onChangeText={setMaxDistance}
+                style={styles.input}
+              />
             </View>
 
-            {/* For simplicity, quick date presets; wire up to a proper picker if you prefer */}
-            <View style={{ height: 16 }} />
+            {/* Time */}
+            <Text style={styles.label}>Total Time (minutes)</Text>
             <View style={styles.row}>
-              <TouchableOpacity
-                style={styles.preset}
-                onPress={() => {
-                  const end = new Date();
-                  const start = new Date();
-                  start.setDate(end.getDate() - 7);
-                  setDateFrom(start.toISOString().slice(0, 10));
-                  setDateTo(end.toISOString().slice(0, 10));
-                }}
-              >
-                <Text style={styles.presetText}>Last 7 days</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.preset}
-                onPress={() => {
-                  const end = new Date();
-                  const start = new Date();
-                  start.setMonth(end.getMonth() - 1);
-                  setDateFrom(start.toISOString().slice(0, 10));
-                  setDateTo(end.toISOString().slice(0, 10));
-                }}
-              >
-                <Text style={styles.presetText}>Last 30 days</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.preset}
-                onPress={() => {
-                  setDateFrom(null);
-                  setDateTo(null);
-                }}
-              >
-                <Text style={styles.presetText}>Clear dates</Text>
-              </TouchableOpacity>
+              <TextInput
+                placeholder="Min"
+                keyboardType="numeric"
+                value={minTime}
+                onChangeText={setMinTime}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="Max"
+                keyboardType="numeric"
+                value={maxTime}
+                onChangeText={setMaxTime}
+                style={styles.input}
+              />
             </View>
 
-            <View style={{ height: 16 }} />
-            <TouchableOpacity style={styles.applyBtn} onPress={() => setShowFilter(false)}>
-              <Text style={styles.applyText}>Apply</Text>
+            {/* Pace */}
+            <Text style={styles.label}>Average Pace (min/mi)</Text>
+            <View style={styles.row}>
+              <TextInput
+                placeholder="Min"
+                keyboardType="numeric"
+                value={minPace}
+                onChangeText={setMinPace}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="Max"
+                keyboardType="numeric"
+                value={maxPace}
+                onChangeText={setMaxPace}
+                style={styles.input}
+              />
+            </View>
+
+            {/* Coordinates */}
+            <Text style={styles.label}>Coordinates (for outdoor runs)</Text>
+            <View style={styles.row}>
+              <TextInput
+                placeholder="Latitude"
+                keyboardType="numeric"
+                value={latitude}
+                onChangeText={setLatitude}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="Longitude"
+                keyboardType="numeric"
+                value={longitude}
+                onChangeText={setLongitude}
+                style={styles.input}
+              />
+            </View>
+
+            {/* Date Range */}
+            <Text style={styles.label}>Date Range</Text>
+            <View style={styles.row}>
+              <TextInput
+                placeholder="Start Date (YYYY-MM-DD)"
+                value={startDate}
+                onChangeText={setStartDate}
+                style={styles.input}
+              />
+              <TextInput
+                placeholder="End Date (YYYY-MM-DD)"
+                value={endDate}
+                onChangeText={setEndDate}
+                style={styles.input}
+              />
+            </View>
+
+            <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
+              <Text style={styles.applyText}>Find</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.applyBtn, { backgroundColor: '#555' }]}
+              onPress={() => setShowFilter(false)}
+            >
+              <Text style={styles.applyText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Detail Modals */}
-      <Modal visible={!!selected && selected?.type === 'indoor'} transparent animationType="slide">
-        <IndoorActivityModal activity={selected!} onClose={() => setSelected(null)} />
+      {/* --- Session Details Modal --- */}
+      <Modal visible={!!selected && selected?.type === 'indoor'} animationType="slide" transparent>
+        <IndoorActivityModal session={selected!} onClose={() => setSelected(null)} />
       </Modal>
-      <Modal visible={!!selected && selected?.type === 'outdoor'} transparent animationType="slide">
-        <OutdoorActivityModal activity={selected!} onClose={() => setSelected(null)} />
+
+      <Modal visible={!!selected && selected?.type === 'outdoor'} animationType="slide" transparent>
+        <OutdoorActivityModal session={selected!} onClose={() => setSelected(null)} />
       </Modal>
     </SafeAreaView>
   );
@@ -169,53 +254,32 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  filter: { color: WHITE, opacity: 0.9 },
-  searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
-  search: {
-    backgroundColor: '#e6e6e6ff',
-    color: WHITE,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: '#0009',
-    justifyContent: 'flex-end',
-  },
+  filterText: { color: WHITE, fontWeight: '700' },
+  backdrop: { flex: 1, backgroundColor: '#0009', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#2f2f2f',
     padding: 16,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
-  sheetTitle: { color: WHITE, fontSize: 16, fontWeight: '800' },
-  row: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  pill: {
-    borderWidth: 1,
-    borderColor: '#888',
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  pillActive: { backgroundColor: ORANGE, borderColor: ORANGE },
-  pillText: { color: WHITE, fontWeight: '700' },
-  pillTextActive: { color: WHITE },
-  preset: {
-    backgroundColor: '#494949',
+  title: { color: WHITE, fontSize: 18, fontWeight: '800', marginBottom: 8 },
+  label: { color: WHITE, fontWeight: '600', marginTop: 12, marginBottom: 4 },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  input: {
+    backgroundColor: '#444',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    padding: 10,
+    color: WHITE,
+    flex: 1,
   },
-  presetText: { color: WHITE },
   applyBtn: {
     backgroundColor: ORANGE,
     paddingVertical: 12,
     borderRadius: 10,
-    marginTop: 8,
+    marginTop: 16,
   },
   applyText: { color: WHITE, textAlign: 'center', fontWeight: '800' },
 });

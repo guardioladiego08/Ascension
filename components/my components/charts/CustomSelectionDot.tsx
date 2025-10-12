@@ -1,57 +1,56 @@
+// components/my componentscharts/CustomSelectionDot.tsx
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+
 /**
- * An example for a custom SelectionDot component.
- *
- * Usage:
- *
- * ```jsx
- * <LineGraph
- *   points={priceHistory}
- *   animated={true}
- *   enablePanGesture={true}
- *   SelectionDot={CustomSelectionDot}
- * />
- * ```
- *
- * This example has removed the outer ring and light
- * shadow from the default one to make it more flat.
+ * A safe selection dot renderer compatible with react-native-graph.
+ * Protects against undefined point values and shows a small highlight circle.
  */
-import React, { useCallback } from 'react'
-import {
-  runOnJS,
-  useAnimatedReaction,
-  withSpring,
-  useSharedValue,
-} from 'react-native-reanimated'
-import { Circle } from '@shopify/react-native-skia'
-import type { SelectionDotProps } from 'react-native-graph'
+export const SelectionDot = ({
+  color = '#FF950A',
+  point,
+}: {
+  color?: string;
+  point?: { value?: number; date?: Date };
+}) => {
+  if (!point || typeof point.value !== 'number') {
+    return null; // gracefully skip until a valid point exists
+  }
 
-export function SelectionDot({
-  isActive,
-  color,
-  circleX,
-  circleY,
-}: SelectionDotProps): React.ReactElement {
-  const circleRadius = useSharedValue(80)
+  return (
+    <View style={[styles.container]}>
+      <View style={[styles.dot, { borderColor: color }]} />
+      <View style={styles.labelContainer}>
+        <Text style={styles.labelText}>
+          {point.value.toFixed(2)}
+        </Text>
+      </View>
+    </View>
+  );
+};
 
-  const setIsActive = useCallback(
-    (active: boolean) => {
-      circleRadius.value = withSpring(active ? 5 : 0, {
-        mass: 1,
-        stiffness: 1000,
-        damping: 50,
-        velocity: 0,
-      })
-    },
-    [circleRadius]
-  )
-
-  useAnimatedReaction(
-    () => isActive.value,
-    (active) => {
-      runOnJS(setIsActive)(active)
-    },
-    [isActive, setIsActive]
-  )
-
-  return <Circle cx={circleX} cy={circleY} r={circleRadius} color={color} />
-}
+const styles = StyleSheet.create({
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    backgroundColor: '#fff',
+  },
+  labelContainer: {
+    marginTop: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#333',
+    borderRadius: 8,
+  },
+  labelText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+});
