@@ -1,5 +1,6 @@
 // app/(tabs)/stats/cardio/Cardio.tsx
-import React, { useEffect, useState } from 'react';
+// Tensr Fitness — Cardio (dashboard) with optimistic delete, focus refresh, and Realtime fallback
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -10,7 +11,8 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import { GlobalStyles } from '@/constants/GlobalStyles';
@@ -22,37 +24,79 @@ type CardioSession = {
   id: string;
   type: 'indoor' | 'outdoor';
   started_at: string;
-  total_time: string;
-  total_distance: number;
-  avg_pace: number;
-  avg_incline?: number;
-  avg_elevation?: number;
+  total_time: string | null;
+  total_distance: number | null;
+  avg_pace: number | null;
+  avg_incline?: number | null;
+  avg_elevation?: number | null;
 };
 
 export default function Cardio({ limit = 10 }: { limit?: number }) {
   const [sessions, setSessions] = useState<CardioSession[]>([]);
   const [selected, setSelected] = useState<CardioSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    const fetchSessions = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('cardio_sessions')
-        .select('*')
-        .order('started_at', { ascending: false })
-        .limit(limit);
-      if (error) console.error(error);
-      else setSessions(data || []);
-      setLoading(false);
+    return () => {
+      isMounted.current = false;
     };
-    fetchSessions();
+  }, []);
+
+  const fetchRecent = useCallback(async () => {
+    if (!isMounted.current) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('cardio_sessions')
+      .select('*')
+      .order('started_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.error(error);
+    } else if (isMounted.current) {
+      setSessions(data || []);
+    }
+    if (isMounted.current) setLoading(false);
   }, [limit]);
+
+  // Initial load
+  useEffect(() => {
+    fetchRecent();
+  }, [fetchRecent]);
+
+  // 🔁 Auto-refresh on screen focus (covers back button navigation)
+  useFocusEffect(
+    useCallback(() => {
+      fetchRecent();
+    }, [fetchRecent])
+  );
+
+  // 🔁 Realtime fallback: refresh when cardio_sessions changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('cardio_sessions_live_cardio')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cardio_sessions' },
+        () => fetchRecent()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchRecent]);
+
+  // 🔥 Optimistic removal for instant UI update
+  const handleDeleted = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setSelected(null);
+    fetchRecent();
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <LogoHeader showBackButton />
+      <LogoHeader />
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
         <Text style={GlobalStyles.header}>CARDIO</Text>
 
@@ -88,7 +132,11 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
 
       {/* --- Indoor Activity Modal --- */}
       <Modal visible={!!selected && selected.type === 'indoor'} transparent animationType="slide">
-        <IndoorActivityModal session={selected!} onClose={() => setSelected(null)} />
+        <IndoorActivityModal
+          session={selected!}
+          onClose={() => setSelected(null)}
+          onDeleted={handleDeleted}
+        />
       </Modal>
     </SafeAreaView>
   );

@@ -1,5 +1,6 @@
 // app/(tabs)/stats/cardio/allCardioActivities.tsx
-import React, { useEffect, useState } from 'react';
+// Tensr Fitness — AllCardioActivities with optimistic delete, focus refresh, and Realtime fallback
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -11,6 +12,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import ActivityCard from '@/components/my components/cardio/ActivityCard';
@@ -38,11 +40,16 @@ export default function AllCardioActivities() {
   const [maxPace, setMaxPace] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
 
-  // --- Fetch sessions from Supabase ---
-  const fetchSessions = async (filters?: {
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const fetchSessions = useCallback(async (filters?: {
     minDistance?: number;
     maxDistance?: number;
     minTime?: number;
@@ -52,34 +59,65 @@ export default function AllCardioActivities() {
     startDate?: string;
     endDate?: string;
   }) => {
+    if (!isMounted.current) return;
     setLoading(true);
 
-    let query = supabase
-      .from('cardio_sessions')
-      .select('*')
-      .order('started_at', { ascending: false });
+    try {
+      let query = supabase
+        .from('cardio_sessions')
+        .select('*')
+        .order('started_at', { ascending: false });
 
-    if (filters?.minDistance) query = query.gte('total_distance', filters.minDistance);
-    if (filters?.maxDistance) query = query.lte('total_distance', filters.maxDistance);
-    if (filters?.minTime) query = query.gte('total_time', `${filters.minTime} minutes`);
-    if (filters?.maxTime) query = query.lte('total_time', `${filters.maxTime} minutes`);
-    if (filters?.minPace) query = query.gte('avg_pace', filters.minPace);
-    if (filters?.maxPace) query = query.lte('avg_pace', filters.maxPace);
-    if (filters?.startDate) query = query.gte('started_at', filters.startDate);
-    if (filters?.endDate) query = query.lte('started_at', filters.endDate);
+      if (filters?.minDistance != null) query = query.gte('total_distance', filters.minDistance);
+      if (filters?.maxDistance != null) query = query.lte('total_distance', filters.maxDistance);
+      if (filters?.minTime != null) query = query.gte('total_time', `${filters.minTime} minutes`);
+      if (filters?.maxTime != null) query = query.lte('total_time', `${filters.maxTime} minutes`);
+      if (filters?.minPace != null) query = query.gte('avg_pace', filters.minPace);
+      if (filters?.maxPace != null) query = query.lte('avg_pace', filters.maxPace);
+      if (filters?.startDate) query = query.gte('started_at', filters.startDate);
+      if (filters?.endDate) query = query.lte('started_at', filters.endDate);
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error fetching sessions:', error);
-    } else {
-      setSessions(data || []);
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching sessions:', error);
+      } else if (isMounted.current) {
+        setSessions(data || []);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching sessions:', err);
+    } finally {
+      if (isMounted.current) setLoading(false);
     }
-    setLoading(false);
-  };
+  }, []);
 
+  // Initial load
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [fetchSessions]);
+
+  // 🔁 Auto-refresh on screen focus (covers back button navigation)
+  useFocusEffect(
+    useCallback(() => {
+      fetchSessions();
+    }, [fetchSessions])
+  );
+
+  // 🔁 Realtime fallback: refresh when any row in cardio_sessions changes
+  useEffect(() => {
+    // Ensure Realtime is enabled for the table in Supabase
+    const channel = supabase
+      .channel('cardio_sessions_live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cardio_sessions' },
+        () => fetchSessions()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchSessions]);
 
   const applyFilters = () => {
     const filters = {
@@ -96,6 +134,14 @@ export default function AllCardioActivities() {
     setShowFilter(false);
   };
 
+  // 🔥 Optimistic removal: instant UI update when modal reports deletion
+  const handleDeleted = (id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
+    setSelected(null);
+    // Safety re-fetch to stay in sync with backend
+    fetchSessions();
+  };
+
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
       <LogoHeader showBackButton />
@@ -108,7 +154,7 @@ export default function AllCardioActivities() {
 
       {loading ? (
         <ActivityIndicator size="large" color={ORANGE} style={{ marginTop: 20 }} />
-      ) : (
+      ) : sessions.length > 0 ? (
         <FlatList
           data={sessions}
           keyExtractor={(it) => it.id}
@@ -121,6 +167,8 @@ export default function AllCardioActivities() {
             />
           )}
         />
+      ) : (
+        <Text style={styles.noDataText}>No cardio sessions found.</Text>
       )}
 
       {/* --- Filter Modal --- */}
@@ -138,6 +186,7 @@ export default function AllCardioActivities() {
                 value={minDistance}
                 onChangeText={setMinDistance}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
               <TextInput
                 placeholder="Max"
@@ -145,6 +194,7 @@ export default function AllCardioActivities() {
                 value={maxDistance}
                 onChangeText={setMaxDistance}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
             </View>
 
@@ -157,6 +207,7 @@ export default function AllCardioActivities() {
                 value={minTime}
                 onChangeText={setMinTime}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
               <TextInput
                 placeholder="Max"
@@ -164,6 +215,7 @@ export default function AllCardioActivities() {
                 value={maxTime}
                 onChangeText={setMaxTime}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
             </View>
 
@@ -176,6 +228,7 @@ export default function AllCardioActivities() {
                 value={minPace}
                 onChangeText={setMinPace}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
               <TextInput
                 placeholder="Max"
@@ -183,25 +236,7 @@ export default function AllCardioActivities() {
                 value={maxPace}
                 onChangeText={setMaxPace}
                 style={styles.input}
-              />
-            </View>
-
-            {/* Coordinates */}
-            <Text style={styles.label}>Coordinates (for outdoor runs)</Text>
-            <View style={styles.row}>
-              <TextInput
-                placeholder="Latitude"
-                keyboardType="numeric"
-                value={latitude}
-                onChangeText={setLatitude}
-                style={styles.input}
-              />
-              <TextInput
-                placeholder="Longitude"
-                keyboardType="numeric"
-                value={longitude}
-                onChangeText={setLongitude}
-                style={styles.input}
+                placeholderTextColor="#aaa"
               />
             </View>
 
@@ -213,17 +248,19 @@ export default function AllCardioActivities() {
                 value={startDate}
                 onChangeText={setStartDate}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
               <TextInput
                 placeholder="End Date (YYYY-MM-DD)"
                 value={endDate}
                 onChangeText={setEndDate}
                 style={styles.input}
+                placeholderTextColor="#aaa"
               />
             </View>
 
             <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
-              <Text style={styles.applyText}>Find</Text>
+              <Text style={styles.applyText}>Apply Filters</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -236,13 +273,21 @@ export default function AllCardioActivities() {
         </View>
       </Modal>
 
-      {/* --- Session Details Modal --- */}
+      {/* --- Session Details Modals --- */}
       <Modal visible={!!selected && selected?.type === 'indoor'} animationType="slide" transparent>
-        <IndoorActivityModal session={selected!} onClose={() => setSelected(null)} />
+        <IndoorActivityModal
+          session={selected!}
+          onClose={() => setSelected(null)}
+          onDeleted={handleDeleted}
+        />
       </Modal>
 
       <Modal visible={!!selected && selected?.type === 'outdoor'} animationType="slide" transparent>
-        <OutdoorActivityModal session={selected!} onClose={() => setSelected(null)} />
+        <OutdoorActivityModal
+          session={selected!}
+          onClose={() => setSelected(null)}
+          // If you add delete to OutdoorActivityModal, pass: onDeleted={handleDeleted}
+        />
       </Modal>
     </SafeAreaView>
   );
@@ -258,6 +303,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterText: { color: WHITE, fontWeight: '700' },
+  noDataText: {
+    color: WHITE,
+    textAlign: 'center',
+    marginTop: 40,
+    fontSize: 16,
+    fontWeight: '600',
+    opacity: 0.8,
+  },
   backdrop: { flex: 1, backgroundColor: '#0009', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: '#2f2f2f',
