@@ -1,5 +1,6 @@
 // app/(tabs)/stats/cardio/Cardio.tsx
 // Tensr Fitness — Cardio (dashboard) with optimistic delete, focus refresh, and Realtime fallback
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
@@ -22,7 +23,7 @@ import IndoorActivityModal from '@/components/my components/cardio/IndoorActivit
 
 type CardioSession = {
   id: string;
-  type: 'indoor' | 'outdoor';
+  type: string; // normalized string (e.g. "Indoor Run", "Outdoor Walk")
   started_at: string;
   total_time: string | null;
   total_distance: number | null;
@@ -43,35 +44,50 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
     };
   }, []);
 
+  // ✅ Fetch + map numeric session_type → descriptive type string
   const fetchRecent = useCallback(async () => {
     if (!isMounted.current) return;
     setLoading(true);
+
     const { data, error } = await supabase
       .from('cardio_sessions')
       .select('*')
       .order('started_at', { ascending: false })
       .limit(limit);
+
     if (error) {
       console.error(error);
     } else if (isMounted.current) {
-      setSessions(data || []);
+      const normalized = (data || []).map((s: any) => ({
+        ...s,
+        type:
+          s.session_type === 1
+            ? 'Outdoor Walk'
+            : s.session_type === 2
+            ? 'Outdoor Run'
+            : s.session_type === 3
+            ? 'Indoor Walk'
+            : s.session_type === 4
+            ? 'Indoor Run'
+            : 'Unknown',
+      }));
+      setSessions(normalized);
     }
+
     if (isMounted.current) setLoading(false);
   }, [limit]);
 
-  // Initial load
+  // 🔁 Initial + focus + realtime refreshes
   useEffect(() => {
     fetchRecent();
   }, [fetchRecent]);
 
-  // 🔁 Auto-refresh on screen focus (covers back button navigation)
   useFocusEffect(
     useCallback(() => {
       fetchRecent();
     }, [fetchRecent])
   );
 
-  // 🔁 Realtime fallback: refresh when cardio_sessions changes
   useEffect(() => {
     const channel = supabase
       .channel('cardio_sessions_live_cardio')
@@ -87,12 +103,14 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
     };
   }, [fetchRecent]);
 
-  // 🔥 Optimistic removal for instant UI update
   const handleDeleted = (id: string) => {
     setSessions(prev => prev.filter(s => s.id !== id));
     setSelected(null);
     fetchRecent();
   };
+
+  // ✅ Detect any indoor activity (either walk or run)
+  const isIndoor = selected?.type?.toLowerCase().includes('indoor');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -108,7 +126,7 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
           <ActivityIndicator color={Colors.dark.highlight1} size="large" />
         ) : (
           <View style={{ gap: 12 }}>
-            {sessions.map((session) => (
+            {sessions.map(session => (
               <ActivityCard
                 key={session.id}
                 session={session}
@@ -131,12 +149,14 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
       </View>
 
       {/* --- Indoor Activity Modal --- */}
-      <Modal visible={!!selected && selected.type === 'indoor'} transparent animationType="slide">
-        <IndoorActivityModal
-          session={selected!}
-          onClose={() => setSelected(null)}
-          onDeleted={handleDeleted}
-        />
+      <Modal visible={!!selected && isIndoor} transparent animationType="slide">
+        {selected && (
+          <IndoorActivityModal
+            session={selected}
+            onClose={() => setSelected(null)}
+            onDeleted={handleDeleted}
+          />
+        )}
       </Modal>
     </SafeAreaView>
   );

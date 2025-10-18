@@ -1,16 +1,36 @@
 // app/auth.tsx
-// Renders your Auth UI. On successful sign-in, we ALSO navigate immediately.
-// This makes redirect snappy even before the global guard runs.
+// Authentication screen entry point for the app.
+// Wraps the <Auth /> component inside a safe, styled container.
 
 import React from 'react';
-import { SafeAreaView } from 'react-native';
+import { SafeAreaView, StatusBar, StyleSheet, View, ActivityIndicator } from 'react-native';
 import Auth from '@/components/Auth';
-import { GlobalStyles } from '@/constants/GlobalStyles';
+import { Colors } from '@/constants/Colors';
 
 export default function AuthRoute(): JSX.Element {
+  const BG = Colors?.dark?.background ?? '#121212';
+
   return (
-    <SafeAreaView style={GlobalStyles.safeArea}>
-      <Auth />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: BG }]}>
+      {/* Status bar styling */}
+      <StatusBar barStyle="light-content" backgroundColor={BG} />
+
+      {/* Main auth container */}
+      <View style={styles.container}>
+        <React.Suspense fallback={<ActivityIndicator size="large" color="#FF950A" />}>
+          <Auth />
+        </React.Suspense>
+      </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+});

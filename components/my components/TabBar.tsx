@@ -44,7 +44,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
               iconName = 'plus';
               break;
             case 'stats':
-              iconName = 'piechart';
+              iconName = 'pie-chart';
               break;
             default:
               iconName = 'question';

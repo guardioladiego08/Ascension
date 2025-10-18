@@ -25,7 +25,7 @@ export default function ActivityCard({ session, onPress, style }: Props) {
     <TouchableOpacity style={[styles.card, style]} onPress={onPress}>
       <View style={styles.row}>
         <Text style={styles.name}>
-          {session.type.toUpperCase()} RUN
+          {session.type} RUN
         </Text>
         <Text style={styles.date}>{dateStr}</Text>
       </View>

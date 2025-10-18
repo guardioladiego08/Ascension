@@ -7,17 +7,10 @@ export default {
     slug: 'ascension',
     scheme: 'ascension',
     version: '1.0.0',
-    extra: {
-      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-    },
     orientation: 'portrait',
-
-    // Correct path to your actual icon
-    icon: './assets/images/icon.png',
-
     userInterfaceStyle: 'automatic',
 
+    icon: './assets/images/icon.png',
     assetBundlePatterns: ['**/*'],
 
     ios: {
@@ -26,12 +19,10 @@ export default {
 
     android: {
       package: 'com.yourcompany.ascension',
-
       adaptiveIcon: {
-        foregroundImage: './assets/images/icon.png',  // fixed path
+        foregroundImage: './assets/images/icon.png',
         backgroundColor: '#000000',
       },
-
       config: {
         googleMaps: {
           apiKey: process.env.ANDROID_MAPS_API_KEY,
@@ -39,12 +30,12 @@ export default {
       },
     },
 
-    plugins: [
-      "expo-router",
-      "expo-web-browser"
-    ],
+    plugins: ['expo-router', 'expo-web-browser'],
 
+    // ✅ merged extras so nothing gets lost
     extra: {
+      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       ANDROID_MAPS_API_KEY: process.env.ANDROID_MAPS_API_KEY,
     },
   },
