@@ -3,16 +3,14 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { format } from 'date-fns';
 
-const WHITE = '#FFFFFF';
-
 type Props = {
   session: {
     id: string;
-    type: 'indoor' | 'outdoor';
+    type: string; // e.g. "Outdoor Run"
     started_at: string;
-    total_distance: number;
-    total_time: string;
-    avg_pace: number;
+    total_distance?: number | null;
+    total_time?: string | null;
+    avg_pace?: number | null;
   };
   onPress?: () => void;
   style?: ViewStyle;
@@ -20,20 +18,19 @@ type Props = {
 
 export default function ActivityCard({ session, onPress, style }: Props) {
   const dateStr = format(new Date(session.started_at), 'MMM d, yyyy');
-  const timeStr = session.total_time?.replace('minutes', 'min');
+  const timeStr = session.total_time ?? '--';
+
   return (
     <TouchableOpacity style={[styles.card, style]} onPress={onPress}>
       <View style={styles.row}>
-        <Text style={styles.name}>
-          {session.type} RUN
-        </Text>
+        <Text style={styles.name}>{session.type}</Text>
         <Text style={styles.date}>{dateStr}</Text>
       </View>
 
       <View style={styles.metricsRow}>
-        <Metric label="DISTANCE" value={`${session.total_distance?.toFixed(2)} mi`} />
+        <Metric label="DISTANCE" value={session.total_distance ? `${session.total_distance.toFixed(2)} mi` : '--'} />
         <Metric label="TIME" value={timeStr} />
-        <Metric label="PACE" value={`${session.avg_pace?.toFixed(2)} /mi`} />
+        <Metric label="PACE" value={session.avg_pace ? `${session.avg_pace.toFixed(2)} /mi` : '--'} />
       </View>
     </TouchableOpacity>
   );
@@ -54,8 +51,8 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  name: { color: WHITE, fontSize: 16, fontWeight: '800', letterSpacing: 0.8 },
-  date: { color: WHITE, opacity: 0.8, fontSize: 12 },
+  name: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.8 },
+  date: { color: '#fff', opacity: 0.8, fontSize: 12 },
   metricsRow: {
     marginTop: 10,
     backgroundColor: '#77777755',
@@ -66,6 +63,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   metric: { alignItems: 'flex-start' },
-  metricLabel: { color: WHITE, opacity: 0.9, fontSize: 11 },
-  metricVal: { color: WHITE, fontWeight: '800', marginTop: 2 },
+  metricLabel: { color: '#fff', opacity: 0.9, fontSize: 11 },
+  metricVal: { color: '#fff', fontWeight: '800', marginTop: 2 },
 });

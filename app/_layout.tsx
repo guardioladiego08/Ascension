@@ -1,5 +1,4 @@
 // app/_layout.tsx
-// only change is in the guard: go to '/home' (not '/(tabs)')
 import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -8,8 +7,23 @@ import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-rout
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
+import MapboxGL from '@rnmapbox/maps';
 
-// app/_layout.tsx
+// ✅ Initialize Mapbox once with your public token
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
+
+if (MAPBOX_TOKEN) {
+  MapboxGL.setAccessToken(MAPBOX_TOKEN);
+  MapboxGL.setTelemetryEnabled(false);
+  console.log('🗺️ Mapbox initialized with token');
+} else {
+  console.warn('⚠️ No EXPO_PUBLIC_MAPBOX_TOKEN found in environment');
+}
+
+/**
+ * 🔒 SessionRouterGuard
+ * Redirects users to `/auth` if not logged in, or `/home` if logged in.
+ */
 function SessionRouterGuard() {
   const router = useRouter();
   const segments = useSegments();
@@ -18,44 +32,45 @@ function SessionRouterGuard() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
 
+    // Get current Supabase session
     supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
+      if (!active) return;
       setSession(data.session ?? null);
       setReady(true);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      if (!mounted) return;
-      setSession(s ?? null);
+    // Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!active) return;
+      setSession(newSession ?? null);
     });
 
     return () => {
-      mounted = false;
-      sub.subscription?.unsubscribe();
+      active = false;
+      listener.subscription?.unsubscribe();
     };
   }, []);
 
   useEffect(() => {
     if (!ready || !navState?.key) return;
 
-    const inAuth = segments[0] === 'auth';
-
-    if (!session && !inAuth) {
-      // not logged in → push them to auth
+    const inAuthRoute = segments[0] === 'auth';
+    if (!session && !inAuthRoute) {
       router.replace('/auth');
+    } else if (session && inAuthRoute) {
+      router.replace('/home');
     }
-
-    if (session && inAuth) {
-      // logged in but still on auth → send to a safe default
-      router.replace('/home'); // ✅ only when they’re on /auth
-    }
-  }, [ready, navState?.key, session, segments, router]);
+  }, [ready, navState?.key, session, segments]);
 
   return null;
 }
 
+/**
+ * 🧱 Root Layout
+ * Wraps app providers and initializes navigation and Mapbox.
+ */
 export default function RootLayout(): JSX.Element {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

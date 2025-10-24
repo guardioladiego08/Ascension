@@ -1,4 +1,4 @@
-package com.yourcompany.ascension
+package com.tensrfitness.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

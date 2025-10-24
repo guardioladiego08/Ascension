@@ -1,21 +1,33 @@
-// ✅ FIX #1 — app/(tabs)/new/OutdoorSession.tsx
-// The file must export a React component as the **default** export.
-// This minimal screen renders and keeps your tab bar visible.
-
 import React from 'react';
-import { SafeAreaView, Text, StyleSheet } from 'react-native';
+import { SafeAreaView, Text, View, StyleSheet } from 'react-native';
+import OutdoorMap from '@/components/my components/cardio/OutdoorMap';
+import { useLocalSearchParams } from 'expo-router';
+import LogoHeader from '@/components/my components/logoHeader';
 
-const OutdoorSession: React.FC = () => {
+export default function SessionMap() {
+  const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
+
   return (
     <SafeAreaView style={styles.safe}>
-      <Text style={styles.text}>Outdoor Session (WIP)</Text>
+      <LogoHeader />
+      <Text style={styles.title}>{name ?? 'Outdoor Session'}</Text>
+      <View style={{ flex: 1 }}>
+        <OutdoorMap sessionId={id} />
+      </View>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#222', alignItems: 'center', justifyContent: 'center' },
-  text: { color: 'white', fontSize: 18, fontWeight: '700' },
+  safe: {
+    flex: 1,
+    backgroundColor: '#121212',
+  },
+  title: {
+    color: '#FF950A',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
 });
-
-export default OutdoorSession;

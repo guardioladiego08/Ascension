@@ -1,6 +1,4 @@
 // app/(tabs)/stats/cardio/Cardio.tsx
-// Tensr Fitness — Cardio (dashboard) with optimistic delete, focus refresh, and Realtime fallback
-
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SafeAreaView,
@@ -23,13 +21,14 @@ import IndoorActivityModal from '@/components/my components/cardio/IndoorActivit
 
 type CardioSession = {
   id: string;
-  type: string; // normalized string (e.g. "Indoor Run", "Outdoor Walk")
+  session_type: number;
   started_at: string;
   total_time: string | null;
   total_distance: number | null;
   avg_pace: number | null;
   avg_incline?: number | null;
   avg_elevation?: number | null;
+  type?: string;
 };
 
 export default function Cardio({ limit = 10 }: { limit?: number }) {
@@ -38,13 +37,13 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
   const [loading, setLoading] = useState(true);
   const isMounted = useRef(true);
 
-  useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+  const sessionTypeMap: Record<number, string> = {
+    1: 'Outdoor Run',
+    2: 'Outdoor Walk',
+    3: 'Indoor Run',
+    4: 'Indoor Walk',
+  };
 
-  // ✅ Fetch + map numeric session_type → descriptive type string
   const fetchRecent = useCallback(async () => {
     if (!isMounted.current) return;
     setLoading(true);
@@ -57,30 +56,15 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
 
     if (error) {
       console.error(error);
-    } else if (isMounted.current) {
-      const normalized = (data || []).map((s: any) => ({
+    } else if (data) {
+      const normalized = data.map((s: any) => ({
         ...s,
-        type:
-          s.session_type === 1
-            ? 'Outdoor Walk'
-            : s.session_type === 2
-            ? 'Outdoor Run'
-            : s.session_type === 3
-            ? 'Indoor Walk'
-            : s.session_type === 4
-            ? 'Indoor Run'
-            : 'Unknown',
+        type: sessionTypeMap[s.session_type] || 'Other',
       }));
       setSessions(normalized);
     }
-
-    if (isMounted.current) setLoading(false);
+    setLoading(false);
   }, [limit]);
-
-  // 🔁 Initial + focus + realtime refreshes
-  useEffect(() => {
-    fetchRecent();
-  }, [fetchRecent]);
 
   useFocusEffect(
     useCallback(() => {
@@ -89,19 +73,10 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
   );
 
   useEffect(() => {
-    const channel = supabase
-      .channel('cardio_sessions_live_cardio')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'cardio_sessions' },
-        () => fetchRecent()
-      )
-      .subscribe();
-
     return () => {
-      supabase.removeChannel(channel);
+      isMounted.current = false;
     };
-  }, [fetchRecent]);
+  }, []);
 
   const handleDeleted = (id: string) => {
     setSessions(prev => prev.filter(s => s.id !== id));
@@ -109,15 +84,24 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
     fetchRecent();
   };
 
-  // ✅ Detect any indoor activity (either walk or run)
-  const isIndoor = selected?.type?.toLowerCase().includes('indoor');
+  // Handle card tap — indoor opens modal, outdoor navigates to map
+  const handleSessionPress = (session: CardioSession) => {
+    const type = session.session_type;
+    if (type === 3 || type === 4) {
+      setSelected(session);
+    } else if (type === 1 || type === 2) {
+      router.push({
+        pathname: '/(tabs)/stats/cardio/OutdoorSessionMap',
+        params: { session_id: session.id },
+      });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <LogoHeader />
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
         <Text style={GlobalStyles.header}>CARDIO</Text>
-
         <View style={styles.sectionHeader}>
           <Text style={GlobalStyles.subtitle}>RECENT SESSIONS</Text>
         </View>
@@ -130,7 +114,7 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
               <ActivityCard
                 key={session.id}
                 session={session}
-                onPress={() => setSelected(session)}
+                onPress={() => handleSessionPress(session)}
                 style={{ backgroundColor: '#5a5a5a' }}
               />
             ))}
@@ -138,7 +122,6 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
         )}
       </ScrollView>
 
-      {/* --- Bottom Button --- */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.allBtn}
@@ -148,8 +131,7 @@ export default function Cardio({ limit = 10 }: { limit?: number }) {
         </TouchableOpacity>
       </View>
 
-      {/* --- Indoor Activity Modal --- */}
-      <Modal visible={!!selected && isIndoor} transparent animationType="slide">
+      <Modal visible={!!selected} transparent animationType="slide">
         {selected && (
           <IndoorActivityModal
             session={selected}
