@@ -42,18 +42,26 @@ export default {
     },
 
     plugins: [
-      'expo-router',
-      'expo-web-browser',
+  'expo-router',
+  'expo-web-browser',
+  [
+    'expo-build-properties',
+    {
+      android: {
+        compileSdkVersion: 36,
+        targetSdkVersion: 36,
+        kotlinVersion: '2.1.20',
+        extraMavenRepos: [
+          'https://api.mapbox.com/downloads/v2/releases/maven',
+          'https://www.jitpack.io',
+          '../node_modules/react-native/android',
+        ],
+      },
+    },
+  ],
+],
 
-      // ✅ Add Mapbox config plugin (required for rebuild)
-      [
-        '@rnmapbox/maps',
-        {
-          RNMapboxMapsImpl: 'mapbox',
-          RNMAPBOX_MAPS_DOWNLOAD_TOKEN: process.env.RNMAPBOX_MAPS_DOWNLOAD_TOKEN,
-        },
-      ],
-    ],
+
 
     // ✅ Environment variables accessible from `Constants.expoConfig.extra`
     extra: {
