@@ -10,6 +10,8 @@ export const Colors = {
     offset1: '#6C6C6C',
     highlight1: '#FF950A',
     highlight2: '#6AE5E5',
+    highlight3: '#23f03eff',
+    highlight4: '#c023f0ff',
     macroProtein:    '#b6b5b5ff',   // light-grey
     macroCarbs:      '#f3cf30ff',   // yellow
     macroFats:       '#f3a435ff',   // orange
@@ -19,6 +21,7 @@ export const Colors = {
     blkText: '#000000ff',
     link: '#1e90ff',
     tab: '#2B2B2B',
+    cardDark: '#151C27'
   },
 };
 

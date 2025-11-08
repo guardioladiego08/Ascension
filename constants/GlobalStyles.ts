@@ -55,7 +55,16 @@ export const GlobalStyles = StyleSheet.create({
   },
   kpiLabel: { 
     color: '#acb7c9ff', 
-    fontSize: 12 },
+    fontSize: 12 
+  },
+  quickCard: { 
+    flex: 1, 
+    backgroundColor: Colors.dark.cardDark, 
+    borderRadius: 14, 
+    paddingVertical: 18, 
+    alignItems: 'center', 
+    marginRight: 12 
+  },
   text: {
     color: Colors.dark.text,
     fontFamily: Fonts.regular,

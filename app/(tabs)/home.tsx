@@ -12,13 +12,14 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import { useRouter } from 'expo-router';
+import { Colors } from '@/constants/Colors';
 
 
 export default function BlankHome() {
   const router = useRouter();
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
-        <LogoHeader/>
+      <LogoHeader/>
       <ScrollView contentContainerStyle={GlobalStyles.container} showsVerticalScrollIndicator={false}>
         {/* Header */}
           <Text style={GlobalStyles.header}>HOME</Text>
@@ -44,26 +45,26 @@ export default function BlankHome() {
         <View style={styles.quickRow}>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={styles.quickCard}
-            onPress={() => router.push('/new/strength')}
+            style={GlobalStyles.quickCard}
+            onPress={() => router.push('/add/StrengthTrain')}
           >
-            <MaterialCommunityIcons name="arm-flex" size={28} color="#B8C1FF" />
+            <MaterialCommunityIcons name="arm-flex" size={28} color={Colors.dark.highlight1} />
             <Text style={styles.quickText}>Weights</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={styles.quickCard}
+            style={GlobalStyles.quickCard}
             onPress={() => router.push('/new/run')}
           >
-            <Ionicons name="walk" size={28} color="#B8C1FF" />
+            <Ionicons name="walk" size={28} color={Colors.dark.highlight2} />
             <Text style={styles.quickText}>Run</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={styles.quickCard}
+            style={GlobalStyles.quickCard}
             onPress={() => router.push('/new/bike')}
           >
-            <Ionicons name="bicycle" size={28} color="#B8C1FF" />
+            <Ionicons name="bicycle" size={28} color={Colors.dark.highlight3} />
             <Text style={styles.quickText}>Bike</Text>
           </TouchableOpacity>
         </View>
@@ -158,7 +159,6 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#97A3B6', fontSize: 12, marginTop: 10, marginBottom: 8, fontWeight: '700', letterSpacing: 0.6 },
 
   quickRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  quickCard: { flex: 1, backgroundColor: CARD_DARK, borderRadius: 14, paddingVertical: 18, alignItems: 'center', marginRight: 12 },
   quickText: { color: '#D6DEEE', fontWeight: '600', marginTop: 8 },
 
   card: { backgroundColor: CARD, borderRadius: 16, padding: 14, marginTop: 10 },
