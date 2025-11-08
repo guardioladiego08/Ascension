@@ -43,9 +43,9 @@ const Auth: React.FC = () => {
       try {
         const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/auth/v1/health`);
         const text = await response.text();
-        console.log('✅ [Auth] SUPABASE HEALTH RESPONSE:', text);
+        console.log('✅ SUPABASE HEALTH RESPONSE:', text);
       } catch (error) {
-        console.log('❌ [Auth] SUPABASE TEST FAILED:', error);
+        console.log('❌ SUPABASE TEST FAILED:', error);
       }
     };
 
@@ -137,32 +137,4 @@ const Auth: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG, padding: 20, justifyContent: 'center' },
-  title: { fontSize: 28, fontWeight: '700', color: FG, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: MUTED, textAlign: 'center', marginTop: 6 },
-  field: {},
-  label: { color: FG, marginBottom: 6, fontSize: 14 },
-  input: {
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: FG,
-    backgroundColor: '#1a1a1a',
-  },
-  cta: {
-    backgroundColor: ORANGE,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  ctaText: { color: '#1a1a1a', fontWeight: '700', fontSize: 16 },
-  link: { color: FG, textAlign: 'center', textDecorationLine: 'underline' },
-  msg: { color: FG, textAlign: 'center' },
-});
-
-export default Auth;
 

@@ -5,7 +5,7 @@ export const Colors = {
     link: '#1e90ff',
   },
   dark: {
-    background: '#525252',
+    background: '#0e0e0eff',
     offset1: '#6C6C6C',
     highlight1: '#FF950A',
     highlight2: '#6AE5E5',

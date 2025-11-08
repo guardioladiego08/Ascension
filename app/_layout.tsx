@@ -30,20 +30,34 @@ function SessionRouterGuard() {
   const navState = useRootNavigationState();
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
 
     // Get current Supabase session
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session ?? null);
-      setReady(true);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.error('[Auth] getSession error:', error.message);
+          setError(error.message);
+        }
+        setSession(data?.session ?? null);
+        setReady(true);
+      })
+      .catch((e) => {
+        if (!active) return;
+        console.error('[Auth] getSession threw:', e);
+        setError((e as Error)?.message ?? 'getSession failed');
+        setReady(true);
+      });
 
     // Listen for auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!active) return;
+      console.log('[Auth] onAuthStateChange:', event, Boolean(newSession));
       setSession(newSession ?? null);
     });
 
@@ -63,6 +77,16 @@ function SessionRouterGuard() {
       router.replace('/home');
     }
   }, [ready, navState?.key, session, segments]);
+
+  // Safety timeout: if not ready in 6s, allow navigation to auth
+  useEffect(() => {
+    if (ready) return;
+    const t = setTimeout(() => {
+      console.warn('[Auth] Router guard timeout — proceeding to auth');
+      setReady(true);
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   return null;
 }

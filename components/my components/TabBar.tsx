@@ -14,7 +14,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   return (
     <SafeAreaView style={styles.wrapper} edges={['bottom']}>
       <View style={styles.tabBar}>
-        {['home', 'new', 'stats'].map((routeName) => {
+        {['home', 'progress', 'social', 'profile'].map((routeName) => {
           const index = state.routes.findIndex(r => r.name === routeName);
           if (index === -1) return null;
 
@@ -40,11 +40,14 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
             case 'home':
               iconName = 'home';
               break;
-            case 'new':
-              iconName = 'plus';
-              break;
-            case 'stats':
+            case 'progress':
               iconName = 'pie-chart';
+              break;
+            case 'social':
+              iconName = 'team';
+              break;
+            case 'profile':
+              iconName = 'user';
               break;
             default:
               iconName = 'question';
