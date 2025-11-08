@@ -19,7 +19,7 @@ export const GlobalStyles = StyleSheet.create({
     fontSize: 32, 
     fontWeight: 'bold', 
     alignSelf: 'center', 
-    marginVertical: 2
+    marginBottom: 10
   },
   title: {
     color: Colors.dark.text,
@@ -35,12 +35,27 @@ export const GlobalStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  underline:{
-    height: 1,
-    backgroundColor: Colors.dark.text,
-    marginBottom: 10,
-    marginTop: 4
+  kpiCard: { 
+    flex: 1,
+    backgroundColor: Colors.dark.card, 
+    borderRadius: 14, 
+    paddingVertical: 14, 
+    alignItems: 'center', 
+    marginRight: 12, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.25, 
+    shadowRadius: 6, 
+    shadowOffset: { width: 0, height: 3 }, 
+    elevation: 3 },
+  kpiNumber: { 
+      color: Colors.dark.text, 
+      fontWeight: '800', 
+      fontSize: 18, 
+      marginBottom: 4 
   },
+  kpiLabel: { 
+    color: '#acb7c9ff', 
+    fontSize: 12 },
   text: {
     color: Colors.dark.text,
     fontFamily: Fonts.regular,
@@ -72,28 +87,5 @@ export const GlobalStyles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 32,
     paddingVertical: 12,
-  },
-  Chart: {
-    wrap: { 
-      paddingHorizontal: 16, 
-      paddingTop: 15, 
-      paddingBottom:15 
-    },
-    badge: {
-      marginTop: 2,
-      marginLeft: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 14,
-      backgroundColor: '#111',
-      borderWidth: 1,
-      borderColor: '#333',
-      alignSelf: 'flex-start',
-    },
-    text: {
-      color: Colors.dark.text,
-      fontWeight: '600',
-      fontSize: 12,
-    },
   },
 });

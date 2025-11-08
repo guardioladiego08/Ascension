@@ -2,7 +2,6 @@
 import React from 'react';
 import { Image, StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 interface LogoHeaderProps {
   showBackButton?: boolean;   // <- optional flag
@@ -20,7 +19,7 @@ const LogoHeader: React.FC<LogoHeaderProps> = ({ showBackButton = false }) => {
       )}
 
       <Image
-        source={require('../../assets/images/Logo.png')}
+        source={require('../../assets/images/TensrLogo.png')}
         style={styles.logo}
         resizeMode="contain"
       />
