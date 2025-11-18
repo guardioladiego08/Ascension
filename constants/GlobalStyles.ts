@@ -10,7 +10,6 @@ export const GlobalStyles = StyleSheet.create({
     paddingHorizontal: 15
   },
   container: {
-    flex: 1,
     padding: 10,
     backgroundColor: Colors.dark.background,
   },
@@ -42,11 +41,7 @@ export const GlobalStyles = StyleSheet.create({
     paddingVertical: 14, 
     alignItems: 'center', 
     marginRight: 12, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.25, 
-    shadowRadius: 6, 
-    shadowOffset: { width: 0, height: 3 }, 
-    elevation: 3 },
+  },
   kpiNumber: { 
       color: Colors.dark.text, 
       fontWeight: '800', 
@@ -59,11 +54,12 @@ export const GlobalStyles = StyleSheet.create({
   },
   quickCard: { 
     flex: 1, 
-    backgroundColor: Colors.dark.cardDark, 
+    backgroundColor: Colors.dark.card, 
     borderRadius: 14, 
     paddingVertical: 18, 
     alignItems: 'center', 
-    marginRight: 12 
+    marginRight: 12,
+
   },
   text: {
     color: Colors.dark.text,

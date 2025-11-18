@@ -46,7 +46,7 @@ export default function BlankHome() {
           <TouchableOpacity
             activeOpacity={0.9}
             style={GlobalStyles.quickCard}
-            onPress={() => router.push('/add/StrengthTrain')}
+            onPress={() => router.replace('/add/Strength/StrengthTrain')}
           >
             <MaterialCommunityIcons name="arm-flex" size={28} color={Colors.dark.highlight1} />
             <Text style={styles.quickText}>Weights</Text>
@@ -54,7 +54,7 @@ export default function BlankHome() {
           <TouchableOpacity
             activeOpacity={0.9}
             style={GlobalStyles.quickCard}
-            onPress={() => router.push('/new/run')}
+            onPress={() => router.push('/add/Cardio/outdoorRun')}
           >
             <Ionicons name="walk" size={28} color={Colors.dark.highlight2} />
             <Text style={styles.quickText}>Run</Text>

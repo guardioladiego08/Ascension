@@ -8,6 +8,8 @@ import { StatusBar } from 'expo-status-bar';
 import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import MapboxGL from '@rnmapbox/maps';
+import 'react-native-get-random-values';
+
 
 // ✅ Initialize Mapbox once with your public token
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;

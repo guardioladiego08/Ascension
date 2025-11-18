@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: Colors.dark.tab,
+    backgroundColor: Colors.dark.card,
     height: 70,
     justifyContent: 'space-evenly',
     alignItems: 'center',

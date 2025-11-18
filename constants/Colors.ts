@@ -5,12 +5,12 @@ export const Colors = {
     link: '#1e90ff',
   },
   dark: {
-    background: '#0e0e0eff',
-    card: '#1A2230',
+    background: '#070707ff',
+    card: '#202836ff',
     offset1: '#6C6C6C',
     highlight1: '#FF950A',
     highlight2: '#6AE5E5',
-    highlight3: '#23f03eff',
+    highlight3: '#41dd22ff',
     highlight4: '#c023f0ff',
     macroProtein:    '#b6b5b5ff',   // light-grey
     macroCarbs:      '#f3cf30ff',   // yellow
@@ -20,7 +20,7 @@ export const Colors = {
     text: '#ffffff',
     blkText: '#000000ff',
     link: '#1e90ff',
-    tab: '#2B2B2B',
+    tab: '#020202ff',
     cardDark: '#151C27'
   },
 };
