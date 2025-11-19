@@ -28,7 +28,7 @@ export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
 
 export type SetDraft = {
   tempId: string;
-  set_index: number; // stored to DB as-is (1..n, including warmups)
+  set_index: number;
   set_type: SetType;
   weight?: number | null;
   weight_unit_csv: UnitMass;
@@ -37,6 +37,7 @@ export type SetDraft = {
   est_1rm?: number | null;
   superset_group?: number | null;
   done?: boolean;
+  notes?: string | null;   // 👈 ADD THIS
 };
 
 export type ExerciseDraft = {
