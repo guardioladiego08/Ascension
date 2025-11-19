@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { Colors } from '@/constants/Colors';
 
 type ExerciseRow = {
   id: string;
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   container: {
-    backgroundColor: '#121827',
+    backgroundColor: Colors.dark.card,
     borderRadius: 12,
     maxHeight: '80%',
     padding: 16,

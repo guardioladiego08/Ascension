@@ -13,6 +13,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { ExerciseDraft, SetDraft } from '../StrengthTrain';
 import SetRow from './SetRow';
+import { Colors } from '@/constants/Colors';
+import { Swipeable } from 'react-native-gesture-handler';
+
 
 type Props = {
   exercise: ExerciseDraft;
@@ -22,6 +25,22 @@ type Props = {
 
 const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
   const [optionsVisible, setOptionsVisible] = useState(false);
+
+  const deleteSet = (tempId: string) => {
+    const updated = exercise.sets.filter(s => s.tempId !== tempId);
+
+    // Re-index set_index for correct backend sequence
+    const reindexed = updated.map((s, idx) => ({
+      ...s,
+      set_index: idx + 1,
+    }));
+
+    onChange({
+      ...exercise,
+      sets: reindexed,
+    });
+  };
+
 
   const addSet = () => {
     const nextIndex = exercise.sets.length + 1;
@@ -59,35 +78,50 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
       <View style={styles.headerRow}>
         <Text style={styles.name}>{exercise.exercise_name}</Text>
         <TouchableOpacity style={styles.prefBtn} onPress={() => setOptionsVisible(true)}>
-          <Ionicons name="ellipsis-horizontal" size={18} color="#9cadff" />
+          <Ionicons name="ellipsis-horizontal" size={18} color={Colors.dark.text} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { width: 32, textAlign: 'center' }]}>Set</Text>
-        <Text style={[styles.th, { flex: 1 }]}>Weight</Text>
-        <Text style={[styles.th, { width: 52, textAlign: 'right' }]}>reps</Text>
+        <Text style={[styles.th, { flex: 1, paddingLeft:45 }]}>Weight</Text>
+        <Text style={[styles.th, { width: 60, paddingRight:15}]}>reps</Text>
       </View>
 
-      {exercise.sets.map(s => {
+      let normalCounter = 0;
+
+      {exercise.sets.map((s) => {
+        // determine the display index for SetRow:
         let displayIndex: number | null = null;
-        if (s.set_type === 'normal') {
+
+        if (s.set_type === "normal") {
           normalCounter += 1;
           displayIndex = normalCounter;
         }
 
         return (
-          <SetRow
+          <Swipeable
             key={s.tempId}
-            setDraft={s}
-            displayIndex={displayIndex}
-            onChange={next => updateSet(s.tempId, () => next)}
-          />
+            renderRightActions={() => (
+              <TouchableOpacity
+                style={styles.deleteAction}
+                onPress={() => deleteSet(s.tempId)}
+              >
+                <Ionicons name="trash" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+          >
+            <SetRow
+              setDraft={s}
+              displayIndex={displayIndex}
+              onChange={next => updateSet(s.tempId, () => next)}
+            />
+          </Swipeable>
         );
       })}
 
       <TouchableOpacity style={styles.addSet} onPress={addSet}>
-        <Ionicons name="add" size={16} color="#b8c1ff" />
+        <Ionicons name="add" size={16} color={Colors.dark.text} />
         <Text style={styles.addSetText}>Add Set</Text>
       </TouchableOpacity>
 
@@ -138,13 +172,12 @@ export default ExerciseCard;
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#121a2e',
+    backgroundColor: '#202836ff',
     borderRadius: 16,
     padding: 12,
     marginHorizontal: 12,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: '#2a3557',
   },
   headerRow: {
     flexDirection: 'row',
@@ -157,7 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: '#1b2340',
+    backgroundColor: Colors.dark.background,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -165,20 +198,20 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 4,
   },
-  th: { color: '#8390b8', fontSize: 12, letterSpacing: 1 },
+  th: { color: Colors.dark.text, fontSize: 12, letterSpacing: 1 },
   addSet: {
     height: 40,
     borderRadius: 10,
     borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: '#404c77',
+    borderColor: Colors.dark.text,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
     marginTop: 10,
   },
-  addSetText: { color: '#b8c1ff', fontWeight: '700' },
+  addSetText: { color: Colors.dark.text, fontWeight: '700' },
 
   modalBackdrop: {
     flex: 1,
@@ -210,4 +243,13 @@ const styles = StyleSheet.create({
     color: '#d5dbff',
     fontSize: 14,
   },
+  deleteAction: {
+    backgroundColor: '#d9534f',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 70,
+    marginLeft: 10,
+    borderRadius: 10,
+  }
+
 });

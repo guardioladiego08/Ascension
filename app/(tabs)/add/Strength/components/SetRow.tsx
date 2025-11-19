@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import type { SetDraft } from '../StrengthTrain';
+import { Colors } from '@/constants/Colors';
 
 // --- helpers -------------------------------------------------
 
@@ -160,7 +161,7 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
         style={styles.reps}
         inputMode="numeric"
         placeholder="reps"
-        placeholderTextColor="#56607f"
+        placeholderTextColor={Colors.dark.textOffSt}
         value={setDraft.reps?.toString() ?? ''}
         onChangeText={handleRepsChange}
       />
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 40,
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
@@ -217,19 +218,16 @@ const styles = StyleSheet.create({
   idxBtn: {
     width: 32,
     height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2b3559',
+
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0b1020',
   },
   idxBtnActive: {
     borderColor: '#f9b24e',
     backgroundColor: '#2b2233',
   },
   idxText: {
-    color: '#c3ceff',
+    color: Colors.dark.text,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
@@ -245,17 +243,18 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2b3559',
-    backgroundColor: '#0d1426',
+    borderWidth: .2,
+    backgroundColor: Colors.dark.background,
     borderRadius: 10,
     overflow: 'hidden',
+    width: 1
   },
   weightInput: {
     flex: 1,
-    color: '#e7ecff',
+    color: Colors.dark.text,
     paddingHorizontal: 10,
     height: 40,
+    width: 100 
   },
 
   unitToggle: {
@@ -263,19 +262,19 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#222a45',
+    backgroundColor: Colors.dark.card2,
   },
-  unitText: { color: '#c3ceff', fontWeight: '700' },
+  unitText: { color: Colors.dark.text, fontWeight: '700' },
 
   reps: {
-    width: 52,
+    width: 70,
     height: 40,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#2b3559',
-    backgroundColor: '#0d1426',
-    color: '#e7ecff',
-    textAlign: 'right',
+    backgroundColor: Colors.dark.background,
+    color: Colors.dark.text,
+    textAlign: 'center',
     paddingRight: 10,
   },
 
@@ -291,10 +290,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#2a3557',
+
   },
   modalTitle: {
-    color: '#e7ecff',
+    color: Colors.dark.text,
     fontWeight: '700',
     fontSize: 15,
     marginBottom: 8,

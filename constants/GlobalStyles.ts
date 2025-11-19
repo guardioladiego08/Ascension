@@ -34,6 +34,9 @@ export const GlobalStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  timer: {
+     color: Colors.dark.text, fontSize: 42, fontWeight: '800', marginTop: 6 
+  },
   kpiCard: { 
     flex: 1,
     backgroundColor: Colors.dark.card, 

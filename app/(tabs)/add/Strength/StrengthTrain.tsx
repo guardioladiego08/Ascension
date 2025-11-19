@@ -12,12 +12,16 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { v4 as uuidv4 } from 'uuid';
+import { GlobalStyles } from '@/constants/GlobalStyles';
 
 import { supabase } from '@/lib/supabase';
+import LogoHeader from '@/components/my components/logoHeader';
 import SessionHeader from './components/SessionHeader';
 import ExerciseCard from './components/ExerciseCard';
 import ExercisePickerModal from './components/ExercisePickerModal';
 import SummaryModal from './components/SummaryModal';
+import CancelConfirmModal from './components/CancelConfirmModal';
+import { Colors } from '@/constants/Colors';
 
 export type UnitMass = 'kg' | 'lb';
 export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
@@ -55,6 +59,7 @@ export default function StrengthTrain() {
   const [paused, setPaused] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [timerResetKey, setTimerResetKey] = useState(0);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
 
   useEffect(() => {
@@ -147,35 +152,8 @@ export default function StrengthTrain() {
   }, [exercises]);
 
   const handleCancel = () => {
-    // pause timer immediately
     setPaused(true);
-
-    Alert.alert('Cancel workout?', 'This will discard the current session.', [
-      {
-        text: 'Keep',
-        style: 'cancel',
-        onPress: () => {
-          // resume timer if user cancels the cancel
-          setPaused(false);
-        },
-      },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: async () => {
-          // delete workout
-          if (workoutId) {
-            await supabase.from('strength_workouts').delete().eq('id', workoutId);
-          }
-
-          // 👇 THIS RESETS TIMER
-          setTimerResetKey(k => k + 1);
-
-          // navigate home
-          router.back();
-        },
-      },
-    ]);
+    setCancelModalOpen(true);
   };
 
 
@@ -279,23 +257,24 @@ export default function StrengthTrain() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[GlobalStyles.container, { flex: 1 }]}>
+      <LogoHeader showBackButton></LogoHeader>
       <SessionHeader
         key={workoutId}               // keep if you're using unique workout per session
-        title="Weight Session"
+        title="Strength Training Session"
         paused={paused}
         timerResetKey={timerResetKey}   // 👈 NEW
         onPauseToggle={() => setPaused(p => !p)}
         onCancel={handleCancel}
       />
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.sectionHeaderRow}>
+      <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>EXERCISES</Text>
           <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
             <Ionicons name="add" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        
 
         {exercises.map(ex => (
           <ExerciseCard
@@ -336,6 +315,29 @@ export default function StrengthTrain() {
         workoutTotalVolKg={totalVolumeKg}
         exercises={exercises}
       />
+      <CancelConfirmModal
+        visible={cancelModalOpen}
+        onKeep={() => {
+          setPaused(false);
+          setCancelModalOpen(false);
+        }}
+        onDiscard={async () => {
+          // 1) delete workout row (keep this exactly as you had it)
+          if (workoutId) {
+            await supabase.from('strength_workouts').delete().eq('id', workoutId);
+          }
+
+          // 2) clear local workout state so nothing persists
+          setExercises([]);          // 👈 clear all exercises from this session
+          setSeconds(0);             // optional: reset StrengthTrain’s seconds state
+          setPaused(false);          // optional: make sure timer is unpaused
+          setTimerResetKey(k => k + 1);  // still reset SessionHeader timer
+
+          // 3) close modal + navigate away
+          setCancelModalOpen(false);
+          router.back();
+        }}
+      />
     </View>
   );
 }
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#5b64ff',
+    backgroundColor: Colors.dark.highlight1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -367,7 +369,7 @@ const styles = StyleSheet.create({
     bottom: 24,
     height: 52,
     borderRadius: 16,
-    backgroundColor: '#5b64ff',
+    backgroundColor: Colors.dark.highlight1,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -375,5 +377,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
   },
-  finishText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  finishText: { color: Colors.dark.text, fontWeight: '700', fontSize: 16 },
 });
