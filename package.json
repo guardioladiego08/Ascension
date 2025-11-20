@@ -25,6 +25,7 @@
     "@shopify/react-native-skia": "2.2.12",
     "@supabase/supabase-js": "^2.57.2",
     "date-fns": "^4.1.0",
+    "dayjs": "^1.11.19",
     "dotenv": "^17.2.1",
     "expo": "54.0.12",
     "expo-app-loading": "^2.1.1",

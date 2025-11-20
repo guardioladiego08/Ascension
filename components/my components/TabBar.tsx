@@ -6,6 +6,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
+import LogoHeader from './logoHeader';
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   // get the current path, e.g. "/new", "/new/strength-train", etc.
