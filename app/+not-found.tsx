@@ -28,7 +28,7 @@ export default function NotFoundScreen() {
           <Text style={styles.btnText}>Go Back</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.btn, styles.btnAlt]} onPress={() => router.replace('/(tabs)/stats/strength')}>
+        <TouchableOpacity style={[styles.btn, styles.btnAlt]} onPress={() => router.replace('/(tabs)/home')}>
           <Text style={styles.btnText}>Go to Strength</Text>
         </TouchableOpacity>
       </View>

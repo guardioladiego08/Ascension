@@ -19,8 +19,9 @@ import LogoHeader from '@/components/my components/logoHeader';
 import SessionHeader from './components/SessionHeader';
 import ExerciseCard from './components/ExerciseCard';
 import ExercisePickerModal from './components/ExercisePickerModal';
-import SummaryModal from './components/SummaryModal';
 import CancelConfirmModal from './components/CancelConfirmModal';
+import FinishConfirmModal from './components/FinishConfirmModal';
+import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
 
 export type UnitMass = 'kg' | 'lb';
@@ -56,11 +57,12 @@ export default function StrengthTrain() {
   const [loading, setLoading] = useState(true);
   const [exercises, setExercises] = useState<ExerciseDraft[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
   const [paused, setPaused] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [timerResetKey, setTimerResetKey] = useState(0);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [finishModalOpen, setFinishModalOpen] = useState(false);
+  const [exerciseRequiredOpen, setExerciseRequiredOpen] = useState(false);
 
 
   useEffect(() => {
@@ -161,9 +163,16 @@ export default function StrengthTrain() {
   const handleFinish = async () => {
     if (!workoutId || !userId) return;
     if (exercises.length === 0) {
-      Alert.alert('No exercises', 'Please add at least one exercise.');
+      setFinishModalOpen(false);      // 👈 close finish modal first
+      setTimeout(() => {
+        setExerciseRequiredOpen(true); // 👈 open required modal AFTER
+      }, 10);
       return;
     }
+
+
+
+
 
     setLoading(true);
     try {
@@ -240,7 +249,7 @@ export default function StrengthTrain() {
       if (wErr) throw wErr;
 
       console.log('✅ workout saved', { workoutId });
-      setSummaryOpen(true);
+      router.replace(`/(tabs)/add/Strength/${workoutId}`);
     } catch (err: any) {
       console.error(err);
       Alert.alert('Save failed', err?.message ?? 'Unknown error');
@@ -293,7 +302,7 @@ export default function StrengthTrain() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
+      <TouchableOpacity style={styles.finishBtn} onPress={() => setFinishModalOpen(true)}>
         <Text style={styles.finishText}>Finish Workout</Text>
       </TouchableOpacity>
 
@@ -304,17 +313,6 @@ export default function StrengthTrain() {
           addExercise(ex);
           setPickerOpen(false);
         }}
-      />
-
-      <SummaryModal
-        visible={summaryOpen}
-        onClose={() => {
-          setSummaryOpen(false);
-          if (workoutId) router.replace(`/summary/strength/${workoutId}`);
-          else router.replace('/(tabs)/add');
-        }}
-        workoutTotalVolKg={totalVolumeKg}
-        exercises={exercises}
       />
       <CancelConfirmModal
         visible={cancelModalOpen}
@@ -337,6 +335,18 @@ export default function StrengthTrain() {
           // 3) close modal + navigate away
           setCancelModalOpen(false);
           router.back();
+        }}
+      />
+      <ExerciseRequiredModal
+        visible={exerciseRequiredOpen}
+        onClose={() => setExerciseRequiredOpen(false)}
+      />
+      <FinishConfirmModal
+        visible={finishModalOpen}
+        onCancel={() => setFinishModalOpen(false)}
+        onConfirm={async () => {
+          setFinishModalOpen(false);
+          await handleFinish();  // triggers your actual save logic
         }}
       />
     </View>
