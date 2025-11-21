@@ -7,13 +7,19 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import LogoHeader from '@/components/my components/logoHeader';
+import { Colors } from '@/constants/Colors';
+import { GlobalStyles } from '@/constants/GlobalStyles';
+import TopMetricCards from './progress/TopMetricCards';
+import ProgressDetailsSection from './progress/ProgressDetailsSection';
+
+const dummyWeeklyData = [24, 40, 32, 60, 52, 36, 18];
 
 const ProgressScreen: React.FC = () => {
   return (
-    <View style={styles.container}>
-      <LogoHeader/>
+    <View style={GlobalStyles.container}>
+      <LogoHeader />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -38,63 +44,7 @@ const ProgressScreen: React.FC = () => {
         </View>
 
         {/* TOP METRIC CARDS */}
-        <View style={styles.metricGrid}>
-          {/* Weights */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeaderRow}>
-              <View style={[styles.metricIcon, styles.weightsIcon]}>
-                <MaterialCommunityIcons
-                  name="dumbbell"
-                  size={18}
-                  color="#C7D2FF"
-                />
-              </View>
-              <Text style={styles.metricLabel}>WEIGHTS</Text>
-            </View>
-            <Text style={styles.metricValue}>5</Text>
-            <Text style={styles.metricSub}>sessions · 6.2 hrs</Text>
-          </View>
-
-          {/* Running */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeaderRow}>
-              <View style={[styles.metricIcon, styles.runningIcon]}>
-                <Ionicons name="walk-outline" size={18} color="#C7F4FF" />
-              </View>
-              <Text style={styles.metricLabel}>RUNNING</Text>
-            </View>
-            <Text style={styles.metricValue}>12.4</Text>
-            <Text style={styles.metricSub}>miles · 3 runs</Text>
-          </View>
-
-          {/* Cycling */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeaderRow}>
-              <View style={[styles.metricIcon, styles.cyclingIcon]}>
-                <Ionicons name="bicycle-outline" size={18} color="#E6F3FF" />
-              </View>
-              <Text style={styles.metricLabel}>CYCLING</Text>
-            </View>
-            <Text style={styles.metricValue}>38.6</Text>
-            <Text style={styles.metricSub}>miles · 2 rides</Text>
-          </View>
-
-          {/* Nutrition */}
-          <View style={styles.metricCard}>
-            <View style={styles.metricHeaderRow}>
-              <View style={[styles.metricIcon, styles.nutritionIcon]}>
-                <MaterialCommunityIcons
-                  name="food-apple-outline"
-                  size={18}
-                  color="#FFEAD1"
-                />
-              </View>
-              <Text style={styles.metricLabel}>NUTRITION</Text>
-            </View>
-            <Text style={styles.metricValue}>6/7</Text>
-            <Text style={styles.metricSub}>days tracked</Text>
-          </View>
-        </View>
+        <TopMetricCards />
 
         {/* WEEKLY ACTIVITY */}
         <View style={styles.sectionHeaderRow}>
@@ -123,7 +73,7 @@ const ProgressScreen: React.FC = () => {
                 key={idx}
                 style={[
                   styles.dayLabel,
-                  idx === 3 && styles.dayLabelActive, // highlight Thursday like mock
+                  idx === 3 && styles.dayLabelActive, // highlight Thursday
                 ]}
               >
                 {d}
@@ -136,79 +86,17 @@ const ProgressScreen: React.FC = () => {
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>VIEW DETAILS</Text>
         </View>
-        <View style={styles.detailsRow}>
-          <TouchableOpacity style={[styles.detailPill, styles.detailPillActive]}>
-            <Ionicons name="barbell-outline" size={16} color="#FFFFFF" />
-            <Text style={[styles.detailPillText, styles.detailPillTextActive]}>
-              Weights
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.detailPill}>
-            <Ionicons name="trail-sign-outline" size={16} color="#9DA4C4" />
-            <Text style={styles.detailPillText}>Running</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.detailPill}>
-            <Ionicons name="bicycle-outline" size={16} color="#9DA4C4" />
-            <Text style={styles.detailPillText}>Cycling</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.detailPill}>
-            <Ionicons name="fast-food-outline" size={16} color="#9DA4C4" />
-            <Text style={styles.detailPillText}>Nutrition</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* THIS WEEK'S WINS */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>THIS WEEK'S WINS</Text>
-        </View>
+        <ProgressDetailsSection />
 
-        <View style={styles.winCard}>
-          <View style={styles.winLeftIcon}>
-            <Ionicons name="flame-outline" size={20} color="#FBBF77" />
-          </View>
-          <View style={styles.winTextBlock}>
-            <Text style={styles.winTitle}>5 Day Streak</Text>
-            <Text style={styles.winSubtitle}>Keep it going!</Text>
-          </View>
-          <Ionicons name="sparkles-outline" size={18} color="#FFB86C" />
-        </View>
-
-        <View style={styles.winCard}>
-          <View style={styles.winLeftIcon}>
-            <Ionicons name="trophy-outline" size={20} color="#F9E58A" />
-          </View>
-          <View style={styles.winTextBlock}>
-            <Text style={styles.winTitle}>Personal Best</Text>
-            <Text style={styles.winSubtitle}>Bench press 225 lbs</Text>
-          </View>
-          <Ionicons name="star-outline" size={18} color="#FFC877" />
-        </View>
-
-        <View style={styles.winCard}>
-          <View style={styles.winLeftIcon}>
-            <Ionicons name="calendar-outline" size={20} color="#F9A8D4" />
-          </View>
-          <View style={styles.winTextBlock}>
-            <Text style={styles.winTitle}>Weekly Goal</Text>
-            <Text style={styles.winSubtitle}>Hit 10 workouts</Text>
-          </View>
-          <Ionicons name="checkmark-done-outline" size={18} color="#FF6BB5" />
-        </View>
-
-        {/* some bottom spacing so it clears tab bar */}
+        {/* bottom spacing to clear tab bar */}
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>
   );
 };
 
-const dummyWeeklyData = [24, 40, 32, 60, 52, 36, 18];
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#050816', // deep navy
-  },
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 32,
@@ -240,64 +128,9 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: '#111827',
+    backgroundColor: Colors.dark.card,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  metricGrid: {
-    marginTop: 24,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 14,
-  },
-  metricCard: {
-    width: '48%',
-    backgroundColor: '#0B1220',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  metricHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  metricIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  weightsIcon: {
-    backgroundColor: '#28307A',
-  },
-  runningIcon: {
-    backgroundColor: '#1C7C72',
-  },
-  cyclingIcon: {
-    backgroundColor: '#1E3A8A',
-  },
-  nutritionIcon: {
-    backgroundColor: '#7C2D12',
-  },
-  metricLabel: {
-    fontSize: 10,
-    letterSpacing: 0.9,
-    color: '#9DA4C4',
-  },
-  metricValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  metricSub: {
-    marginTop: 4,
-    fontSize: 11,
-    color: '#9DA4C4',
   },
 
   sectionHeaderRow: {
@@ -311,7 +144,7 @@ const styles = StyleSheet.create({
   },
 
   activityCard: {
-    backgroundColor: '#0B1220',
+    backgroundColor: Colors.dark.card,
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -355,62 +188,6 @@ const styles = StyleSheet.create({
   },
   dayLabelActive: {
     color: '#6366F1',
-  },
-
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  detailPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#0B1220',
-    gap: 6,
-  },
-  detailPillActive: {
-    backgroundColor: '#6366F1',
-  },
-  detailPillText: {
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  detailPillTextActive: {
-    color: '#FFFFFF',
-  },
-
-  winCard: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0B1220',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  winLeftIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  winTextBlock: {
-    flex: 1,
-  },
-  winTitle: {
-    fontSize: 13,
-    color: '#E5E7F5',
-    fontWeight: '600',
-  },
-  winSubtitle: {
-    fontSize: 11,
-    color: '#9DA4C4',
-    marginTop: 2,
   },
 });
 
