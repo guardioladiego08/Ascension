@@ -233,20 +233,34 @@ const ExercisesScreen: React.FC = () => {
 
   // ------------------------ RENDER -------------------------------------------
 
-  const renderItem = ({ item, index }: { item: ExerciseRow; index: number }) => {
+    const renderItem = ({ item, index }: { item: ExerciseRow; index: number }) => {
     const label = getLabel(item);
+
+    const handlePress = () => {
+    router.push({
+        pathname: '/progress/strength/[id]',
+        params: {
+        id: item.id,
+        name: label, // optional, for header
+        },
+    });
+    };
+
+
     return (
-      <View
+        <TouchableOpacity
         style={[
-          styles.item,
-          index === filteredExercises.length - 1 && { borderBottomWidth: 0 },
+            styles.item,
+            index === filteredExercises.length - 1 && { borderBottomWidth: 0 },
         ]}
-      >
+        activeOpacity={0.85}
+        onPress={handlePress}
+        >
         <View style={styles.bullet} />
         <Text style={styles.itemText}>{label}</Text>
-      </View>
+        </TouchableOpacity>
     );
-  };
+    };
 
   const listHeaderComponent = () => {
     if (loadingInitial) {
