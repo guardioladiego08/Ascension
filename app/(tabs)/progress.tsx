@@ -1,4 +1,3 @@
-// app/(tabs)/progress/index.tsx
 import React from 'react';
 import {
   View,
@@ -8,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
 import { GlobalStyles } from '@/constants/GlobalStyles';
@@ -44,7 +44,9 @@ const ProgressScreen: React.FC = () => {
         </View>
 
         {/* TOP METRIC CARDS */}
-        <TopMetricCards />
+        <TopMetricCards
+          onExercisesPress={() => router.push('/progress/strength/exercises')}
+        />
 
         {/* WEEKLY ACTIVITY */}
         <View style={styles.sectionHeaderRow}>
@@ -57,7 +59,6 @@ const ProgressScreen: React.FC = () => {
             <Text style={styles.activityRange}>Daily</Text>
           </View>
 
-          {/* Fake mini chart */}
           <View style={styles.fakeChartRow}>
             {dummyWeeklyData.map((h, idx) => (
               <View key={idx} style={styles.fakeBarWrapper}>
@@ -66,14 +67,13 @@ const ProgressScreen: React.FC = () => {
             ))}
           </View>
 
-          {/* Day labels */}
           <View style={styles.daysRow}>
             {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, idx) => (
               <Text
                 key={idx}
                 style={[
                   styles.dayLabel,
-                  idx === 3 && styles.dayLabelActive, // highlight Thursday
+                  idx === 3 && styles.dayLabelActive,
                 ]}
               >
                 {d}
@@ -82,14 +82,13 @@ const ProgressScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* VIEW DETAILS */}
+        {/* VIEW DETAILS + detail window */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>VIEW DETAILS</Text>
         </View>
 
         <ProgressDetailsSection />
 
-        {/* bottom spacing to clear tab bar */}
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>
