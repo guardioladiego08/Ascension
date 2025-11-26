@@ -11,6 +11,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
+import LogoHeader from '@/components/my components/logoHeader';
 
 const MEAL_TABS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] as const;
 type MealTab = (typeof MEAL_TABS)[number];
@@ -20,15 +21,12 @@ export default function AddMeal() {
   const [activeTab, setActiveTab] = useState<MealTab>('Lunch');
 
   return (
-    <SafeAreaView style={[GlobalStyles.safeArea, styles.safeArea]}>
+    <SafeAreaView style={GlobalStyles.safeArea}>
+      <LogoHeader showBackButton></LogoHeader>
       <View style={styles.main}>
         {/* Top Header Row */}
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#EAF2FF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Meal</Text>
-          <View style={{ width: 32 }} />{/* spacer to balance flex */}
+          <Text style={GlobalStyles.header}>Add Meal</Text>
         </View>
 
         <ScrollView
@@ -58,11 +56,12 @@ export default function AddMeal() {
           <Text style={styles.sectionLabel}>QUICK ADD</Text>
           <View style={styles.quickGrid}>
             <QuickTile
-              iconBg="#15C779"
-              icon={<Ionicons name="add" size={22} color="#EAF2FF" />}
-              title="Create Meal"
-              subtitle="Build from items"
-            />
+                iconBg="#15C779"
+                icon={<Ionicons name="add" size={22} color="#EAF2FF" />}
+                title="Create Meal"
+                subtitle="Build from items"
+                onPress={() => router.push('./createMeal')}  // 👈 NEW
+                />
             <QuickTile
               iconBg="#8A5CFF"
               icon={<Ionicons name="camera" size={22} color="#EAF2FF" />}
@@ -149,11 +148,12 @@ type QuickTileProps = {
   icon: React.ReactNode;
   title: string;
   subtitle: string;
+  onPress?: () => void;   // 👈 NEW
 };
 
-function QuickTile({ iconBg, icon, title, subtitle }: QuickTileProps) {
+function QuickTile({ iconBg, icon, title, subtitle, onPress }: QuickTileProps) {
   return (
-    <TouchableOpacity style={styles.quickTile} activeOpacity={0.9}>
+    <TouchableOpacity style={styles.quickTile} activeOpacity={0.9} onPress={onPress}>
       <View style={[styles.quickIconWrap, { backgroundColor: iconBg }]}>
         {icon}
       </View>
@@ -162,6 +162,7 @@ function QuickTile({ iconBg, icon, title, subtitle }: QuickTileProps) {
     </TouchableOpacity>
   );
 }
+
 
 type RecentMealCardProps = {
   name: string;
@@ -194,20 +195,16 @@ function RecentMealCard({ name, calories, protein }: RecentMealCardProps) {
 
 /* --- Styles --- */
 
-const BG = '#050B18';
-const CARD = '#141D2D';
-const CARD_SOFT = '#121829';
+const CARD = Colors.dark.card;
+const CARD_SOFT = Colors.dark.card;
 const PRIMARY_GREEN = '#15C779';
 const TEXT_PRIMARY = '#EAF2FF';
 const TEXT_MUTED = '#9AA4BF';
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: BG,
-  },
   main: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: Colors.dark.background,
     paddingHorizontal: 18,
     paddingTop: 8,
   },
@@ -221,28 +218,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#101829',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'left',
-    marginLeft: 12,
-    fontSize: 18,
-    fontWeight: '700',
-    color: TEXT_PRIMARY,
-  },
 
   /* Tabs */
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: '#101829',
-    borderRadius: 999,
+    backgroundColor: Colors.dark.card,
+    borderRadius: 15,
     padding: 4,
     justifyContent: 'space-between',
     marginBottom: 18,
@@ -250,7 +231,7 @@ const styles = StyleSheet.create({
   tabBtn: {
     flex: 1,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -260,7 +241,7 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: 12,
     fontWeight: '600',
-    color: TEXT_MUTED,
+    color: Colors.dark.text,
   },
   tabTextActive: {
     color: '#05101F',
