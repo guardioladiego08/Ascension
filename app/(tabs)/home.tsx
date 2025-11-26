@@ -96,7 +96,11 @@ export default function BlankHome() {
         </View>
 
         <View style={styles.row2}>
-          <TouchableOpacity activeOpacity={0.9} style={[styles.ctaButton, { marginRight: 14 }]}> 
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={[styles.ctaButton, { marginRight: 14 }]}
+            onPress={() => router.push('/add/Nutrition/logMeal')}
+          >
             <Ionicons name="add-circle" size={18} color="#0E151F" />
             <Text style={styles.ctaText}>Log Meal</Text>
           </TouchableOpacity>
