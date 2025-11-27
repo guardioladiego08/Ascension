@@ -1,79 +1,304 @@
-import React from 'react';
+// app/(tabs)/nutrition/createMeal.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TextInput,
   TouchableOpacity,
+  TextInput,
+  Modal,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import MealSummaryCard from './components/MealSummaryCard';
+import IngredientsList from './components/IngredientsList';
+import { supabase } from '@/lib/supabase';
+
+const CARD = Colors.dark.card;
+const TEXT_PRIMARY = '#EAF2FF';
+const TEXT_MUTED = '#9AA4BF';
+const PRIMARY_GREEN = '#15C779';
+const DANGER_RED = '#FF6B81';
 
 type Ingredient = {
-  id: string;
-  name: string;
-  grams: number;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
+  food_id: number;
+  description: string;
+  baseKcal: number;
+  baseProtein: number;
+  baseCarbs: number;
+  baseFat: number;
+  serving_size: number | null;
+  serving_unit: string | null;
+  quantity: number; // portion multiplier (1 = default serving)
 };
-
-const MOCK_INGREDIENTS: Ingredient[] = [
-  {
-    id: '1',
-    name: 'Grilled Chicken Breast',
-    grams: 150,
-    calories: 250,
-    protein: 40,
-    carbs: 0,
-    fat: 7,
-  },
-  {
-    id: '2',
-    name: 'Jasmine Rice',
-    grams: 180,
-    calories: 240,
-    protein: 4,
-    carbs: 52,
-    fat: 2,
-  },
-  {
-    id: '3',
-    name: 'Avocado',
-    grams: 50,
-    calories: 80,
-    protein: 1,
-    carbs: 4,
-    fat: 7,
-  },
-];
 
 export default function CreateMeal() {
   const router = useRouter();
 
-  // Totals from mock ingredients (replace with real data later)
-  const totals = MOCK_INGREDIENTS.reduce(
-    (acc, ing) => {
-      acc.grams += ing.grams;
-      acc.calories += ing.calories;
-      acc.protein += ing.protein;
-      acc.carbs += ing.carbs;
-      acc.fat += ing.fat;
-      return acc;
-    },
-    { grams: 0, calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
+  const params = useLocalSearchParams<{
+    foodId?: string;
+    description?: string;
+    kcal?: string;
+    protein?: string;
+    carbs?: string;
+    fat?: string;
+    serving_size?: string;
+    serving_unit?: string;
+  }>();
+
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [recipeName, setRecipeName] = useState('');
+  const [recipeDescription, setRecipeDescription] = useState('');
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // 🔹 REAL user id from Supabase auth
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('Error getting user in CreateMeal', error);
+        return;
+      }
+      if (data.user) {
+        setUserId(data.user.id);
+      }
+    };
+    loadUser();
+  }, []);
+
+  // When returning from AddIngredient with a selected food, add it to ingredients
+  useEffect(() => {
+    if (!params.foodId) return;
+
+    const foodIdNum = Number(params.foodId);
+    if (Number.isNaN(foodIdNum)) return;
+
+    setIngredients(prev => [
+      ...prev,
+      {
+        food_id: foodIdNum,
+        description: params.description ?? '',
+        baseKcal: params.kcal ? Number(params.kcal) : 0,
+        baseProtein: params.protein ? Number(params.protein) : 0,
+        baseCarbs: params.carbs ? Number(params.carbs) : 0,
+        baseFat: params.fat ? Number(params.fat) : 0,
+        serving_size: params.serving_size ? Number(params.serving_size) : null,
+        serving_unit: params.serving_unit ?? null,
+        quantity: 1,
+      },
+    ]);
+  }, [params.foodId]);
+
+  // Totals for meal summary (kcal + macros)
+  const { totalKcal, totalProtein, totalCarbs, totalFat } = useMemo(() => {
+    return ingredients.reduce(
+      (acc, ing) => {
+        const q = ing.quantity || 0;
+        acc.totalKcal += ing.baseKcal * q;
+        acc.totalProtein += ing.baseProtein * q;
+        acc.totalCarbs += ing.baseCarbs * q;
+        acc.totalFat += ing.baseFat * q;
+        return acc;
+      },
+      {
+        totalKcal: 0,
+        totalProtein: 0,
+        totalCarbs: 0,
+        totalFat: 0,
+      }
+    );
+  }, [ingredients]);
+
+  // 🔹 Total grams for ONE portion of this recipe
+  // (sum of each ingredient's default serving_size in grams * quantity)
+  const totalGrams = useMemo(() => {
+    return ingredients.reduce((acc, ing) => {
+      const q = ing.quantity || 0;
+      if (!ing.serving_size) return acc;
+      return acc + ing.serving_size * q;
+    }, 0);
+  }, [ingredients]);
+
+  const handleQuantityChange = (index: number, value: string) => {
+    const cleaned = value.replace(',', '.');
+    const num = parseFloat(cleaned);
+    setIngredients(prev => {
+      const copy = [...prev];
+      copy[index] = {
+        ...copy[index],
+        quantity: Number.isNaN(num) ? 0 : num,
+      };
+      return copy;
+    });
+  };
+
+  const handleSubmitPress = () => {
+    if (!recipeName.trim()) {
+      Alert.alert('Name required', 'Please give your recipe a name.');
+      return;
+    }
+    if (ingredients.length === 0) {
+      Alert.alert('Add ingredients', 'Add at least one ingredient first.');
+      return;
+    }
+    if (!userId) {
+      Alert.alert('User missing', 'Please sign in again before saving.');
+      return;
+    }
+    setShowSubmitConfirm(true);
+  };
+
+  const handleCancelPress = () => {
+    setShowCancelConfirm(true);
+  };
+
+  /** Helper: create recipe in DB and return the inserted row */
+  const createRecipeInDb = async () => {
+    if (!userId) {
+      Alert.alert('User missing', 'Please sign in again before saving.');
+      return null;
+    }
+
+    setSaving(true);
+
+    const totalGramsRounded =
+      totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
+
+    // Build ingredients JSON payload
+    const ingredientsPayload = ingredients.map(ing => ({
+      food_id: ing.food_id,
+      description: ing.description,
+      quantity: ing.quantity,
+      serving_size: ing.serving_size,
+      serving_unit: ing.serving_unit,
+      base_kcal: ing.baseKcal,
+      base_protein: ing.baseProtein,
+      base_carbs: ing.baseCarbs,
+      base_fat: ing.baseFat,
+    }));
+
+    const { data, error } = await supabase
+      .from('recipes')
+      .insert({
+        user_id: userId,
+        name: recipeName.trim(),
+        // TODO: add a "description" column in recipes and store recipeDescription
+        kcal: Math.round(totalKcal),
+        protein: Number(totalProtein.toFixed(2)),
+        carbs: Number(totalCarbs.toFixed(2)),
+        fat: Number(totalFat.toFixed(2)),
+        fiber: null,
+        sugar: null,
+        sodium: null,
+        default_portion_grams: totalGramsRounded, // 🔹 save grams per portion
+        ingredients: ingredientsPayload,
+        is_private: true,
+      })
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      console.error('Error creating recipe', error);
+      Alert.alert('Error', 'Could not save recipe. Please try again.');
+      return null;
+    }
+
+    return data; // recipe row (with id)
+  };
+
+  /** Action for the "Submit" button: create recipe only */
+  const handleSubmitRecipeOnly = async () => {
+    setShowSubmitConfirm(false);
+    const recipe = await createRecipeInDb();
+    if (!recipe) return;
+    router.back();
+  };
+
+  /** Action for "Create & Add": create recipe + add to diary for today */
+  const handleCreateAndAdd = async () => {
+    setShowSubmitConfirm(false);
+    const recipe = await createRecipeInDb();
+    if (!recipe || !userId) return;
+
+    const totalGramsRounded =
+      totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
+
+    // 1) Get or create today's diary_day
+    const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+    const { data: diaryDay, error: diaryDayError } = await supabase
+      .from('diary_days')
+      .upsert(
+        {
+          user_id: userId,
+          date: todayStr,
+          timezone_str: 'America/Chicago',
+        },
+        { onConflict: 'user_id,date' }
+      )
+      .select()
+      .single();
+
+    if (diaryDayError || !diaryDay) {
+      console.error('Error upserting diary_day', diaryDayError);
+      Alert.alert('Error', "Could not add to today's diary.");
+      return;
+    }
+
+    // 2) Insert diary_items row referencing the new recipe
+    const { error: diaryItemError } = await supabase.from('diary_items').insert({
+      user_id: userId,
+      diary_day_id: diaryDay.id,
+      meal_type: 'other', // change if you pass in a specific meal_type
+      food_id: null,
+      recipe_id: recipe.id,
+      quantity: 1,
+      unit_label: 'portion',
+      grams: totalGramsRounded, // 🔹 NOT NULL now
+      kcal: Math.round(totalKcal),
+      protein: Number(totalProtein.toFixed(2)),
+      carbs: Number(totalCarbs.toFixed(2)),
+      fat: Number(totalFat.toFixed(2)),
+      fiber: null,
+      sugar: null,
+      sodium: null,
+      note: null,
+    });
+
+    if (diaryItemError) {
+      console.error('Error inserting diary_item', diaryItemError);
+      Alert.alert(
+        'Partial success',
+        `Recipe was created but diary insert failed:\n\n${
+          diaryItemError.message ?? JSON.stringify(diaryItemError, null, 2)
+        }`
+      );
+      return;
+    }
+
+    router.back();
+  };
+
+  const confirmCancel = () => {
+    setShowCancelConfirm(false);
+    router.back();
+  };
 
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
       <LogoHeader showBackButton />
-
       <View style={styles.main}>
         {/* Header */}
         <View style={styles.headerRow}>
@@ -84,107 +309,155 @@ export default function CreateMeal() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Meal name input */}
-          <View style={styles.card}>
-            <Text style={styles.label}>Meal Name</Text>
-            <TextInput
-              placeholder="e.g. Chicken Rice Bowl"
-              placeholderTextColor="#6C768D"
-              style={styles.input}
+          {/* Recipe name input */}
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Name your recipe..."
+            placeholderTextColor={TEXT_MUTED}
+            value={recipeName}
+            onChangeText={setRecipeName}
+          />
+
+          {/* Recipe description */}
+          <TextInput
+            style={styles.descriptionInput}
+            placeholder="Add a short description (optional)"
+            placeholderTextColor={TEXT_MUTED}
+            value={recipeDescription}
+            onChangeText={setRecipeDescription}
+            multiline
+          />
+
+          {/* Meal summary with donut chart */}
+          <MealSummaryCard
+            totalKcal={totalKcal}
+            totalProtein={totalProtein}
+            totalCarbs={totalCarbs}
+            totalFat={totalFat}
+          />
+
+          {/* Ingredients */}
+          <Text style={[styles.sectionLabel, { marginTop: 18 }]}>INGREDIENTS</Text>
+
+          <View style={styles.ingredientsContainer}>
+            <IngredientsList
+              ingredients={ingredients}
+              onChangeQuantity={handleQuantityChange}
             />
           </View>
+        </ScrollView>
 
-          {/* Summary card */}
-          <View style={[styles.card, { marginTop: 14 }]}>
-            <View style={styles.summaryHeader}>
-              <View style={styles.summaryHeaderLeft}>
-                <Ionicons name="stats-chart" size={18} color="#15C779" />
-                <Text style={styles.summaryTitle}>Meal Summary</Text>
-              </View>
-            </View>
+        {/* Footer: Submit / Cancel + Add Ingredient */}
+        <View style={styles.footer}>
+          <View style={styles.footerButtonsRow}>
+            <TouchableOpacity
+              style={[styles.footerBtn, styles.cancelBtn]}
+              activeOpacity={0.9}
+              onPress={handleCancelPress}
+              disabled={saving}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
 
-            <View style={styles.summaryMainRow}>
-              <View>
-                <Text style={styles.summaryLabel}>Total Calories</Text>
-                <Text style={styles.summaryCalories}>
-                  {totals.calories.toFixed(0)}
-                </Text>
-                <Text style={styles.summarySubLabel}>kcal</Text>
-              </View>
-              <View style={styles.summaryRightBox}>
-                <Text style={styles.summaryLabel}>Total Weight</Text>
-                <Text style={styles.summaryRightValue}>
-                  {totals.grams.toFixed(0)} g
-                </Text>
-              </View>
-            </View>
+            <TouchableOpacity
+              style={[styles.footerBtn, styles.submitBtn]}
+              activeOpacity={0.9}
+              onPress={handleSubmitPress}
+              disabled={saving}
+            >
+              <Text style={styles.submitBtnText}>
+                {saving ? 'Saving...' : 'Save Recipe'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Macro totals */}
-            <View style={styles.macroRow}>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>{totals.protein.toFixed(0)}g</Text>
-                <Text style={styles.macroLabel}>PROTEIN</Text>
-              </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>{totals.carbs.toFixed(0)}g</Text>
-                <Text style={styles.macroLabel}>CARBS</Text>
-              </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>{totals.fat.toFixed(0)}g</Text>
-                <Text style={styles.macroLabel}>FAT</Text>
+          <TouchableOpacity
+            style={styles.addIngredientBtn}
+            activeOpacity={0.9}
+            onPress={() => router.push('./addIngredient')}
+            disabled={saving}
+          >
+            <Ionicons name="add" size={18} color="#05101F" />
+            <Text style={styles.addIngredientBtnText}>Add Ingredient</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Submit confirm modal */}
+        <Modal
+          transparent
+          animationType="fade"
+          visible={showSubmitConfirm}
+          onRequestClose={() => setShowSubmitConfirm(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Create this recipe?</Text>
+              <Text style={styles.modalBody}>
+                Choose whether to just save it, or save and add it to today&apos;s
+                diary.
+              </Text>
+
+              <View style={styles.modalButtonsRowMulti}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalCancelBtn]}
+                  onPress={() => setShowSubmitConfirm(false)}
+                >
+                  <Text style={styles.modalCancelText}>Go Back</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalConfirmBtn]}
+                  onPress={handleSubmitRecipeOnly}
+                >
+                  <Text style={styles.modalConfirmText}>Submit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalAltBtn]}
+                  onPress={handleCreateAndAdd}
+                >
+                  <Text style={styles.modalAltText}>Create &amp; Add</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
+        </Modal>
 
-          {/* Ingredients list */}
-          <Text style={styles.sectionLabel}>INGREDIENTS</Text>
+        {/* Cancel confirm modal */}
+        <Modal
+          transparent
+          animationType="fade"
+          visible={showCancelConfirm}
+          onRequestClose={() => setShowCancelConfirm(false)}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Discard this recipe?</Text>
+              <Text style={styles.modalBody}>
+                Any changes you&apos;ve made will be lost.
+              </Text>
 
-          {/* (Later this could be a search/add input) */}
-          {MOCK_INGREDIENTS.map(ing => (
-            <View key={ing.id} style={styles.ingredientCard}>
-              <View style={styles.ingredientLeft}>
-                <Text style={styles.ingredientName}>{ing.name}</Text>
-                <View style={styles.ingredientMetaRow}>
-                  <Text style={styles.ingredientMeta}>
-                    {ing.grams}g • {ing.calories} kcal
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.ingredientMacros}>
-                <MacroBadge label="P" value={`${ing.protein}g`} />
-                <MacroBadge label="C" value={`${ing.carbs}g`} />
-                <MacroBadge label="F" value={`${ing.fat}g`} />
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalCancelBtn]}
+                  onPress={() => setShowCancelConfirm(false)}
+                >
+                  <Text style={styles.modalCancelText}>Keep Editing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalDangerBtn]}
+                  onPress={confirmCancel}
+                >
+                  <Text style={styles.modalDangerText}>Discard</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          ))}
-
-          {/* Add ingredient button */}
-          <TouchableOpacity style={styles.addIngredientBtn} activeOpacity={0.9}>
-            <Ionicons name="add-circle" size={20} color="#05101F" />
-            <Text style={styles.addIngredientText}>Add Ingredient</Text>
-          </TouchableOpacity>
-        </ScrollView>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
 }
-
-function MacroBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.macroBadge}>
-      <Text style={styles.macroBadgeLabel}>{label}</Text>
-      <Text style={styles.macroBadgeValue}>{value}</Text>
-    </View>
-  );
-}
-
-/* --- Styles --- */
-
-const CARD = Colors.dark.card;
-const PRIMARY_GREEN = '#15C779';
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
 
 const styles = StyleSheet.create({
   main: {
@@ -193,172 +466,167 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 8,
   },
-  scrollContent: {
-    paddingBottom: 40,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
   },
-
-  card: {
+  scrollContent: {
+    paddingBottom: 120,
+  },
+  nameInput: {
     backgroundColor: CARD,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  label: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#0F1728',
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     color: TEXT_PRIMARY,
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
   },
-
-  summaryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  summaryHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryTitle: {
+  descriptionInput: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     color: TEXT_PRIMARY,
-    fontWeight: '700',
-    marginLeft: 6,
     fontSize: 13,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    marginBottom: 16,
   },
-
-  summaryMainRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  summaryLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  summaryCalories: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  summarySubLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-  },
-  summaryRightBox: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  summaryRightValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  macroRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  macroItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  macroNumber: {
-    color: TEXT_PRIMARY,
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  macroLabel: {
-    color: TEXT_MUTED,
-    fontSize: 10,
-    marginTop: 2,
-  },
-
   sectionLabel: {
     color: TEXT_MUTED,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
     marginBottom: 10,
-    marginTop: 18,
   },
-
-  ingredientCard: {
-    flexDirection: 'row',
+  ingredientsContainer: {
     backgroundColor: CARD,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 10,
+    borderRadius: 18,
+    padding: 14,
+    minHeight: 120,
   },
-  ingredientLeft: {
+  footer: {
+    paddingBottom: 18,
+    paddingTop: 8,
+    backgroundColor: Colors.dark.background,
+  },
+  footerButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  footerBtn: {
     flex: 1,
-  },
-  ingredientName: {
-    color: TEXT_PRIMARY,
-    fontWeight: '600',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  ingredientMetaRow: {
-    flexDirection: 'row',
-  },
-  ingredientMeta: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-  },
-  ingredientMacros: {
-    flexDirection: 'row',
+    paddingVertical: 10,
+    borderRadius: 999,
     alignItems: 'center',
-    marginLeft: 10,
-  },
-  macroBadge: {
-    backgroundColor: '#101827',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    alignItems: 'center',
-    marginLeft: 4,
-  },
-  macroBadgeLabel: {
-    color: TEXT_MUTED,
-    fontSize: 9,
-  },
-  macroBadgeValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-
-  addIngredientBtn: {
-    marginTop: 12,
-    backgroundColor: PRIMARY_GREEN,
-    borderRadius: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
   },
-  addIngredientText: {
+  cancelBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: TEXT_MUTED,
+    marginRight: 8,
+  },
+  submitBtn: {
+    backgroundColor: PRIMARY_GREEN,
+    marginLeft: 8,
+  },
+  cancelBtnText: {
+    color: TEXT_MUTED,
+    fontWeight: '600',
+  },
+  submitBtnText: {
     color: '#05101F',
-    fontWeight: '800',
+    fontWeight: '700',
+  },
+  addIngredientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2D3C5A',
+    borderRadius: 999,
+    paddingVertical: 11,
+    marginTop: 4,
+  },
+  addIngredientBtnText: {
+    color: TEXT_PRIMARY,
+    fontWeight: '700',
     fontSize: 14,
+    marginLeft: 6,
+  },
+  // Modals
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: '82%',
+    backgroundColor: Colors.dark.card,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  modalTitle: {
+    color: TEXT_PRIMARY,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalBody: {
+    color: TEXT_MUTED,
+    fontSize: 13,
+    marginBottom: 14,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  modalButtonsRowMulti: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+  },
+  modalBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    marginLeft: 8,
+    marginTop: 4,
+  },
+  modalCancelBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: TEXT_MUTED,
+  },
+  modalConfirmBtn: {
+    backgroundColor: PRIMARY_GREEN,
+  },
+  modalAltBtn: {
+    backgroundColor: '#3E8CFF',
+  },
+  modalDangerBtn: {
+    backgroundColor: DANGER_RED,
+  },
+  modalCancelText: {
+    color: TEXT_MUTED,
+    fontWeight: '600',
+  },
+  modalConfirmText: {
+    color: '#05101F',
+    fontWeight: '700',
+  },
+  modalAltText: {
+    color: '#05101F',
+    fontWeight: '700',
+  },
+  modalDangerText: {
+    color: '#05101F',
+    fontWeight: '700',
   },
 });
