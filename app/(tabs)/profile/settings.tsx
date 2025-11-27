@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -13,6 +13,9 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 
+import { useUnits } from '@/contexts/UnitsContext';
+import WeightUnitModal from './settings/WeightUnitModal';
+
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
 const BORDER = Colors.dark?.border ?? '#1F2937';
@@ -23,6 +26,8 @@ const DANGER = '#F97373';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { weightUnit } = useUnits();
+  const [showWeightModal, setShowWeightModal] = useState(false);
 
   const handleComingSoon = (label: string) => {
     // placeholder until you wire actual popups
@@ -154,45 +159,40 @@ export default function SettingsScreen() {
 
         {/* UNITS */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Units</Text>
-          <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Units</Text>
+        <View style={styles.card}>
             <TouchableOpacity
-              style={[styles.row, styles.rowBorder]}
-              onPress={() => handleComingSoon('Language')}
+            style={[styles.row, styles.rowBorder]}
+            onPress={() => handleComingSoon('Language')}
             >
-              <Text style={styles.rowLabel}>Language</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={TEXT_MUTED}
-              />
+            <Text style={styles.rowLabel}>Language</Text>
+            <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.row, styles.rowBorder]}
-              onPress={() => handleComingSoon('Weight unit')}
+            style={[styles.row, styles.rowBorder]}
+            onPress={() => setShowWeightModal(true)}
             >
-              <Text style={styles.rowLabel}>Weight unit</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={TEXT_MUTED}
-              />
+            <Text style={styles.rowLabel}>Weight unit</Text>
+
+            <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>
+                {weightUnit === 'lb' ? 'Pounds (lb)' : 'Kilograms (kg)'}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+            </View>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.row}
-              onPress={() => handleComingSoon('Distance unit')}
+            style={styles.row}
+            onPress={() => handleComingSoon('Distance unit')}
             >
-              <Text style={styles.rowLabel}>Distance unit</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={TEXT_MUTED}
-              />
+            <Text style={styles.rowLabel}>Distance unit</Text>
+            <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
             </TouchableOpacity>
-          </View>
         </View>
+        </View>
+
 
         {/* DATA */}
         <View style={styles.section}>
@@ -300,6 +300,10 @@ export default function SettingsScreen() {
             <Text style={styles.logoutText}>Log out</Text>
           </TouchableOpacity>
         </View>
+        <WeightUnitModal
+            visible={showWeightModal}
+            onClose={() => setShowWeightModal(false)}
+            />
       </ScrollView>
     </SafeAreaView>
   );
@@ -396,4 +400,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+    rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    },
+    rowValue: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    },
 });

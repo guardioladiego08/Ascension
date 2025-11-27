@@ -1,11 +1,54 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
-import { router } from 'expo-router';
+import { useUnits } from '@/contexts/UnitsContext';
 
+const LB_PER_KG = 2.20462;
+
+// Format a value that is stored in KG (volumes, 1RM, etc.)
+function formatFromKg(
+  value: number | null | undefined,
+  unit: 'kg' | 'lb'
+): string {
+  if (value == null) return '-';
+  if (unit === 'kg') return `${value.toFixed(1)} kg`;
+  const lb = value * LB_PER_KG;
+  return `${lb.toFixed(0)} lb`;
+}
+
+// Format a set weight that has its own unit (s.weight + s.weight_unit_csv)
+function formatSetWeight(
+  weight: number | null | undefined,
+  weightUnitCsv: string | null | undefined,
+  viewerUnit: 'kg' | 'lb'
+): string {
+  if (weight == null) return '-';
+
+  const setUnit = (weightUnitCsv === 'kg' || weightUnitCsv === 'lb')
+    ? (weightUnitCsv as 'kg' | 'lb')
+    : viewerUnit;
+
+  // if same unit, just show value + unit
+  if (setUnit === viewerUnit) {
+    return `${weight}${setUnit}`;
+  }
+
+  // convert if different
+  if (setUnit === 'kg' && viewerUnit === 'lb') {
+    const lb = weight * LB_PER_KG;
+    return `${lb.toFixed(0)}lb`;
+  }
+
+  if (setUnit === 'lb' && viewerUnit === 'kg') {
+    const kg = weight / LB_PER_KG;
+    return `${kg.toFixed(1)}kg`;
+  }
+
+  return `${weight}${setUnit}`;
+}
 
 export default function StrengthSummaryPage() {
   const { id } = useLocalSearchParams();   // workout ID
@@ -14,6 +57,8 @@ export default function StrengthSummaryPage() {
   const [workout, setWorkout] = React.useState<any>(null);
   const [exercises, setExercises] = React.useState<any[]>([]);
   const [setsByExercise, setSetsByExercise] = React.useState<any>({});
+
+  const { weightUnit } = useUnits(); // 👈 viewer’s preference: 'kg' | 'lb'
 
   React.useEffect(() => {
     (async () => {
@@ -89,20 +134,29 @@ export default function StrengthSummaryPage() {
         <Text style={styles.title}>Workout Summary</Text>
 
         <Text style={styles.totalVol}>
-          Total Volume: {workout?.total_vol?.toFixed(1)} kg
+          Total Volume:{' '}
+          {formatFromKg(workout?.total_vol, weightUnit)}
         </Text>
 
-        {/* ---- Per Exercise Summary ---- */}
+        {/* ---- Per Exercise Summary ---- */}        
         {exercises.map((ex, i) => (
           <View key={i} style={styles.card}>
             <Text style={styles.exerciseName}>
               {ex.exercises?.exercise_name}
             </Text>
 
-            <Text style={styles.detail}>Volume: {ex.vol} kg</Text>
-            <Text style={styles.detail}>Strongest Set: {ex.strongest_set} kg</Text>
-            <Text style={styles.detail}>Best Est 1RM: {ex.best_est_1rm} kg</Text>
-            <Text style={styles.detail}>Avg Set Weight: {ex.avg_set} kg</Text>
+            <Text style={styles.detail}>
+              Volume: {formatFromKg(ex.vol, weightUnit)}
+            </Text>
+            <Text style={styles.detail}>
+              Strongest Set: {formatFromKg(ex.strongest_set, weightUnit)}
+            </Text>
+            <Text style={styles.detail}>
+              Best Est 1RM: {formatFromKg(ex.best_est_1rm, weightUnit)}
+            </Text>
+            <Text style={styles.detail}>
+              Avg Set Weight: {formatFromKg(ex.avg_set, weightUnit)}
+            </Text>
 
             {/* ---- Table of Sets ---- */}
             <View style={styles.table}>
@@ -122,16 +176,19 @@ export default function StrengthSummaryPage() {
                   <Text style={styles.col}>{s.set_index}</Text>
                   <Text style={styles.col}>{s.set_type}</Text>
                   <Text style={styles.col}>
-                    {s.weight ? `${s.weight}${s.weight_unit_csv}` : "-"}
+                    {formatSetWeight(s.weight, s.weight_unit_csv, weightUnit)}
                   </Text>
                   <Text style={styles.col}>{s.reps ?? "-"}</Text>
                   <Text style={styles.col}>{s.rpe ?? "-"}</Text>
-                  <Text style={styles.col}>{s.est_1rm ?? "-"}</Text>
+                  <Text style={styles.col}>
+                    {formatFromKg(s.est_1rm, weightUnit)}
+                  </Text>
                 </View>
               ))}
             </View>
           </View>
         ))}
+
         <TouchableOpacity
           style={styles.homeBtn}
           onPress={() => router.replace('/')}
@@ -226,17 +283,16 @@ const styles = StyleSheet.create({
     color: Colors.dark.highlight1,
   },
   homeBtn: {
-  backgroundColor: Colors.dark.highlight1,
-  paddingVertical: 14,
-  borderRadius: 14,
-  marginTop: 20,
-  alignItems: 'center',
-  justifyContent: 'center',
+    backgroundColor: Colors.dark.highlight1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   homeBtnText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
   },
-
 });

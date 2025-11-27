@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import MapboxGL from '@rnmapbox/maps';
 import 'react-native-get-random-values';
+import { UnitsProvider } from '@/contexts/UnitsContext';
 
 
 // ✅ Initialize Mapbox once with your public token
@@ -99,17 +100,19 @@ function SessionRouterGuard() {
  */
 export default function RootLayout(): JSX.Element {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <BottomSheetModalProvider>
-          <SessionRouterGuard />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="auth" />
-          </Stack>
-          <StatusBar style="light" />
-        </BottomSheetModalProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <UnitsProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <BottomSheetModalProvider>
+            <SessionRouterGuard />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth" />
+            </Stack>
+            <StatusBar style="light" />
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </UnitsProvider>
   );
 }
