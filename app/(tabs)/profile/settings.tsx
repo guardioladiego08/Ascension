@@ -21,69 +21,16 @@ const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.primary ?? '#6366F1';
 const DANGER = '#F97373';
 
-type SettingsItem = {
-  key: string;
-  label: string;
-};
-
-type SettingsSection = {
-  title: string;
-  items: SettingsItem[];
-};
-
-const SECTIONS: SettingsSection[] = [
-  {
-    title: 'General',
-    items: [
-      { key: 'notifications', label: 'Notifications' },
-      { key: 'goal_settings', label: 'Goal settings' },
-      { key: 'advanced', label: 'Advanced' },
-    ],
-  },
-  {
-    title: 'Strength',
-    items: [
-      { key: 'rest_timer', label: 'Rest timer' },
-      { key: 'warm_up_settings', label: 'Warm-up settings' },
-    ],
-  },
-  {
-    title: 'Cardio',
-    items: [{ key: 'speed_or_pace', label: 'Speed or pace' }],
-  },
-  {
-    title: 'Units',
-    items: [
-      { key: 'language', label: 'Language' },
-      { key: 'weight_unit', label: 'Weight unit' },
-      { key: 'distance_unit', label: 'Distance unit' },
-    ],
-  },
-  {
-    title: 'Data',
-    items: [
-      { key: 'export_strength', label: 'Export strength workouts' },
-      { key: 'export_cardio', label: 'Export cardio' },
-      { key: 'export_nutrition', label: 'Export nutrition' },
-    ],
-  },
-  {
-    title: 'App',
-    items: [
-      { key: 'help_support', label: 'Help & support' },
-      { key: 'review_app', label: 'Review app' },
-      { key: 'tos', label: 'Terms of service' },
-      { key: 'privacy', label: 'Privacy policy' },
-    ],
-  },
-];
-
 export default function SettingsScreen() {
   const router = useRouter();
 
-  const handlePressItem = (sectionKey: string, itemKey: string) => {
-    // For now just a placeholder – you’ll wire these to popups later.
-    console.log('Pressed setting', sectionKey, itemKey);
+  const handleComingSoon = (label: string) => {
+    // placeholder until you wire actual popups
+    Alert.alert(label, 'Configure options coming soon.');
+  };
+
+  const goToGoals = () => {
+    router.push('./settings/goals');
   };
 
   const handleLogout = async () => {
@@ -92,8 +39,7 @@ export default function SettingsScreen() {
       Alert.alert('Logout failed', error.message);
       return;
     }
-
-    // TODO: change this path to your actual auth screen if different
+    // adjust this path to your auth route if different
     router.replace('/(auth)/sign-in');
   };
 
@@ -108,7 +54,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: 32 }} />{/* spacer to balance back icon */}
+        <View style={{ width: 32 }} />
       </View>
 
       <ScrollView
@@ -116,35 +62,235 @@ export default function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {SECTIONS.map(section => (
-          <View key={section.title} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <View style={styles.card}>
-              {section.items.map((item, idx) => (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[
-                    styles.row,
-                    idx !== section.items.length - 1 && styles.rowBorder,
-                  ]}
-                  onPress={() =>
-                    handlePressItem(section.title.toLowerCase(), item.key)
-                  }
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.rowLabel}>{item.label}</Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={TEXT_MUTED}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ))}
+        {/* GENERAL */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>General</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Notifications')}
+            >
+              <Text style={styles.rowLabel}>Notifications</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
 
-        {/* Logout */}
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={goToGoals}
+            >
+              <Text style={styles.rowLabel}>Goal settings</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Advanced')}
+            >
+              <Text style={styles.rowLabel}>Advanced</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* STRENGTH */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Strength</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Rest timer')}
+            >
+              <Text style={styles.rowLabel}>Rest timer</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Warm-up settings')}
+            >
+              <Text style={styles.rowLabel}>Warm up settings</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* CARDIO */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Cardio</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Speed or pace')}
+            >
+              <Text style={styles.rowLabel}>Speed or pace</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* UNITS */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Units</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Language')}
+            >
+              <Text style={styles.rowLabel}>Language</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Weight unit')}
+            >
+              <Text style={styles.rowLabel}>Weight unit</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Distance unit')}
+            >
+              <Text style={styles.rowLabel}>Distance unit</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* DATA */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Data</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Export strength workouts')}
+            >
+              <Text style={styles.rowLabel}>Export strength workouts</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Export cardio')}
+            >
+              <Text style={styles.rowLabel}>Export cardio</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Export nutrition')}
+            >
+              <Text style={styles.rowLabel}>Export nutrition</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* APP */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>App</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Help & support')}
+            >
+              <Text style={styles.rowLabel}>Help and support</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Review app')}
+            >
+              <Text style={styles.rowLabel}>Review app</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Terms of service')}
+            >
+              <Text style={styles.rowLabel}>Terms of service</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => handleComingSoon('Privacy policy')}
+            >
+              <Text style={styles.rowLabel}>Privacy policy</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* LOGOUT */}
         <View style={styles.logoutContainer}>
           <TouchableOpacity
             style={styles.logoutButton}
@@ -158,6 +304,8 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
+
+// ---- styles ----
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -215,6 +363,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER,
     overflow: 'hidden',
   },
+
   row: {
     flexDirection: 'row',
     alignItems: 'center',
