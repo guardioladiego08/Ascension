@@ -16,6 +16,8 @@ import type { ExerciseDraft, SetDraft } from '../StrengthTrain';
 import SetRow from './SetRow';
 import { Colors } from '@/constants/Colors';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useUnits } from '@/contexts/UnitsContext';
+
 
 type Props = {
   exercise: ExerciseDraft;
@@ -25,6 +27,7 @@ type Props = {
 
 const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
   const [optionsVisible, setOptionsVisible] = useState(false);
+  const { weightUnit } = useUnits();
 
   // ---------------------------------------------------------------------
   // SET MANIPULATION
@@ -57,7 +60,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
           tempId: uuidv4(),
           set_index: nextIndex,
           set_type: 'normal',
-          weight_unit_csv: exercise.sets.at(-1)?.weight_unit_csv ?? 'lb',
+          weight_unit_csv: weightUnit, // 👈 store current unit
           weight: undefined,
           reps: undefined,
           rpe: undefined,
@@ -67,6 +70,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
       ],
     });
   };
+
 
   const updateSet = (tempId: string, updater: (s: SetDraft) => SetDraft) => {
     onChange({

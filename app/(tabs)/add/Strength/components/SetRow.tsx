@@ -11,36 +11,34 @@ import {
 } from 'react-native';
 import type { SetDraft } from '../StrengthTrain';
 import { Colors } from '@/constants/Colors';
-
+import { useUnits } from '@/contexts/UnitsContext';
 
 // --- helpers -------------------------------------------------
 
-const UnitToggle = ({
-  value,
-  onChange,
-}: {
-  value: 'kg' | 'lb';
-  onChange: (u: 'kg' | 'lb') => void;
-}) => (
-  <TouchableOpacity
-    style={styles.unitToggle}
-    onPress={() => onChange(value === 'lb' ? 'kg' : 'lb')}
-  >
-    <Text style={styles.unitText}>{value}</Text>
-  </TouchableOpacity>
-);
+const LB_PER_KG = 2.20462;
+
+const convertBetweenUnits = (
+  weight: number,
+  from: 'kg' | 'lb',
+  to: 'kg' | 'lb'
+): number => {
+  if (from === to) return weight;
+  if (from === 'lb' && to === 'kg') return weight / LB_PER_KG;
+  if (from === 'kg' && to === 'lb') return weight * LB_PER_KG;
+  return weight;
+};
 
 const toKg = (weight: number, unit: 'kg' | 'lb') =>
-  unit === 'kg' ? weight : weight * 0.45359237;
+  unit === 'kg' ? weight : weight / LB_PER_KG;
 
 // Epley: 1RM_kg = weight_kg * (1 + reps/30)
 const computeEst1RM = (
-  weight: number | undefined,
+  storedWeight: number | undefined,
   reps: number | undefined,
-  unit: 'kg' | 'lb',
+  storedUnit: 'kg' | 'lb',
 ): number | null => {
-  if (!weight || !reps || reps <= 0) return null;
-  const wKg = toKg(weight, unit);
+  if (!storedWeight || !reps || reps <= 0) return null;
+  const wKg = toKg(storedWeight, storedUnit);
   const est = wKg * (1 + reps / 30);
   return +est.toFixed(2);
 };
@@ -69,6 +67,7 @@ type Props = {
 
 const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
   const [modeVisible, setModeVisible] = useState(false);
+  const { weightUnit: viewerUnit } = useUnits(); // user preference
 
   const handleSelectMode = (mode: SetDraft['set_type']) => {
     onChange({ ...setDraft, set_type: mode });
@@ -78,48 +77,55 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
   const letter = modeLetter[setDraft.set_type];
   const showNumber = setDraft.set_type === 'normal' && displayIndex != null;
 
-  // when weight changes, recompute est_1rm if reps available
+  // true storage unit for this set
+  const storedUnit: 'kg' | 'lb' =
+    setDraft.weight_unit_csv === 'kg' || setDraft.weight_unit_csv === 'lb'
+      ? setDraft.weight_unit_csv
+      : viewerUnit; // fallback for legacy/new sets
+
+  const storedWeight = setDraft.weight ?? undefined;
+
+  // what to show in the input (convert from stored unit to viewer's preferred unit)
+  const displayWeight =
+    storedWeight != null
+      ? convertBetweenUnits(storedWeight, storedUnit, viewerUnit)
+      : undefined;
+
   const handleWeightChange = (text: string) => {
-    const weight = text ? Number(text) : undefined;
+    const wDisplay = text ? Number(text) : undefined;
+    let newStoredWeight: number | undefined = undefined;
+
+    if (wDisplay != null && !Number.isNaN(wDisplay)) {
+      // user types in viewerUnit, convert back to stored unit
+      newStoredWeight = convertBetweenUnits(wDisplay, viewerUnit, storedUnit);
+    }
+
     const reps = setDraft.reps ?? undefined;
     const est_1rm =
-      weight && reps
-        ? computeEst1RM(weight, reps, setDraft.weight_unit_csv)
+      newStoredWeight && reps
+        ? computeEst1RM(newStoredWeight, reps, storedUnit)
         : null;
 
     onChange({
       ...setDraft,
-      weight,
+      weight: newStoredWeight,
+      weight_unit_csv: storedUnit,
       est_1rm: est_1rm ?? undefined,
     });
   };
 
-  // when reps change, recompute est_1rm if weight available
   const handleRepsChange = (text: string) => {
     const reps = text ? Number(text) : undefined;
-    const weight = setDraft.weight ?? undefined;
+    const newStoredWeight = storedWeight;
     const est_1rm =
-      weight && reps
-        ? computeEst1RM(weight, reps, setDraft.weight_unit_csv)
+      newStoredWeight && reps
+        ? computeEst1RM(newStoredWeight, reps, storedUnit)
         : null;
 
     onChange({
       ...setDraft,
       reps,
-      est_1rm: est_1rm ?? undefined,
-    });
-  };
-
-  // when unit toggles, recompute 1RM if we have both weight & reps
-  const handleUnitToggle = (unit: 'kg' | 'lb') => {
-    const weight = setDraft.weight ?? undefined;
-    const reps = setDraft.reps ?? undefined;
-    const est_1rm =
-      weight && reps ? computeEst1RM(weight, reps, unit) : null;
-
-    onChange({
-      ...setDraft,
-      weight_unit_csv: unit,
+      weight_unit_csv: storedUnit,
       est_1rm: est_1rm ?? undefined,
     });
   };
@@ -148,13 +154,15 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
           inputMode="decimal"
           placeholder="0"
           placeholderTextColor="#56607f"
-          value={setDraft.weight?.toString() ?? ''}
+          value={displayWeight != null && !Number.isNaN(displayWeight)
+            ? String(displayWeight)
+            : ''}
           onChangeText={handleWeightChange}
         />
-        <UnitToggle
-          value={setDraft.weight_unit_csv}
-          onChange={handleUnitToggle}
-        />
+        {/* read-only unit badge showing viewer unit */}
+        <View style={styles.unitBadge}>
+          <Text style={styles.unitText}>{viewerUnit}</Text>
+        </View>
       </View>
 
       {/* Reps */}
@@ -180,20 +188,20 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
               <View style={styles.modalCard}>
                 <Text style={styles.modalTitle}>Set Type</Text>
 
-                {(['normal', 'warmup', 'dropset', 'failure'] as SetDraft['set_type'][]).map(
-                  m => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[
-                        styles.modeRow,
-                        m === setDraft.set_type && styles.modeRowActive,
-                      ]}
-                      onPress={() => handleSelectMode(m)}
-                    >
-                      <Text style={styles.modeText}>{modeLabel[m]}</Text>
-                    </TouchableOpacity>
-                  ),
-                )}
+                {(
+                  ['normal', 'warmup', 'dropset', 'failure'] as SetDraft['set_type'][]
+                ).map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[
+                      styles.modeRow,
+                      m === setDraft.set_type && styles.modeRowActive,
+                    ]}
+                    onPress={() => handleSelectMode(m)}
+                  >
+                    <Text style={styles.modeText}>{modeLabel[m]}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </TouchableWithoutFeedback>
           </View>
@@ -215,11 +223,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
   },
-
   idxBtn: {
     width: 32,
     height: 40,
-
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -244,28 +250,31 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: .2,
+    borderWidth: 0.2,
     backgroundColor: Colors.dark.background,
     borderRadius: 10,
     overflow: 'hidden',
-    width: 1
+    width: 1,
   },
   weightInput: {
     flex: 1,
     color: Colors.dark.text,
     paddingHorizontal: 10,
     height: 40,
-    width: 100 
+    width: 100,
   },
 
-  unitToggle: {
+  unitBadge: {
     width: 54,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.dark.card2,
   },
-  unitText: { color: Colors.dark.text, fontWeight: '700' },
+  unitText: {
+    color: Colors.dark.text,
+    fontWeight: '700',
+  },
 
   reps: {
     width: 70,
@@ -291,7 +300,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-
   },
   modalTitle: {
     color: Colors.dark.text,

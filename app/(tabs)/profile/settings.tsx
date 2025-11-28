@@ -15,6 +15,8 @@ import { Colors } from '@/constants/Colors';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
+import DistanceUnitModal from './settings/DistanceUnitModal';
+
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
@@ -26,8 +28,9 @@ const DANGER = '#F97373';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { weightUnit } = useUnits();
+  const { weightUnit, distanceUnit } = useUnits();
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showDistanceModal, setShowDistanceModal] = useState(false);
 
   const handleComingSoon = (label: string) => {
     // placeholder until you wire actual popups
@@ -159,40 +162,45 @@ export default function SettingsScreen() {
 
         {/* UNITS */}
         <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Units</Text>
-        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Units</Text>
+          <View style={styles.card}>
             <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
-            onPress={() => handleComingSoon('Language')}
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => handleComingSoon('Language')}
             >
-            <Text style={styles.rowLabel}>Language</Text>
-            <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+              <Text style={styles.rowLabel}>Language</Text>
+              <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
             </TouchableOpacity>
 
+            {/* Weight unit with popup */}
             <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
-            onPress={() => setShowWeightModal(true)}
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => setShowWeightModal(true)}
             >
-            <Text style={styles.rowLabel}>Weight unit</Text>
-
-            <View style={styles.rowRight}>
+              <Text style={styles.rowLabel}>Weight unit</Text>
+              <View style={styles.rowRight}>
                 <Text style={styles.rowValue}>
-                {weightUnit === 'lb' ? 'Pounds (lb)' : 'Kilograms (kg)'}
+                  {weightUnit === 'lb' ? 'Pounds (lb)' : 'Kilograms (kg)'}
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
-            </View>
+              </View>
             </TouchableOpacity>
 
+            {/* Distance unit with popup */}
             <TouchableOpacity
-            style={styles.row}
-            onPress={() => handleComingSoon('Distance unit')}
+              style={styles.row}
+              onPress={() => setShowDistanceModal(true)}
             >
-            <Text style={styles.rowLabel}>Distance unit</Text>
-            <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+              <Text style={styles.rowLabel}>Distance unit</Text>
+              <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>
+                  {distanceUnit === 'mi' ? 'Miles (mi)' : 'Kilometers (km)'}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+              </View>
             </TouchableOpacity>
+          </View>
         </View>
-        </View>
-
 
         {/* DATA */}
         <View style={styles.section}>
@@ -300,10 +308,18 @@ export default function SettingsScreen() {
             <Text style={styles.logoutText}>Log out</Text>
           </TouchableOpacity>
         </View>
+        {/* Weight unit modal */}
         <WeightUnitModal
-            visible={showWeightModal}
-            onClose={() => setShowWeightModal(false)}
-            />
+          visible={showWeightModal}
+          onClose={() => setShowWeightModal(false)}
+        />
+
+        {/* Distance unit modal */}
+        <DistanceUnitModal
+          visible={showDistanceModal}
+          onClose={() => setShowDistanceModal(false)}
+        />
+
       </ScrollView>
     </SafeAreaView>
   );
