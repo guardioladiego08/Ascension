@@ -21,7 +21,8 @@ const ProgressScreen: React.FC = () => {
     <View style={GlobalStyles.container}>
       <LogoHeader />
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 90 }} // or 48 if your tab bar is tall
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER */}

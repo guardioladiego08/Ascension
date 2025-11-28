@@ -49,6 +49,11 @@ const ProgressDetailsSection: React.FC = () => {
     setSegmentWidth(totalWidth / DETAIL_SEGMENTS.length);
   };
 
+  // 🆕 Navigate to "all strength workouts" screen
+  const handleViewAllPress = () => {
+    router.push('/progress/strength/allStrengthWorkouts');
+  };
+
   // --- LOAD 5 MOST RECENT STRENGTH WORKOUTS ---------------------------------
   useEffect(() => {
     const fetchRecentWeights = async () => {
@@ -64,7 +69,7 @@ const ProgressDetailsSection: React.FC = () => {
         }
 
         const { data, error } = await supabase
-          .from('strength_workouts') // 🔁 adjust table name if needed
+          .from('strength_workouts')
           .select('id, started_at, ended_at')
           .eq('user_id', user.id)
           .order('started_at', { ascending: false })
@@ -84,7 +89,6 @@ const ProgressDetailsSection: React.FC = () => {
   }, []);
 
   const handleWorkoutPress = (workoutId: string) => {
-    // 🔁 CHANGE THIS PATH if your summary route is different
     router.push(`/add/Strength/${workoutId}`);
   };
 
@@ -95,9 +99,25 @@ const ProgressDetailsSection: React.FC = () => {
 
     if (!weightsWorkouts.length) {
       return (
-        <Text style={styles.contentMuted}>
-          No recent strength workouts.
-        </Text>
+        <View style={styles.listContainer}>
+          <Text style={styles.contentMuted}>
+            No recent strength workouts.
+          </Text>
+
+          {/* Still show the "view all" button so user can jump to full list */}
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            activeOpacity={0.85}
+            onPress={handleViewAllPress}
+          >
+            <Text style={styles.viewAllText}>View all strength workouts</Text>
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={18}
+              color="#A5B4FC"
+            />
+          </TouchableOpacity>
+        </View>
       );
     }
 
@@ -118,7 +138,9 @@ const ProgressDetailsSection: React.FC = () => {
             durationLabel = diffMin > 0 ? `${diffMin} min` : '';
           }
 
-          const subtitle = durationLabel ? `Strength session · ${durationLabel}` : 'Strength session';
+          const subtitle = durationLabel
+            ? `Strength session · ${durationLabel}`
+            : 'Strength session';
 
           return (
             <TouchableOpacity
@@ -135,13 +157,26 @@ const ProgressDetailsSection: React.FC = () => {
             </TouchableOpacity>
           );
         })}
+
+        {/* 🆕 View all button at bottom of list */}
+        <TouchableOpacity
+          style={styles.viewAllButton}
+          activeOpacity={0.85}
+          onPress={handleViewAllPress}
+        >
+          <Text style={styles.viewAllText}>View all strength workouts</Text>
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={18}
+            color="#A5B4FC"
+          />
+        </TouchableOpacity>
       </View>
     );
   };
 
   const renderContent = () => {
     if (selectedDetailIndex === 0) {
-      // Weights
       return renderWeightsContent();
     }
 
@@ -238,6 +273,7 @@ const styles = StyleSheet.create({
 
   contentCard: {
     marginTop: 12,
+    marginBottom: 24, // 🆕 add this so the list isn’t cut off at the bottom
     backgroundColor: Colors.dark.card,
     borderRadius: 18,
     paddingHorizontal: 16,
@@ -250,6 +286,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     gap: 10,
+    paddingBottom: 8, // 🆕 small extra space inside the card
   },
   listItem: {
     flexDirection: 'row',
@@ -268,6 +305,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9DA4C4',
     marginTop: 2,
+  },
+
+  // 🆕 View all button styles
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  viewAllText: {
+    fontSize: 12,
+    color: '#A5B4FC',
+    fontWeight: '500',
+    marginRight: 6,
   },
 });
 

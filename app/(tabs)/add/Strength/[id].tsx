@@ -1,5 +1,13 @@
+// app/(tabs)/add/Strength/[id].tsx
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -27,9 +35,10 @@ function formatSetWeight(
 ): string {
   if (weight == null) return '-';
 
-  const setUnit = (weightUnitCsv === 'kg' || weightUnitCsv === 'lb')
-    ? (weightUnitCsv as 'kg' | 'lb')
-    : viewerUnit;
+  const setUnit =
+    weightUnitCsv === 'kg' || weightUnitCsv === 'lb'
+      ? (weightUnitCsv as 'kg' | 'lb')
+      : viewerUnit;
 
   // if same unit, just show value + unit
   if (setUnit === viewerUnit) {
@@ -51,16 +60,18 @@ function formatSetWeight(
 }
 
 export default function StrengthSummaryPage() {
-  const { id } = useLocalSearchParams();   // workout ID
+  const { id } = useLocalSearchParams<{ id?: string }>(); // workout ID
 
   const [loading, setLoading] = React.useState(true);
   const [workout, setWorkout] = React.useState<any>(null);
   const [exercises, setExercises] = React.useState<any[]>([]);
   const [setsByExercise, setSetsByExercise] = React.useState<any>({});
 
-  const { weightUnit } = useUnits(); // 👈 viewer’s preference: 'kg' | 'lb'
+  const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
 
   React.useEffect(() => {
+    if (!id) return;
+
     (async () => {
       // 1. Load main workout row
       const { data: w } = await supabase
@@ -97,10 +108,78 @@ export default function StrengthSummaryPage() {
     })();
   }, [id]);
 
+  // ---------- DELETE WORKOUT & RELATED DATA ----------
+  const handleDeleteWorkout = () => {
+    if (!id) return;
+
+    Alert.alert(
+      'Delete workout?',
+      'This will permanently delete this workout and all its sets and exercise summaries. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // 1. Delete sets
+              const { data: deletedSets, error: setsError } = await supabase
+                .from('strength_sets')
+                .delete()
+                .eq('strength_workout_id', id)
+                .select('id');
+              if (setsError) throw setsError;
+              console.log(
+                'Deleted strength_sets rows:',
+                deletedSets?.length ?? 0
+              );
+
+              // 2. Delete exercise summaries
+              const { data: deletedSummaries, error: summaryError } =
+                await supabase
+                  .from('exercise_summary')
+                  .delete()
+                  .eq('strength_workout_id', id)
+                  .select('id');
+              if (summaryError) throw summaryError;
+              console.log(
+                'Deleted exercise_summary rows:',
+                deletedSummaries?.length ?? 0
+              );
+
+              // 3. Delete workout header
+              const { data: deletedWorkouts, error: workoutError } =
+                await supabase
+                  .from('strength_workouts')
+                  .delete()
+                  .eq('id', id)
+                  .select('id');
+              if (workoutError) throw workoutError;
+              console.log(
+                'Deleted strength_workouts rows:',
+                deletedWorkouts?.length ?? 0
+              );
+
+              Alert.alert('Workout deleted');
+              // Go back to the list of all strength workouts
+              router.replace('/progress/strength/allStrengthWorkouts');
+            } catch (err) {
+              console.error('Error deleting workout', err);
+              Alert.alert(
+                'Error',
+                'Could not delete workout. Check console logs for details.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loading}>
-        <Text style={{ color: "#fff" }}>Loading...</Text>
+        <Text style={{ color: '#fff' }}>Loading...</Text>
       </View>
     );
   }
@@ -109,7 +188,7 @@ export default function StrengthSummaryPage() {
   const start = workout?.started_at ? new Date(workout.started_at) : null;
   const end = workout?.ended_at ? new Date(workout.ended_at) : null;
 
-  let durationStr = "";
+  let durationStr = '';
   if (start && end) {
     const ms = end.getTime() - start.getTime();
     const mins = Math.floor(ms / 60000);
@@ -118,15 +197,18 @@ export default function StrengthSummaryPage() {
   }
 
   const dateStr = end
-    ? end.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
-    : "";
+    ? end.toLocaleDateString(undefined, {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : '';
 
   return (
     <View style={styles.container}>
       <LogoHeader />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-        
         {/* --- Workout Header --- */}
         <Text style={styles.headerDate}>{dateStr}</Text>
         <Text style={styles.headerDuration}>Duration: {durationStr}</Text>
@@ -134,11 +216,10 @@ export default function StrengthSummaryPage() {
         <Text style={styles.title}>Workout Summary</Text>
 
         <Text style={styles.totalVol}>
-          Total Volume:{' '}
-          {formatFromKg(workout?.total_vol, weightUnit)}
+          Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
         </Text>
 
-        {/* ---- Per Exercise Summary ---- */}        
+        {/* ---- Per Exercise Summary ---- */}
         {exercises.map((ex, i) => (
           <View key={i} style={styles.card}>
             <Text style={styles.exerciseName}>
@@ -171,23 +252,37 @@ export default function StrengthSummaryPage() {
               </View>
 
               {/* Rows */}
-              {setsByExercise[ex.exercise_id]?.map((s: any, idx: number) => (
-                <View key={idx} style={styles.row}>
-                  <Text style={styles.col}>{s.set_index}</Text>
-                  <Text style={styles.col}>{s.set_type}</Text>
-                  <Text style={styles.col}>
-                    {formatSetWeight(s.weight, s.weight_unit_csv, weightUnit)}
-                  </Text>
-                  <Text style={styles.col}>{s.reps ?? "-"}</Text>
-                  <Text style={styles.col}>{s.rpe ?? "-"}</Text>
-                  <Text style={styles.col}>
-                    {formatFromKg(s.est_1rm, weightUnit)}
-                  </Text>
-                </View>
-              ))}
+              {setsByExercise[ex.exercise_id]?.map(
+                (s: any, idx: number) => (
+                  <View key={idx} style={styles.row}>
+                    <Text style={styles.col}>{s.set_index}</Text>
+                    <Text style={styles.col}>{s.set_type}</Text>
+                    <Text style={styles.col}>
+                      {formatSetWeight(
+                        s.weight,
+                        s.weight_unit_csv,
+                        weightUnit
+                      )}
+                    </Text>
+                    <Text style={styles.col}>{s.reps ?? '-'}</Text>
+                    <Text style={styles.col}>{s.rpe ?? '-'}</Text>
+                    <Text style={styles.col}>
+                      {formatFromKg(s.est_1rm, weightUnit)}
+                    </Text>
+                  </View>
+                )
+              )}
             </View>
           </View>
         ))}
+
+        {/* DELETE + HOME BUTTONS */}
+        <TouchableOpacity
+          style={styles.deleteBtn}
+          onPress={handleDeleteWorkout}
+        >
+          <Text style={styles.deleteBtnText}>Delete Workout</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.homeBtn}
@@ -282,17 +377,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.dark.highlight1,
   },
+
+  deleteBtn: {
+    backgroundColor: '#FF4D4F',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+  deleteBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
   homeBtn: {
     backgroundColor: Colors.dark.highlight1,
     paddingVertical: 14,
     borderRadius: 14,
-    marginTop: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 12,
   },
   homeBtnText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#0b1020',
     fontWeight: '700',
+    textAlign: 'center',
   },
 });
