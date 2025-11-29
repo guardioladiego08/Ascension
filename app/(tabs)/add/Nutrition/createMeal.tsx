@@ -27,7 +27,7 @@ const PRIMARY_GREEN = '#15C779';
 const DANGER_RED = '#FF6B81';
 
 type Ingredient = {
-  food_id: number;
+  food_id: string;          // 👈 matches foods.id from CSV
   description: string;
   baseKcal: number;
   baseProtein: number;
@@ -35,8 +35,9 @@ type Ingredient = {
   baseFat: number;
   serving_size: number | null;
   serving_unit: string | null;
-  quantity: number; // portion multiplier (1 = default serving)
+  quantity: number;
 };
+
 
 export default function CreateMeal() {
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function CreateMeal() {
     fat?: string;
     serving_size?: string;
     serving_unit?: string;
+    quantity?: string;   // 👈 NEW
   }>();
 
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -77,16 +79,17 @@ export default function CreateMeal() {
   }, []);
 
   // When returning from AddIngredient with a selected food, add it to ingredients
+  // When returning from AddIngredient with a selected food, add it to ingredients
   useEffect(() => {
     if (!params.foodId) return;
 
-    const foodIdNum = Number(params.foodId);
-    if (Number.isNaN(foodIdNum)) return;
+    const foodId = params.foodId; // already a string like "fd_F2MYJuH8UsE9"
+    const qty = params.quantity ? Number(params.quantity) : 1;
 
     setIngredients(prev => [
       ...prev,
       {
-        food_id: foodIdNum,
+        food_id: foodId,
         description: params.description ?? '',
         baseKcal: params.kcal ? Number(params.kcal) : 0,
         baseProtein: params.protein ? Number(params.protein) : 0,
@@ -94,10 +97,12 @@ export default function CreateMeal() {
         baseFat: params.fat ? Number(params.fat) : 0,
         serving_size: params.serving_size ? Number(params.serving_size) : null,
         serving_unit: params.serving_unit ?? null,
-        quantity: 1,
+        quantity: Number.isNaN(qty) ? 1 : qty,
       },
     ]);
-  }, [params.foodId]);
+  }, [params.foodId, params.quantity]);
+
+
 
   // Totals for meal summary (kcal + macros)
   const { totalKcal, totalProtein, totalCarbs, totalFat } = useMemo(() => {

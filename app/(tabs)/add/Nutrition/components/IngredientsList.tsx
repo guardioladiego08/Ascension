@@ -15,7 +15,7 @@ const ACCENT_BLUE = '#4E8BFF';
 const ACCENT_GREEN = '#3ED598';
 
 type Ingredient = {
-  food_id: number;
+  food_id: string;
   description: string;
   baseKcal: number;
   baseProtein: number;
@@ -25,6 +25,7 @@ type Ingredient = {
   serving_unit: string | null;
   quantity: number;
 };
+
 
 type Props = {
   ingredients: Ingredient[];
