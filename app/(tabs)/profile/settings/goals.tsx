@@ -1,4 +1,3 @@
-// app/settings/goals.tsx
 import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
@@ -105,7 +104,9 @@ export default function GoalSettingsScreen() {
           );
 
           // Calories
-          setCalorieMode((g.calorie_goal_mode ?? 'disabled') as CalorieGoalMode);
+          setCalorieMode(
+            (g.calorie_goal_mode ?? 'disabled') as CalorieGoalMode
+          );
           setCalorieTarget(
             g.calorie_target_kcal != null ? String(g.calorie_target_kcal) : ''
           );
@@ -130,24 +131,23 @@ export default function GoalSettingsScreen() {
 
   const handleSave = async () => {
     setSaving(true);
-        try {
-        const {
+    try {
+      const {
         data: { user },
         error: userError,
-        } = await supabase.auth.getUser();
+      } = await supabase.auth.getUser();
 
-        if (userError || !user) {
+      if (userError || !user) {
         Alert.alert('Error', 'You must be logged in to save goals.');
         setSaving(false);
         return;
-        }
+      }
+
       const payload: any = {
         user_id: user.id,
         // strength
         strength_use_time: strengthUseTime,
-        strength_time_min: strengthUseTime
-          ? intOrNull(strengthTimeMin)
-          : null,
+        strength_time_min: strengthUseTime ? intOrNull(strengthTimeMin) : null,
         strength_use_volume: strengthUseVolume,
         strength_volume_min: strengthUseVolume
           ? intOrNull(strengthVolumeMin)
@@ -173,6 +173,7 @@ export default function GoalSettingsScreen() {
           calorieMode === 'disabled' ? null : intOrNull(calorieTarget),
       };
 
+      // 1) Insert snapshot
       const { error } = await supabase
         .from('user_goal_snapshots')
         .insert([payload]);
@@ -183,7 +184,23 @@ export default function GoalSettingsScreen() {
         return;
       }
 
-      Alert.alert('Goals saved', 'Your goals have been updated.');
+      // 2) Recompute all strength-day statuses for this user
+      const { error: rpcError } = await supabase.rpc(
+        'fn_recompute_strength_status_for_user_id',
+        { p_user_id: user.id }
+      );
+
+      if (rpcError) {
+        console.error('Error recomputing strength status', rpcError);
+        Alert.alert(
+          'Goals saved',
+          'Your goals were saved, but the calendar could not be fully updated.'
+        );
+      } else {
+        console.log('Recomputed daily strength goal status for user', user.id);
+        Alert.alert('Goals saved', 'Your goals have been updated.');
+      }
+
       router.back();
     } finally {
       setSaving(false);
