@@ -193,6 +193,7 @@ export default function CreateMeal() {
     }));
 
     const { data, error } = await supabase
+      .schema('nutrition')
       .from('recipes')
       .insert({
         user_id: userId,
@@ -263,7 +264,7 @@ export default function CreateMeal() {
     }
 
     // 2) Insert diary_items row referencing the new recipe
-    const { error: diaryItemError } = await supabase.from('diary_items').insert({
+    const { error: diaryItemError } = await supabase.schema('nutrition').from('diary_items').insert({
       user_id: userId,
       diary_day_id: diaryDay.id,
       meal_type: 'other', // change if you pass in a specific meal_type

@@ -59,6 +59,7 @@ export default function GoalSettingsScreen() {
     const loadLatestGoals = async () => {
       try {
         const { data, error } = await supabase
+          .schema('user')  // <- new schema
           .from('user_goal_snapshots')
           .select('*')
           .order('created_at', { ascending: false })
@@ -175,6 +176,7 @@ export default function GoalSettingsScreen() {
 
       // 1) Insert snapshot
       const { error } = await supabase
+        .schema('user')  // <- new schema
         .from('user_goal_snapshots')
         .insert([payload]);
 
@@ -183,23 +185,8 @@ export default function GoalSettingsScreen() {
         Alert.alert('Error', error.message);
         return;
       }
+      Alert.alert('Goals saved', 'Your goals have been updated.');
 
-      // 2) Recompute all strength-day statuses for this user
-      const { error: rpcError } = await supabase.rpc(
-        'fn_recompute_strength_status_for_user_id',
-        { p_user_id: user.id }
-      );
-
-      if (rpcError) {
-        console.error('Error recomputing strength status', rpcError);
-        Alert.alert(
-          'Goals saved',
-          'Your goals were saved, but the calendar could not be fully updated.'
-        );
-      } else {
-        console.log('Recomputed daily strength goal status for user', user.id);
-        Alert.alert('Goals saved', 'Your goals have been updated.');
-      }
 
       router.back();
     } finally {

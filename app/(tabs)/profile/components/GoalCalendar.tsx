@@ -59,6 +59,7 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
       const end = currentMonth.endOf('month').format('YYYY-MM-DD');
 
       const { data, error } = await supabase
+        .schema('user')  // <- new schema
         .from('daily_goal_status')
         .select('goal_date, strength_met, cardio_met, nutrition_met')
         .gte('goal_date', start)
