@@ -1,28 +1,47 @@
 // app/(tabs)/home/BlankHome.tsx
-// Home screen with live "Nutrition Today" data from diary_days.
+// Home screen with live "Nutrition Today" data from nutrition.diary_days.
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
-import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 
 type DiaryDay = {
-  id: number;
+  id: string;
   user_id: string;
-  diary_date: string;       // <-- change to your real date column if needed
-  calories_eaten: number;   // <-- change these field names to match your table
-  calories_target: number;
-  protein_g: number;
-  carbs_g: number;
-  fats_g: number;
+  date: string;
+  timezone_str: string | null;
+  kcal_target: number | null;
+  protein_g_target: string | number | null;
+  carbs_g_target: string | number | null;
+  fat_g_target: string | number | null;
+  water_ml_target: number | null;
+  notes: string | null;
+  kcal_total: number | null;
+  protein_g_total: string | number | null;
+  carbs_g_total: string | number | null;
+  fat_g_total: string | number | null;
+  fiber_g_total: string | number | null;
+  sodium_mg_total: number | null;
+  water_ml_total: number | null;
+  updated_at: string;
+  goal_hit: boolean;
 };
 
 const CARD = '#1A2230';
-const CARD_DARK = '#151C27';
 const PRIMARY = '#6EA8FF';
 
 const formatNumber = (value: number) =>
@@ -40,60 +59,84 @@ export default function BlankHome() {
     return d.toISOString().slice(0, 10);
   }, []);
 
-  useEffect(() => {
-    const fetchTodayDiary = async () => {
-      try {
-        setLoadingDiary(true);
+  // Fetch today's diary_days row whenever this screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      const fetchTodayDiary = async () => {
+        try {
+          setLoadingDiary(true);
 
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          console.error('Error fetching auth user for diary_days:', userError);
-          return;
-        }
-
-        const user = userData?.user;
-        if (!user) return;
-
-        const { data, error } = await supabase
-          .schema('nutrition')
-          .from('diary_days')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('diary_date', todayISO) // 🔁 change 'diary_date' to your real column name if different
-          .maybeSingle();
-
-        if (error) {
-          // PGRST116 is "no rows returned" when using single/maybeSingle
-          if ((error as any).code !== 'PGRST116') {
-            console.error('Error fetching today diary_days row:', error);
+          const { data: userData, error: userError } =
+            await supabase.auth.getUser();
+          if (userError) {
+            console.error(
+              'Error fetching auth user for diary_days:',
+              userError
+            );
+            return;
           }
-          return;
+
+          const user = userData?.user;
+          if (!user) return;
+
+          const { data, error } = await supabase
+            .schema('nutrition')
+            .from('diary_days')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('date', todayISO) // <-- real column name
+            .maybeSingle();
+
+          if (error) {
+            // PGRST116 is "no rows returned" when using maybeSingle
+            if ((error as any).code !== 'PGRST116') {
+              console.error('Error fetching today diary_days row:', error);
+            }
+            setTodaySummary(null);
+            return;
+          }
+
+          if (data) {
+            setTodaySummary(data as DiaryDay);
+          } else {
+            setTodaySummary(null);
+          }
+        } catch (err) {
+          console.error('Unexpected error loading today diary_days:', err);
+        } finally {
+          setLoadingDiary(false);
         }
+      };
 
-        if (data) {
-          setTodaySummary(data as DiaryDay);
-        } else {
-          setTodaySummary(null);
-        }
-      } catch (err) {
-        console.error('Unexpected error loading today diary_days:', err);
-      } finally {
-        setLoadingDiary(false);
-      }
-    };
+      fetchTodayDiary();
+    }, [todayISO])
+  );
 
-    fetchTodayDiary();
-  }, [todayISO]);
+  // Safely pull totals/targets from diary_days
+  const caloriesEaten = todaySummary?.kcal_total != null
+    ? Number(todaySummary.kcal_total)
+    : 0;
 
-  const caloriesEaten = todaySummary?.calories_eaten ?? 0;
-  const caloriesTarget = todaySummary?.calories_target ?? 0;
+  const caloriesTarget = todaySummary?.kcal_target != null
+    ? Number(todaySummary.kcal_target)
+    : 0;
 
-  const protein = todaySummary?.protein_g ?? 0;
-  const carbs = todaySummary?.carbs_g ?? 0;
-  const fats = todaySummary?.fats_g ?? 0;
+  const protein = todaySummary?.protein_g_total != null
+    ? Number(todaySummary.protein_g_total)
+    : 0;
+
+  const carbs = todaySummary?.carbs_g_total != null
+    ? Number(todaySummary.carbs_g_total)
+    : 0;
+
+  const fats = todaySummary?.fat_g_total != null
+    ? Number(todaySummary.fat_g_total)
+    : 0;
 
   const caloriePct =
-    caloriesTarget > 0 ? Math.min(100, (caloriesEaten / caloriesTarget) * 100) : 0;
+    caloriesTarget > 0
+      ? Math.min(100, (caloriesEaten / caloriesTarget) * 100)
+      : 0;
 
   const handleOpenDailySummary = () => {
     router.push({
@@ -149,7 +192,11 @@ export default function BlankHome() {
             style={GlobalStyles.quickCard}
             onPress={() => router.push('/add/Cardio/outdoorRun')}
           >
-            <Ionicons name="walk" size={28} color={Colors.dark.highlight2} />
+            <Ionicons
+              name="walk"
+              size={28}
+              color={Colors.dark.highlight2}
+            />
             <Text style={styles.quickText}>Run</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -157,7 +204,11 @@ export default function BlankHome() {
             style={GlobalStyles.quickCard}
             onPress={() => router.push('/new/bike')}
           >
-            <Ionicons name="bicycle" size={28} color={Colors.dark.highlight3} />
+            <Ionicons
+              name="bicycle"
+              size={28}
+              color={Colors.dark.highlight3}
+            />
             <Text style={styles.quickText}>Bike</Text>
           </TouchableOpacity>
         </View>
@@ -171,7 +222,11 @@ export default function BlankHome() {
         >
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
-              <Ionicons name="checkmark-circle" size={18} color="#7BE495" />
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color="#7BE495"
+              />
               <Text style={styles.cardHeaderTitle}>Daily Summary</Text>
             </View>
             <Text style={styles.link}>View Details</Text>
@@ -182,7 +237,9 @@ export default function BlankHome() {
               {loadingDiary ? '...' : formatNumber(caloriesEaten)}
             </Text>
             <Text style={styles.calRight}>
-              {loadingDiary ? '' : `/ ${formatNumber(caloriesTarget)} kcal`}
+              {loadingDiary
+                ? ''
+                : `/ ${formatNumber(caloriesTarget)} kcal`}
             </Text>
           </View>
 
@@ -240,9 +297,15 @@ export default function BlankHome() {
           </View>
           <View style={styles.listTextWrap}>
             <Text style={styles.listTitle}>Workout Feed</Text>
-            <Text style={styles.listSubtitle}>See what friends are doing</Text>
+            <Text style={styles.listSubtitle}>
+              See what friends are doing
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color="#AAB2C5"
+          />
         </View>
         <View style={styles.listCard}>
           <View style={styles.listIconWrap}>
@@ -250,9 +313,15 @@ export default function BlankHome() {
           </View>
           <View style={styles.listTextWrap}>
             <Text style={styles.listTitle}>Leaderboards</Text>
-            <Text style={styles.listSubtitle}>Compete with the community</Text>
+            <Text style={styles.listSubtitle}>
+              Compete with the community
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color="#AAB2C5"
+          />
         </View>
         <View style={styles.listCard}>
           <View style={styles.listIconWrap}>
@@ -260,28 +329,59 @@ export default function BlankHome() {
           </View>
           <View style={styles.listTextWrap}>
             <Text style={styles.listTitle}>Challenges</Text>
-            <Text style={styles.listSubtitle}>Join active challenges</Text>
+            <Text style={styles.listSubtitle}>
+              Join active challenges
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color="#AAB2C5"
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function TabItem({ label, icon, active = false }: { label: string; icon: any; active?: boolean }) {
+function TabItem({
+  label,
+  icon,
+  active = false,
+}: {
+  label: string;
+  icon: any;
+  active?: boolean;
+}) {
   return (
     <View style={styles.tabItem}>
-      <Ionicons name={icon} size={20} color={active ? '#6EA8FF' : '#AAB2C5'} />
-      <Text style={[styles.tabLabel, active && { color: '#6EA8FF' }]}>{label}</Text>
+      <Ionicons
+        name={icon}
+        size={20}
+        color={active ? '#6EA8FF' : '#AAB2C5'}
+      />
+      <Text
+        style={[styles.tabLabel, active && { color: '#6EA8FF' }]}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 18, paddingTop: 8 },
-  greeting: { color: '#AAB2C5', marginTop: 6, marginBottom: 12, fontSize: 13 },
-  kpiRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  greeting: {
+    color: '#AAB2C5',
+    marginTop: 6,
+    marginBottom: 12,
+    fontSize: 13,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   sectionTitle: {
     color: '#97A3B6',
     fontSize: 12,
@@ -291,10 +391,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
 
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  quickRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   quickText: { color: '#D6DEEE', fontWeight: '600', marginTop: 8 },
 
-  card: { backgroundColor: CARD, borderRadius: 16, padding: 14, marginTop: 10 },
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 10,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -302,17 +410,38 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-  cardHeaderTitle: { color: '#D6DEEE', fontWeight: '700', marginLeft: 6 },
+  cardHeaderTitle: {
+    color: '#D6DEEE',
+    fontWeight: '700',
+    marginLeft: 6,
+  },
   link: { color: PRIMARY, fontSize: 12, fontWeight: '600' },
 
   calRow: { flexDirection: 'row', alignItems: 'baseline' },
-  calLeft: { color: '#EAF2FF', fontSize: 22, fontWeight: '800' },
+  calLeft: {
+    color: '#EAF2FF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
   calRight: { color: '#97A3B6', marginLeft: 6 },
 
-  progressTrack: { height: 6, backgroundColor: '#2A3344', borderRadius: 999, marginTop: 10 },
-  progressFill: { height: 6, backgroundColor: PRIMARY, borderRadius: 999 },
+  progressTrack: {
+    height: 6,
+    backgroundColor: '#2A3344',
+    borderRadius: 999,
+    marginTop: 10,
+  },
+  progressFill: {
+    height: 6,
+    backgroundColor: PRIMARY,
+    borderRadius: 999,
+  },
 
-  macroRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  macroRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
   macroItem: { alignItems: 'center', flex: 1 },
   macroNumber: { color: '#EAF2FF', fontWeight: '800' },
   macroLabel: { color: '#97A3B6', fontSize: 10, marginTop: 2 },
@@ -349,7 +478,11 @@ const styles = StyleSheet.create({
   },
   listTextWrap: { flex: 1 },
   listTitle: { color: '#EAF2FF', fontWeight: '700' },
-  listSubtitle: { color: '#97A3B6', fontSize: 12, marginTop: 2 },
+  listSubtitle: {
+    color: '#97A3B6',
+    fontSize: 12,
+    marginTop: 2,
+  },
 
   tabItem: { alignItems: 'center', justifyContent: 'center' },
   tabLabel: { color: '#AAB2C5', fontSize: 10, marginTop: 4 },
