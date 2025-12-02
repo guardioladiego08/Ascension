@@ -45,7 +45,8 @@ export default function Paywall() {
         .update({ onboarding_completed: true })
         .eq('auth_user_id', fallbackId);
 
-      router.replace('/home');
+      // ⬇️ redirect to Login screen
+      router.replace('/SignInLogin/Login');
       return;
     }
 
@@ -65,9 +66,10 @@ export default function Paywall() {
       return;
     }
 
-    router.replace('../Login');
-  
+    // ⬇️ redirect to Login screen
+    router.replace('/SignInLogin/Login');
   };
+
 
   const handleSkip = async () => {
     await finishOnboarding();

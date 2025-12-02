@@ -81,5 +81,5 @@ export default function Index() {
   }
 
   // 5) Session + onboarding complete -> go to home
-  return <Redirect href="/home" />;
+  return <Redirect href="/(tabs)/home" />;
 }

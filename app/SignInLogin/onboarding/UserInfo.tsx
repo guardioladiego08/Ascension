@@ -8,20 +8,37 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
+import LogoHeader from '@/components/my components/logoHeader';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
-const PRIMARY = Colors.dark.tint;
-const TEXT_PRIMARY = '#EAF2FF';
+const PRIMARY = Colors.dark.highlight2;
+const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = '#9AA4BF';
 
 type Gender = 'male' | 'female' | 'non_binary' | 'prefer_not_to_say' | 'other';
+
+const REASONS = [
+  'track_fitness_health',
+  'compete_with_friends',
+  'train_for_personal_goal',
+  'connect_with_friends',
+  'improve_performance',
+];
+
+const JOURNEY = [
+  'just_getting_started',
+  'getting_back_into_it',
+  'training_consistently',
+  'competing_regularly',
+];
 
 export default function UserInfo() {
   const router = useRouter();
@@ -30,11 +47,28 @@ export default function UserInfo() {
     ? params.authUserId[0]
     : params.authUserId;
 
+  // ── Section 1: basic info ────────────────────────────────────────────────
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dob, setDob] = useState(''); // YYYY-MM-DD
   const [gender, setGender] = useState<Gender | null>(null);
+
+  // ── Section 2: body stats (IMPERIAL on UI) ───────────────────────────────
+  const [heightFt, setHeightFt] = useState('');
+  const [heightIn, setHeightIn] = useState('');
+  const [weightLbs, setWeightLbs] = useState('');
+
+  // ── Section 3: goals & journey ───────────────────────────────────────────
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [journeyStage, setJourneyStage] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
+
+  const toggleReason = (value: string) => {
+    setSelectedReasons((prev) =>
+      prev.includes(value) ? prev.filter((r) => r !== value) : [...prev, value],
+    );
+  };
 
   const handleContinue = async () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -49,12 +83,16 @@ export default function UserInfo() {
       Alert.alert('Gender', 'Please select a gender.');
       return;
     }
+    if (!journeyStage) {
+      Alert.alert('Your journey', 'Where are you on your fitness journey?');
+      return;
+    }
 
     setSaving(true);
 
     let authUserId = paramAuthUserId;
 
-    // Fallback for future: if user reaches here AFTER logging in (with a session)
+    // Fallback if user reaches here with an active session but no param
     if (!authUserId) {
       const { data: authData, error: userErr } = await supabase.auth.getUser();
       if (userErr || !authData.user) {
@@ -65,100 +103,281 @@ export default function UserInfo() {
       authUserId = authData.user.id;
     }
 
+    // ── Convert imperial → metric for storage ──────────────────────────────
+    let height_cm: number | null = null;
+    let weight_kg: number | null = null;
+
+    const ftNum = parseInt(heightFt, 10);
+    const inNum = parseInt(heightIn, 10);
+
+    if (!Number.isNaN(ftNum) || !Number.isNaN(inNum)) {
+      const safeFt = Number.isNaN(ftNum) ? 0 : ftNum;
+      const safeIn = Number.isNaN(inNum) ? 0 : inNum;
+      const totalInches = safeFt * 12 + safeIn;
+      if (totalInches > 0) {
+        height_cm = totalInches * 2.54; // store as cm
+      }
+    }
+
+    const lbsNum = parseFloat(weightLbs);
+    if (!Number.isNaN(lbsNum) && lbsNum > 0) {
+      weight_kg = lbsNum * 0.45359237; // store as kg
+    }
+
     const { error } = await supabase
-    .schema('user')
-    .from('profiles')
-    .update({
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      date_of_birth: dob.trim(),
-      gender,
-      onboarding_completed: false,
-    })
-    .eq('auth_user_id', authUserId);
+      .schema('user')
+      .from('profiles')
+      .update({
+        // basic info
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        date_of_birth: dob.trim(),
+        gender,
+        // body stats (metric in DB)
+        height_cm,
+        weight_kg,
+        // goals
+        app_reasons: selectedReasons,
+        journey_stage: journeyStage,
+        onboarding_completed: false,
+      })
+      .eq('auth_user_id', authUserId);
 
     setSaving(false);
 
     if (error) {
-      console.log('save user info error', error);
+      console.log('save onboarding info error', error);
       Alert.alert('Error', error.message);
       return;
     }
 
+    // Continue to next onboarding step (Privacy)
     router.push({
-      pathname: './BodyInfo',
+      pathname: './Privacy',
       params: { authUserId },
     });
   };
 
+  const niceLabel = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="person-circle-outline" size={24} color={TEXT_MUTED} />
-          <Text style={styles.headerTitle}>Tell us about you</Text>
+      <LogoHeader></LogoHeader>
+      {/* Top header */}
+      <View style={styles.mainHeader}>
+        <View>
+          <Text style={styles.mainTitle}>Complete your profile</Text>
+          <Text style={styles.mainSubtitle}>
+            Help TENSR personalize your training, stats, and social experience.
+          </Text>
         </View>
-        <Text style={styles.stepText}>Step 1 of 5</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>First name</Text>
-        <TextInput
-          value={firstName}
-          onChangeText={setFirstName}
-          placeholder="Diego"
-          placeholderTextColor={TEXT_MUTED}
-          style={styles.input}
-        />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Section 1: Personal Info */}
+        <View style={styles.sectionCard}>
+          <View className="sectionHeaderRow" style={styles.sectionHeaderRow}>
+            <View style={styles.iconCircle}>
+              <Ionicons
+                name="person-circle-outline"
+                size={20}
+                color={PRIMARY}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>About you</Text>
+              <Text style={styles.sectionSubtitle}>
+                Name, birthday, and how you identify.
+              </Text>
+            </View>
+            <Text style={styles.sectionTag}>Profile</Text>
+          </View>
 
-        <Text style={styles.label}>Last name</Text>
-        <TextInput
-          value={lastName}
-          onChangeText={setLastName}
-          placeholder="Guardiola"
-          placeholderTextColor={TEXT_MUTED}
-          style={styles.input}
-        />
+          <Text style={styles.label}>First name</Text>
+          <TextInput
+            value={firstName}
+            onChangeText={setFirstName}
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
 
-        <Text style={styles.label}>Date of birth (YYYY-MM-DD)</Text>
-        <TextInput
-          value={dob}
-          onChangeText={setDob}
-          placeholder="1996-04-08"
-          placeholderTextColor={TEXT_MUTED}
-          style={styles.input}
-        />
+          <Text style={styles.label}>Last name</Text>
+          <TextInput
+            value={lastName}
+            onChangeText={setLastName}
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
 
-        <Text style={styles.label}>Gender</Text>
-        <View style={styles.pillRow}>
-          {[
-            { value: 'male', label: 'Male' },
-            { value: 'female', label: 'Female' },
-            { value: 'non_binary', label: 'Non-binary' },
-            { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-            { value: 'other', label: 'Other' },
-          ].map((g) => {
-            const selected = gender === g.value;
-            return (
-              <TouchableOpacity
-                key={g.value}
-                style={[styles.pill, selected && styles.pillSelected]}
-                onPress={() => setGender(g.value as Gender)}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    selected && { color: '#020817', fontWeight: '600' },
-                  ]}
+          <Text style={styles.label}>Date of birth (YYYY-MM-DD)</Text>
+          <TextInput
+            value={dob}
+            onChangeText={setDob}
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Gender</Text>
+          <View style={styles.pillRow}>
+            {[
+              { value: 'male', label: 'Male' },
+              { value: 'female', label: 'Female' },
+              { value: 'non_binary', label: 'Non-binary' },
+              { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+              { value: 'other', label: 'Other' },
+            ].map((g) => {
+              const selected = gender === g.value;
+              return (
+                <TouchableOpacity
+                  key={g.value}
+                  style={[styles.pill, selected && styles.pillSelected]}
+                  onPress={() => setGender(g.value as Gender)}
                 >
-                  {g.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.pillText,
+                      selected && styles.pillTextSelected,
+                    ]}
+                  >
+                    {g.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
-      </View>
 
+        {/* Section 2: Body stats (imperial inputs) */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="body-outline" size={20} color={PRIMARY} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Body stats</Text>
+              <Text style={styles.sectionSubtitle}>
+                These help calculate pace, effort, and recommendations.
+              </Text>
+            </View>
+            <Text style={styles.sectionTag}>Performance</Text>
+          </View>
+
+          <Text style={styles.label}>Height</Text>
+          <View style={styles.row}>
+            <View style={[styles.flexItem, { marginRight: 6 }]}>
+              <Text style={styles.smallLabel}>Feet</Text>
+              <TextInput
+                value={heightFt}
+                onChangeText={setHeightFt}
+                keyboardType="numeric"
+                placeholder="5"
+                placeholderTextColor={TEXT_MUTED}
+                style={styles.input}
+              />
+            </View>
+            <View style={[styles.flexItem, { marginLeft: 6 }]}>
+              <Text style={styles.smallLabel}>Inches</Text>
+              <TextInput
+                value={heightIn}
+                onChangeText={setHeightIn}
+                keyboardType="numeric"
+                placeholder="10"
+                placeholderTextColor={TEXT_MUTED}
+                style={styles.input}
+              />
+            </View>
+          </View>
+          <Text style={styles.helperText}>
+            Stored as centimeters. You can change units later in settings.
+          </Text>
+
+          <Text style={[styles.label, { marginTop: 14 }]}>Weight (lbs)</Text>
+          <TextInput
+            value={weightLbs}
+            onChangeText={setWeightLbs}
+            keyboardType="numeric"
+            placeholder="170"
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
+          <Text style={styles.helperText}>
+            We’ll store this as kilograms to keep your stats consistent.
+          </Text>
+        </View>
+
+        {/* Section 3: Goals & journey */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="flag-outline" size={20} color={PRIMARY} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Your goals</Text>
+              <Text style={styles.sectionSubtitle}>
+                Tell us why you’re here and how hard you’re going.
+              </Text>
+            </View>
+            <Text style={styles.sectionTag}>Goals</Text>
+          </View>
+
+          <Text style={styles.label}>What will you use TENSR for?</Text>
+          <View style={styles.pillRow}>
+            {REASONS.map((r) => {
+              const selected = selectedReasons.includes(r);
+              return (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.pill, selected && styles.pillSelected]}
+                  onPress={() => toggleReason(r)}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      selected && styles.pillTextSelected,
+                    ]}
+                  >
+                    {niceLabel(r)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.label, { marginTop: 16 }]}>
+            Where are you on your fitness journey?
+          </Text>
+          <View style={styles.pillRow}>
+            {JOURNEY.map((j) => {
+              const selected = journeyStage === j;
+              return (
+                <TouchableOpacity
+                  key={j}
+                  style={[styles.pill, selected && styles.pillSelected]}
+                  onPress={() => setJourneyStage(j)}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      selected && styles.pillTextSelected,
+                    ]}
+                  >
+                    {niceLabel(j)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Bottom CTA */}
       <TouchableOpacity
         style={[styles.primaryButton, saving && { opacity: 0.7 }]}
         onPress={handleContinue}
@@ -167,7 +386,7 @@ export default function UserInfo() {
         {saving ? (
           <ActivityIndicator color="#020817" />
         ) : (
-          <Text style={styles.primaryText}>Continue</Text>
+          <Text style={styles.primaryText2}>Continue</Text>
         )}
       </TouchableOpacity>
     </SafeAreaView>
@@ -175,18 +394,106 @@ export default function UserInfo() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 20, paddingTop: 8 },
-  header: {
-    marginBottom: 12,
+  container: {
+    flex: 1,
+    backgroundColor: BG,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  scroll: {
+    flex: 1,
+    marginTop: 8,
+  },
+
+  // Top header
+  mainHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mainTitle: {
+    fontSize: 24,
+    color: TEXT_PRIMARY,
+    fontWeight: '700',
+  },
+  mainSubtitle: {
+    marginTop: 4,
+    color: TEXT_MUTED,
+    fontSize: 13,
+    maxWidth: 260,
+  },
+  stepPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#101827',
+    borderWidth: 1,
+    borderColor: '#273347',
+  },
+  stepPillText: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  // Section card styling
+  sectionCard: {
+    backgroundColor: CARD,
+    borderRadius: 20,
+    padding: 18,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#1E2838',
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 10,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 22, color: TEXT_PRIMARY, fontWeight: '700' },
-  stepText: { fontSize: 12, color: TEXT_MUTED, marginTop: 4 },
-  card: { backgroundColor: CARD, borderRadius: 18, padding: 18 },
-  label: { fontSize: 13, color: TEXT_MUTED, marginTop: 10, marginBottom: 4 },
+  iconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#151B28',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    color: TEXT_PRIMARY,
+    fontWeight: '600',
+  },
+  sectionSubtitle: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  sectionTag: {
+    fontSize: 12,
+    color: TEXT_PRIMARY,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#101827',
+    borderWidth: 1,
+    borderColor: '#273347',
+  },
+
+  label: {
+    fontSize: 13,
+    color: TEXT_PRIMARY,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  smallLabel: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginBottom: 2,
+  },
   input: {
     borderRadius: 12,
     borderWidth: 1,
@@ -195,7 +502,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: TEXT_PRIMARY,
     fontSize: 15,
+    backgroundColor: '#050816',
   },
+  helperText: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginTop: 4,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  flexItem: {
+    flex: 1,
+  },
+
   pillRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -206,17 +528,39 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#3A465E',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#050816',
   },
-  pillSelected: { backgroundColor: PRIMARY, borderColor: PRIMARY },
-  pillText: { color: TEXT_MUTED, fontSize: 12 },
+  pillSelected: {
+    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+  },
+  pillText: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+  },
+  pillTextSelected: {
+    color: '#020817',
+    fontWeight: '600',
+  },
+
   primaryButton: {
-    marginTop: 18,
+    marginTop: 8,
+    marginBottom: 15,
     backgroundColor: PRIMARY,
     borderRadius: 999,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  primaryText: { color: '#020817', fontWeight: '600', fontSize: 15 },
+  primaryText: {
+    color: Colors.dark.text,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+    primaryText2: {
+    color: Colors.dark.blkText,
+    fontWeight: '600',
+    fontSize: 15,
+  },
 });

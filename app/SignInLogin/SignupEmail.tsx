@@ -8,18 +8,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import AppAlert from './components/AppAlert';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
 const PRIMARY = Colors.dark.tint;
-const TEXT_PRIMARY = '#EAF2FF';
+const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = '#9AA4BF';
 
 export default function SignupEmail() {
@@ -35,6 +35,28 @@ export default function SignupEmail() {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
 
+  // 🔔 Custom alert state
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertOnConfirm, setAlertOnConfirm] = useState<(() => void) | null>(null);
+
+  const showAlert = (title: string, message: string, onConfirm?: () => void) => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertOnConfirm(() => (onConfirm ? onConfirm : null));
+    setAlertVisible(true);
+  };
+
+  const handleCloseAlert = () => {
+    setAlertVisible(false);
+    if (alertOnConfirm) {
+      const cb = alertOnConfirm;
+      setAlertOnConfirm(null);
+      cb();
+    }
+  };
+
   const checkUsernameAvailability = async () => {
     if (!username.trim()) return;
     setCheckingUsername(true);
@@ -48,7 +70,7 @@ export default function SignupEmail() {
 
     if (error) {
       console.log('username rpc error', error);
-      Alert.alert('Error', 'Could not check username right now.');
+      showAlert('Error', 'Could not check username right now.');
       return;
     }
 
@@ -57,19 +79,17 @@ export default function SignupEmail() {
 
   const handleEmailSignup = async () => {
     if (!email.trim() || !password.trim() || !username.trim()) {
-      Alert.alert('Missing info', 'Please enter email, username, and password.');
+      showAlert('Missing info', 'Please enter email, username, and password.');
       return;
     }
 
     if (usernameAvailable === false) {
-      Alert.alert('Username taken', 'Please choose a different username.');
+      showAlert('Username taken', 'Please choose a different username.');
       return;
     }
 
     setLoadingEmail(true);
 
-    // 1) Sign up with email/password. With email confirmation ON this will NOT create a session,
-    // but it DOES return data.user with the new auth user id.
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password: password.trim(),
@@ -82,21 +102,20 @@ export default function SignupEmail() {
 
     if (error) {
       setLoadingEmail(false);
-      Alert.alert('Sign up failed', error.message);
+      showAlert('Sign up failed', error.message);
       return;
     }
 
     const userId = data.user?.id;
     if (!userId) {
       setLoadingEmail(false);
-      Alert.alert(
+      showAlert(
         'Error',
         'Account was created, but we did not receive an ID. Please try again.',
       );
       return;
     }
 
-    // 2) Create profile row with username. This uses anon role, so RLS must allow anon (dev_all_profiles_access).
     const { error: profileError } = await supabase
       .schema('user')
       .from('profiles')
@@ -112,42 +131,45 @@ export default function SignupEmail() {
 
     if (profileError) {
       console.log('profile upsert error', profileError);
-      Alert.alert(
+      showAlert(
         'Error',
         'Your account was created, but we could not save your profile. Please try again.',
       );
       return;
     }
 
-    // Optional: tell them to check email for confirmation
-    Alert.alert(
+    // ✅ Show custom popup and then navigate after user closes it
+    showAlert(
       'Check your email',
-      'We sent you a confirmation link. You can continue onboarding now and confirm your email whenever you like.',
+      'We sent you a confirmation link. You can continue onboarding now and confirm your email after finishing.',
+      () => {
+        router.replace({
+          pathname: './onboarding/UserInfo',
+          params: { authUserId: userId },
+        });
+      },
     );
-
-    // 3) Go to onboarding step 1, passing authUserId as a route param
-    router.replace({
-      pathname: './onboarding/UserInfo',
-      params: { authUserId: userId },
-    });
   };
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
     try {
       provider === 'google' ? setLoadingGoogle(true) : setLoadingApple(true);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: 'yourapp://auth-callback',
         },
       });
+
       provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
+
       if (error) {
-        Alert.alert('Auth error', error.message);
+        showAlert('Auth error', error.message);
       }
     } catch (e: any) {
       provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
-      Alert.alert('Auth error', e?.message ?? 'Something went wrong.');
+      showAlert('Auth error', e?.message ?? 'Something went wrong.');
     }
   };
 
@@ -160,39 +182,6 @@ export default function SignupEmail() {
       </View>
 
       <View style={styles.card}>
-        {/* OAuth buttons */}
-        <TouchableOpacity
-          style={styles.oauthButton}
-          onPress={() => handleOAuth('google')}
-          disabled={loadingGoogle}
-        >
-          {loadingGoogle ? (
-            <ActivityIndicator color={TEXT_PRIMARY} />
-          ) : (
-            <>
-              <Ionicons name="logo-google" size={18} color={TEXT_PRIMARY} />
-              <Text style={styles.oauthText}>Continue with Google</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.oauthButton}
-          onPress={() => handleOAuth('apple')}
-          disabled={loadingApple}
-        >
-          {loadingApple ? (
-            <ActivityIndicator color={TEXT_PRIMARY} />
-          ) : (
-            <>
-              <Ionicons name="logo-apple" size={18} color={TEXT_PRIMARY} />
-              <Text style={styles.oauthText}>Continue with Apple</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.dividerText}>or sign up with email</Text>
-
         {/* Email */}
         <Text style={styles.label}>Email</Text>
         <TextInput
@@ -272,6 +261,14 @@ export default function SignupEmail() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 🔔 Global popup for this screen */}
+      <AppAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={handleCloseAlert}
+      />
     </SafeAreaView>
   );
 }
@@ -284,7 +281,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     justifyContent: 'space-between',
   },
-  headerTitle: { fontSize: 18, color: TEXT_PRIMARY, fontWeight: '600' },
+  headerTitle: { fontSize: 24, color: TEXT_PRIMARY, fontWeight: '600' },
   card: { backgroundColor: CARD, borderRadius: 18, padding: 18, marginTop: 16 },
   oauthButton: {
     flexDirection: 'row',
@@ -292,7 +289,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#3A465E',
+    borderColor: '#010408ff',
     paddingVertical: 10,
     justifyContent: 'center',
     marginBottom: 8,
@@ -304,7 +301,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     fontSize: 12,
   },
-  label: { fontSize: 13, color: TEXT_MUTED, marginTop: 10, marginBottom: 4 },
+  label: { fontSize: 13, color: TEXT_PRIMARY, marginTop: 10, marginBottom: 4 },
   input: {
     borderRadius: 12,
     borderWidth: 1,
@@ -320,7 +317,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     justifyContent: 'center',
   },
-  smallButtonText: { color: '#020817', fontWeight: '600', fontSize: 13 },
+  smallButtonText: { color: TEXT_PRIMARY, fontWeight: '600', fontSize: 13 },
   helperText: { fontSize: 12, color: TEXT_MUTED, marginTop: 4 },
   primaryButton: {
     marginTop: 16,
@@ -329,8 +326,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
-  primaryText: { color: '#020817', fontWeight: '600', fontSize: 15 },
+  primaryText: { color: TEXT_PRIMARY, fontWeight: '600', fontSize: 15 },
   footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
   footerText: { color: TEXT_MUTED, fontSize: 13 },
-  footerLink: { color: PRIMARY, fontSize: 13, fontWeight: '600' },
+  footerLink: { color: Colors.dark.highlight1, fontSize: 13, fontWeight: '600' },
 });

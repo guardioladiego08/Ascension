@@ -14,11 +14,12 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import { router } from 'expo-router';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
-const PRIMARY = Colors.dark.tint;
-const TEXT_PRIMARY = '#EAF2FF';
+const PRIMARY = Colors.dark.highlight4;
+const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = '#9AA4BF';
 
 export default function Login() {
@@ -43,7 +44,7 @@ export default function Login() {
       Alert.alert('Login failed', error.message);
       return;
     }
-    router.replace('/home');
+    router.replace('/(tabs)/home');
   };
 
   const handleOAuth = async (provider: 'google' | 'apple') => {
@@ -110,40 +111,6 @@ export default function Login() {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.dividerText}>or continue with</Text>
-
-        {/* Google */}
-        <TouchableOpacity
-          style={styles.oauthButton}
-          onPress={() => handleOAuth('google')}
-          disabled={loadingGoogle}
-        >
-          {loadingGoogle ? (
-            <ActivityIndicator color={TEXT_PRIMARY} />
-          ) : (
-            <>
-              <Ionicons name="logo-google" size={18} color={TEXT_PRIMARY} />
-              <Text style={styles.oauthText}>Continue with Google</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Apple */}
-        <TouchableOpacity
-          style={styles.oauthButton}
-          onPress={() => handleOAuth('apple')}
-          disabled={loadingApple}
-        >
-          {loadingApple ? (
-            <ActivityIndicator color={TEXT_PRIMARY} />
-          ) : (
-            <>
-              <Ionicons name="logo-apple" size={18} color={TEXT_PRIMARY} />
-              <Text style={styles.oauthText}>Continue with Apple</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Don’t have an account?</Text>
           <TouchableOpacity onPress={() => router.replace('/SignupEmail')}>
@@ -163,14 +130,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     justifyContent: 'space-between',
   },
-  headerTitle: { fontSize: 18, color: TEXT_PRIMARY, fontWeight: '600' },
+  headerTitle: { fontSize: 24, color: TEXT_PRIMARY, fontWeight: '600' },
   card: {
     backgroundColor: CARD,
     borderRadius: 18,
     padding: 18,
     marginTop: 16,
   },
-  label: { fontSize: 13, color: TEXT_MUTED, marginBottom: 4 },
+  label: { fontSize: 13, color: TEXT_PRIMARY, marginBottom: 4 },
   input: {
     borderRadius: 12,
     borderWidth: 1,

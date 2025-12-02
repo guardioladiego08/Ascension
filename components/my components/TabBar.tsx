@@ -6,20 +6,23 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/Colors';
-import LogoHeader from './logoHeader';
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
-  // get the current path, e.g. "/new", "/new/strength-train", etc.
   const pathname = usePathname() ?? '';
+
+  // Debug once to see what your route names actually are
+  console.log('[TabBar] routes:', state.routes.map(r => r.name));
 
   return (
     <SafeAreaView style={styles.wrapper} edges={['bottom']}>
       <View style={styles.tabBar}>
-        {['home', 'progress', 'social', 'profile'].map((routeName) => {
-          const index = state.routes.findIndex(r => r.name === routeName);
-          if (index === -1) return null;
+        {state.routes.map((route, index) => {
+          const routeName = route.name;
 
-          // For "new" tab: highlight whenever we're anywhere under /new
+          // If you only want certain tabs visible, you can filter here:
+          const allowed = ['home', 'progress', 'social', 'profile', 'new'];
+          if (!allowed.includes(routeName)) return null;
+
           const isNewTab = routeName === 'new';
           const isFocused = isNewTab
             ? pathname.startsWith('/new')
@@ -28,11 +31,12 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
           const onPress = () => {
             const event = navigation.emit({
               type: 'tabPress',
-              target: state.routes[index].key,
+              target: route.key,
               canPreventDefault: true,
             });
+
             if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(state.routes[index].name);
+              navigation.navigate(route.name);
             }
           };
 
@@ -50,13 +54,16 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
             case 'profile':
               iconName = 'user';
               break;
+            case 'new':
+              iconName = 'pluscircle';
+              break;
             default:
               iconName = 'question';
           }
 
           return (
             <TouchableOpacity
-              key={routeName}
+              key={route.key}
               onPress={onPress}
               style={styles.tabButton}
             >
@@ -78,7 +85,7 @@ export default CustomTabBar;
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: Colors.dark.background,
-    zIndex: 10
+    zIndex: 10,
   },
   tabBar: {
     flexDirection: 'row',
