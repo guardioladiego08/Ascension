@@ -80,31 +80,67 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
       return;
     }
 
-    setLoading(true);
-
-    const { data: user } = await supabase.auth.getUser();
-    const userId = user?.user?.id;
-
-    const { error } = await supabase.from("exercises").insert({
-    exercise_name: name.trim(),
-    body_parts: bodyParts,
-    workout_category: category,
-    info,
-    user_id: userId,
-    });
-
-
-
-    setLoading(false);
-
-    if (error) {
-      Alert.alert("Error", error.message);
+    if (bodyParts.length === 0) {
+      Alert.alert("Missing Body Parts", "Please select at least one body part.");
       return;
     }
 
-    Alert.alert("Success", "Exercise added successfully!");
-    onSuccess();
+    if (!category) {
+      Alert.alert("Missing Category", "Please select a workout category.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const {
+        data,
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !data?.user) {
+        throw userError || new Error("Not signed in.");
+      }
+
+      const userId = data.user.id;
+
+      const { error } = await supabase.from("exercises").insert({
+        exercise_name: name.trim(),
+        body_parts: bodyParts,                 // string[] -> body_part[]
+        workout_category: category || null,    // enum or null
+        info: info.trim() || null,
+        user_id: userId,                       // 🔥 explicitly tie to this user
+      });
+
+      if (error) {
+        // Unique constraint violation: (user_id, exercise_name) already exists
+        if (error.code === "23505") {
+          Alert.alert(
+            "Exercise already exists",
+            "You already have an exercise with this name. Try a different name or use the existing exercise in your list."
+          );
+          return;
+        }
+
+        throw error;
+      }
+
+      Alert.alert("Success", "Exercise added successfully!");
+      onSuccess();
+
+      // optional: clear fields for next time
+      setName("");
+      setBodyParts([]);
+      setCategory("");
+      setInfo("");
+    } catch (err: any) {
+      console.warn("Error inserting custom exercise", err);
+      Alert.alert("Error", err?.message ?? "Failed to add exercise.");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <Modal visible={visible} transparent animationType="fade">

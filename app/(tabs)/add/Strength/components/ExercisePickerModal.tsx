@@ -97,19 +97,33 @@ const ExercisePickerModal: React.FC<Props> = ({
     setFetchError(null);
 
     try {
+      // 1) Get current user
+      const {
+        data,
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !data?.user) {
+        throw userError || new Error('Not signed in.');
+      }
+
+      const user = data.user;
+
       const rows: ExerciseRow[] = [];
       let offset = 0;
 
       while (true) {
-        const { data, error } = await supabase
+        const { data: batchData, error } = await supabase
           .from(tableName)
           .select('*')
+          // show global + this user's custom exercises
+          .or(`user_id.is.null,user_id.eq.${user.id}`)
           .order('exercise_name', { ascending: true })
           .range(offset, offset + PAGE_SIZE - 1);
 
         if (error) throw error;
 
-        const batch = (data ?? []) as ExerciseRow[];
+        const batch = (batchData ?? []) as ExerciseRow[];
         rows.push(...batch);
 
         if (batch.length < PAGE_SIZE) break;
@@ -118,11 +132,13 @@ const ExercisePickerModal: React.FC<Props> = ({
 
       setAllItems(rows);
     } catch (e: any) {
+      console.warn('Error fetching exercises', e);
       setFetchError(e?.message || 'Failed to fetch exercises.');
     } finally {
       setLoading(false);
     }
   }, [tableName]);
+
 
   useEffect(() => {
     if (visible) {

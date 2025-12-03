@@ -112,9 +112,22 @@ const ExercisesScreen: React.FC = () => {
       const from = pageIndex * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) {
+        setErrorMsg('Not signed in.');
+        setHasMore(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('exercises')
         .select('*')
+        .or(`user_id.is.null,user_id.eq.${user.id}`)
+        .order('exercise_name', { ascending: true })
         .range(from, to);
 
       if (error) {
@@ -132,7 +145,6 @@ const ExercisesScreen: React.FC = () => {
         if (pageIndex === 0) {
           return rows;
         }
-        // merge without duplicates
         const ids = new Set(prev.map(p => p.id));
         const merged = [...prev];
         rows.forEach(r => {
@@ -151,6 +163,7 @@ const ExercisesScreen: React.FC = () => {
       setLoadingMore(false);
     }
   };
+
 
   useEffect(() => {
     fetchPage(0);

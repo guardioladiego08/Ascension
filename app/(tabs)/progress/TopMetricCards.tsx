@@ -74,13 +74,21 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
 
       // ---- Exercises (total count) ----
       try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError) throw userError;
+
         const { data, error } = await supabase
-          .from('exercises') // adjust if table name differs
-          .select('id');
+          .from('exercises')
+          .select('id')
+          .or(`user_id.is.null,user_id.eq.${user.id}`);
 
         if (error) throw error;
 
         setExerciseCount((data ?? []).length);
+
       } catch (err) {
         console.warn('Error loading exercises count', err);
       } finally {
