@@ -48,7 +48,7 @@ export default function SettingsScreen() {
       return;
     }
     // adjust this path to your auth route if different
-    router.replace('/(auth)/sign-in');
+    router.replace('../../SignInLogin/FirstPage');
   };
 
   return (

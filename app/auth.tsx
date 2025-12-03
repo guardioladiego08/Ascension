@@ -5,5 +5,5 @@ import React from 'react';
 import { Redirect } from 'expo-router';
 
 export default function AuthRoute(): JSX.Element {
-  return <Redirect href="/SignInLogin/FirstPage" />;
+  return <Redirect href="@/SignInLogin/FirstPage" />;
 }
