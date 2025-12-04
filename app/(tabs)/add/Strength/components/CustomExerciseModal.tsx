@@ -104,7 +104,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
 
       const userId = data.user.id;
 
-      const { error } = await supabase.from("exercises").insert({
+      const { error } = await supabase.schema('strength').from("exercises").insert({
         exercise_name: name.trim(),
         body_parts: bodyParts,                 // string[] -> body_part[]
         workout_category: category || null,    // enum or null

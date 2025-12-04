@@ -59,13 +59,22 @@ function formatSetWeight(
   return `${weight}${setUnit}`;
 }
 
+type ExerciseSummaryRow = {
+  exercise_id: string;
+  exercise_name?: string | null;
+  vol: number | null;
+  strongest_set: number | null;
+  best_est_1rm: number | null;
+  avg_set: number | null;
+};
+
 export default function StrengthSummaryPage() {
   const { id } = useLocalSearchParams<{ id?: string }>(); // workout ID
 
   const [loading, setLoading] = React.useState(true);
   const [workout, setWorkout] = React.useState<any>(null);
-  const [exercises, setExercises] = React.useState<any[]>([]);
-  const [setsByExercise, setSetsByExercise] = React.useState<any>({});
+  const [exercises, setExercises] = React.useState<ExerciseSummaryRow[]>([]);
+  const [setsByExercise, setSetsByExercise] = React.useState<Record<string, any[]>>({});
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
 
@@ -73,38 +82,95 @@ export default function StrengthSummaryPage() {
     if (!id) return;
 
     (async () => {
-      // 1. Load main workout row
-      const { data: w } = await supabase
-        .from('strength_workouts')
-        .select('*')
-        .eq('id', id)
-        .single();
+      try {
+        setLoading(true);
 
-      // 2. Load exercise summaries
-      const { data: s } = await supabase
-        .from('exercise_summary')
-        .select('*, exercises(exercise_name)')
-        .eq('strength_workout_id', id);
+        // 1. Load main workout row from strength schema
+        const { data: w, error: wError } = await supabase
+          .schema('strength')
+          .from('strength_workouts')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-      // 3. Load ALL sets for this workout
-      const { data: sets } = await supabase
-        .from('strength_sets')
-        .select('*')
-        .eq('strength_workout_id', id)
-        .order('exercise_id', { ascending: true })
-        .order('set_index', { ascending: true });
+        if (wError) {
+          console.error('Error loading workout', wError);
+          Alert.alert('Error', 'Could not load workout.');
+          setLoading(false);
+          return;
+        }
 
-      // Group sets by exercise
-      const grouped: any = {};
-      sets?.forEach((st: any) => {
-        if (!grouped[st.exercise_id]) grouped[st.exercise_id] = [];
-        grouped[st.exercise_id].push(st);
-      });
+        // 2. Load exercise summaries (no join yet)
+        const { data: summaryRows, error: sError } = await supabase
+          .schema('strength')
+          .from('exercise_summary')
+          .select(
+            'exercise_id, vol, strongest_set, best_est_1rm, avg_set'
+          )
+          .eq('strength_workout_id', id);
 
-      setWorkout(w);
-      setExercises(s ?? []);
-      setSetsByExercise(grouped);
-      setLoading(false);
+        if (sError) {
+          console.error('Error loading exercise_summary', sError);
+        }
+
+        const summaries = (summaryRows ?? []) as ExerciseSummaryRow[];
+
+        // 3. Load exercise names from public.exercises for all exercise_ids
+        let enrichedSummaries = summaries;
+        if (summaries.length > 0) {
+          const uniqueIds = Array.from(
+            new Set(summaries.map((row) => row.exercise_id))
+          );
+
+          const { data: exRows, error: exError } = await supabase
+            .from('exercises') // public.exercises
+            .select('id, exercise_name')
+            .in('id', uniqueIds);
+
+          if (exError) {
+            console.error('Error loading exercises', exError);
+          }
+
+          const nameById: Record<string, string | null> = {};
+          exRows?.forEach((er: any) => {
+            nameById[er.id] = er.exercise_name;
+          });
+
+          enrichedSummaries = summaries.map((row) => ({
+            ...row,
+            exercise_name: nameById[row.exercise_id] ?? null,
+          }));
+        }
+
+        // 4. Load ALL sets for this workout from strength schema
+        const { data: sets, error: setsError } = await supabase
+          .schema('strength')
+          .from('strength_sets')
+          .select('*')
+          .eq('strength_workout_id', id)
+          .order('exercise_id', { ascending: true })
+          .order('set_index', { ascending: true });
+
+        if (setsError) {
+          console.error('Error loading strength_sets', setsError);
+        }
+
+        // Group sets by exercise
+        const grouped: Record<string, any[]> = {};
+        (sets ?? []).forEach((st: any) => {
+          if (!grouped[st.exercise_id]) grouped[st.exercise_id] = [];
+          grouped[st.exercise_id].push(st);
+        });
+
+        setWorkout(w);
+        setExercises(enrichedSummaries);
+        setSetsByExercise(grouped);
+      } catch (err) {
+        console.error('Error loading strength summary', err);
+        Alert.alert('Error', 'Could not load strength workout summary.');
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [id]);
 
@@ -124,6 +190,7 @@ export default function StrengthSummaryPage() {
             try {
               // 1. Delete sets
               const { data: deletedSets, error: setsError } = await supabase
+                .schema('strength')
                 .from('strength_sets')
                 .delete()
                 .eq('strength_workout_id', id)
@@ -137,6 +204,7 @@ export default function StrengthSummaryPage() {
               // 2. Delete exercise summaries
               const { data: deletedSummaries, error: summaryError } =
                 await supabase
+                  .schema('strength')
                   .from('exercise_summary')
                   .delete()
                   .eq('strength_workout_id', id)
@@ -150,6 +218,7 @@ export default function StrengthSummaryPage() {
               // 3. Delete workout header
               const { data: deletedWorkouts, error: workoutError } =
                 await supabase
+                  .schema('strength')
                   .from('strength_workouts')
                   .delete()
                   .eq('id', id)
@@ -220,10 +289,16 @@ export default function StrengthSummaryPage() {
         </Text>
 
         {/* ---- Per Exercise Summary ---- */}
+        {exercises.length === 0 && (
+          <Text style={{ color: '#9aa4bf', marginTop: 8 }}>
+            No exercises logged for this workout.
+          </Text>
+        )}
+
         {exercises.map((ex, i) => (
-          <View key={i} style={styles.card}>
+          <View key={ex.exercise_id ?? i} style={styles.card}>
             <Text style={styles.exerciseName}>
-              {ex.exercises?.exercise_name}
+              {ex.exercise_name ?? 'Exercise'}
             </Text>
 
             <Text style={styles.detail}>
@@ -252,26 +327,24 @@ export default function StrengthSummaryPage() {
               </View>
 
               {/* Rows */}
-              {setsByExercise[ex.exercise_id]?.map(
-                (s: any, idx: number) => (
-                  <View key={idx} style={styles.row}>
-                    <Text style={styles.col}>{s.set_index}</Text>
-                    <Text style={styles.col}>{s.set_type}</Text>
-                    <Text style={styles.col}>
-                      {formatSetWeight(
-                        s.weight,
-                        s.weight_unit_csv,
-                        weightUnit
-                      )}
-                    </Text>
-                    <Text style={styles.col}>{s.reps ?? '-'}</Text>
-                    <Text style={styles.col}>{s.rpe ?? '-'}</Text>
-                    <Text style={styles.col}>
-                      {formatFromKg(s.est_1rm, weightUnit)}
-                    </Text>
-                  </View>
-                )
-              )}
+              {setsByExercise[ex.exercise_id]?.map((s: any, idx: number) => (
+                <View key={idx} style={styles.row}>
+                  <Text style={styles.col}>{s.set_index}</Text>
+                  <Text style={styles.col}>{s.set_type}</Text>
+                  <Text style={styles.col}>
+                    {formatSetWeight(
+                      s.weight,
+                      s.weight_unit_csv,
+                      weightUnit
+                    )}
+                  </Text>
+                  <Text style={styles.col}>{s.reps ?? '-'}</Text>
+                  <Text style={styles.col}>{s.rpe ?? '-'}</Text>
+                  <Text style={styles.col}>
+                    {formatFromKg(s.est_1rm, weightUnit)}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         ))}

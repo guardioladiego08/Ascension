@@ -43,6 +43,7 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
           start.setDate(end.getDate() - 6);
 
           const { data, error } = await supabase
+            .schema('strength')
             .from('strength_workouts') // change if your table name differs
             .select('started_at, ended_at')
             .eq('user_id', user.id)

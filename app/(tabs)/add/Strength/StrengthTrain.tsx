@@ -93,6 +93,7 @@ export default function StrengthTrain() {
       setUserId(uid);
 
       const { data, error } = await supabase
+        .schema('strength')
         .from('strength_workouts')
         .insert({ user_id: uid })
         .select('id')
@@ -171,9 +172,6 @@ export default function StrengthTrain() {
     }
 
 
-
-
-
     setLoading(true);
     try {
       // 1) Insert sets
@@ -194,7 +192,7 @@ export default function StrengthTrain() {
       );
 
       if (setPayload.length > 0) {
-        const { error: setsErr } = await supabase.from('strength_sets').insert(setPayload);
+        const { error: setsErr } = await supabase.schema('strength').from('strength_sets').insert(setPayload);
         if (setsErr) throw setsErr;
       }
 
@@ -236,13 +234,14 @@ export default function StrengthTrain() {
       }));
 
       if (summaryPayload.length > 0) {
-        const { error: sumErr } = await supabase.from('exercise_summary').insert(summaryPayload);
+        const { error: sumErr } = await supabase.schema('strength').from('exercise_summary').insert(summaryPayload);
         if (sumErr) throw sumErr;
       }
 
       // 3) Update workout with total volume + end time
       const totalVol = +totalVolumeKg.toFixed(2);
       const { error: wErr } = await supabase
+        .schema('strength')
         .from('strength_workouts')
         .update({ ended_at: new Date().toISOString(), total_vol: totalVol })
         .eq('id', workoutId);
@@ -323,7 +322,7 @@ export default function StrengthTrain() {
         onDiscard={async () => {
           // 1) delete workout row (keep this exactly as you had it)
           if (workoutId) {
-            await supabase.from('strength_workouts').delete().eq('id', workoutId);
+            await supabase.schema('strength').from('strength_workouts').delete().eq('id', workoutId);
           }
 
           // 2) clear local workout state so nothing persists

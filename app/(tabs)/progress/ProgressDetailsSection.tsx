@@ -69,6 +69,7 @@ const ProgressDetailsSection: React.FC = () => {
         }
 
         const { data, error } = await supabase
+          .schema('strength')
           .from('strength_workouts')
           .select('id, started_at, ended_at')
           .eq('user_id', user.id)

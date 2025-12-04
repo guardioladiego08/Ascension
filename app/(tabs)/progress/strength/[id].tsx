@@ -51,6 +51,7 @@ const ExerciseDetailScreen: React.FC = () => {
   const [selectedStat, setSelectedStat] = useState<'sessions' | 'volume' | 'oneRM'>(
     'sessions'
   );
+  
 
   // ------------------------ LOAD DATA ----------------------------------------
 
@@ -67,6 +68,7 @@ const ExerciseDetailScreen: React.FC = () => {
 
         // 1) Exercise metadata
         const { data: exData, error: exErr } = await supabase
+          .schema('strength')
           .from('exercises')
           .select('*')
           .eq('id', id)
@@ -82,6 +84,7 @@ const ExerciseDetailScreen: React.FC = () => {
 
         // 2) All sets for this exercise
         const { data: setData, error: setErr } = await supabase
+          .schema('strength')
           .from('strength_sets')
           .select('*')
           .eq('exercise_id', id);
@@ -102,6 +105,7 @@ const ExerciseDetailScreen: React.FC = () => {
 
         if (workoutIds.length) {
           const { data: wkData, error: wkErr } = await supabase
+            .schema('strength')
             .from('strength_workouts')
             .select('id, started_at, ended_at')
             .in('id', workoutIds);

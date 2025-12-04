@@ -124,6 +124,7 @@ const ExercisesScreen: React.FC = () => {
       }
 
       const { data, error } = await supabase
+        .schema('strength')
         .from('exercises')
         .select('*')
         .or(`user_id.is.null,user_id.eq.${user.id}`)

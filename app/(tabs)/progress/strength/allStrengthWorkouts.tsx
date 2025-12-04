@@ -41,6 +41,7 @@ const AllStrengthWorkoutsScreen: React.FC = () => {
       );
 
       const { data, error } = await supabase
+        .schema('strength')
         .from('strength_workouts')
         .select('id, started_at, ended_at, total_vol, notes')
         .order('started_at', { ascending: false });
