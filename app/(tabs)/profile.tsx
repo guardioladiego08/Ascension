@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// app/(tabs)/profile.tsx
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -6,13 +7,17 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import GoalCalendar from './profile/components/GoalCalendar';
+import ProfileHeaderSection from './profile/components/ProfileHeaderSection';
+import { supabase } from '@/lib/supabase';
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
@@ -21,17 +26,104 @@ const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
 const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.primary ?? '#6366F1';
 
+type ProfileRow = {
+  id: string;
+  auth_user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  username: string;
+  bio: string | null;
+  profile_image_url: string | null;
+};
+
+type ProfileStats = {
+  posts: number;
+  followers: number;
+  following: number;
+};
+
 export default function ProfileScreen() {
   const router = useRouter();
+
   const [detailTab, setDetailTab] = useState<'grid' | 'stats' | 'calendar'>(
     'grid'
   );
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [stats, setStats] = useState<ProfileStats>({
+    posts: 0,
+    followers: 0,
+    following: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const goToSettings = () => {
     router.push('/profile/settings');
   };
 
-  // ---------- RENDER HELPERS ----------
+  // --------- LOAD PROFILE (reusable) ---------
+  const loadProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorText(null);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error('[Profile] getUser error', userError);
+        throw userError;
+      }
+
+      if (!user) {
+        throw new Error('Not signed in');
+      }
+
+      const { data, error } = await supabase
+        .schema('user')
+        .from('profiles')
+        .select(
+          'id, auth_user_id, first_name, last_name, username, bio, profile_image_url'
+        )
+        .eq('auth_user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[Profile] profiles query error', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('Profile not found for current user.');
+      }
+
+      setProfile(data as ProfileRow);
+
+      // TODO: later, fetch stats (posts/followers/following)
+    } catch (err: any) {
+      console.error('[Profile] loadProfile failed', err);
+      setErrorText(err?.message ?? 'Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load on mount
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  // Re-run whenever the Profile tab regains focus (e.g. returning from /profile/edit)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
+
+  // --------- RENDER HELPERS ---------
+
   const renderDetailTabs = () => (
     <View style={styles.detailTabs}>
       <TabButton
@@ -55,7 +147,6 @@ export default function ProfileScreen() {
     </View>
   );
 
-  // For now, simple placeholders – you can wire these to Supabase later
   const renderGridPosts = () => (
     <View style={styles.emptyStateCard}>
       <Text style={styles.emptyStateTitle}>No posts yet</Text>
@@ -75,13 +166,21 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const fullName =
+    profile &&
+    [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+
+  const username = profile?.username ?? 'user';
+
+  // --------- MAIN RENDER ---------
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <LogoHeader />
 
       {/* Instagram-style top bar */}
       <View style={styles.topBar}>
-        <Text style={styles.topBarUsername}>marcusj_fit</Text>
+        <Text style={styles.topBarUsername}>@{username}</Text>
         <View style={styles.topBarIcons}>
           <TouchableOpacity onPress={goToSettings} style={styles.iconButton}>
             <Ionicons name="settings-outline" size={22} color={TEXT_PRIMARY} />
@@ -89,81 +188,66 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header: avatar + stats */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>MJ</Text>
+      {loading ? (
+        <View style={styles.loadingWrapper}>
+          <ActivityIndicator size="small" color={ACCENT} />
+          <Text style={styles.loadingText}>Loading profile…</Text>
+        </View>
+      ) : errorText ? (
+        <View style={styles.loadingWrapper}>
+          <Text style={styles.errorText}>{errorText}</Text>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header: avatar + stats + bio from Supabase */}
+          {profile && (
+            <ProfileHeaderSection
+              fullName={fullName}
+              username={profile.username}
+              bio={profile.bio}
+              profileImageUrl={profile.profile_image_url}
+              stats={stats}
+              isOwnProfile={true}
+              onEditProfile={() => router.push('/profile/edit')}
+            />
+          )}
+
+          {/* Lifetime stat badges */}
+          <View style={styles.lifetimeCard}>
+            <Text style={styles.sectionTitle}>Lifetime Stats</Text>
+            <View style={styles.lifetimeRow}>
+              <LifetimeStat
+                label="Workouts"
+                value="0"
+                icon="barbell-outline"
+              />
+              <LifetimeStat label="Miles" value="0" icon="trail-sign-outline" />
+              <LifetimeStat
+                label="Lbs Lifted"
+                value="0"
+                icon="fitness-outline"
+              />
             </View>
           </View>
 
-          <View style={styles.headerStatsRow}>
-            <ProfileStat label="Posts" value="0" />
-            <ProfileStat label="Followers" value="0" />
-            <ProfileStat label="Following" value="0" />
-          </View>
-        </View>
+          {/* Detail tabs */}
+          {renderDetailTabs()}
 
-        {/* Bio */}
-        <View style={styles.bioSection}>
-          <Text style={styles.nameText}>Marcus Johnson</Text>
-          <Text style={styles.usernameText}>@marcusj_fit</Text>
-          <Text style={styles.bioText}>
-            Hybrid athlete in progress. Tracking strength, miles, and macros to
-            hit the next level.
-          </Text>
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Follow</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Message</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Lifetime stat badges */}
-        <View style={styles.lifetimeCard}>
-          <Text style={styles.sectionTitle}>Lifetime Stats</Text>
-          <View style={styles.lifetimeRow}>
-            <LifetimeStat label="Workouts" value="0" icon="barbell-outline" />
-            <LifetimeStat label="Miles" value="0" icon="trail-sign-outline" />
-            <LifetimeStat
-              label="Lbs Lifted"
-              value="0"
-              icon="fitness-outline"
-            />
-          </View>
-        </View>
-
-        {/* Detail tabs */}
-        {renderDetailTabs()}
-
-        {/* Tab content */}
-        {detailTab === 'grid' && renderGridPosts()}
-        {detailTab === 'stats' && renderActivityStats()}
-        {detailTab === 'calendar' && <GoalCalendar />}
-      </ScrollView>
+          {/* Tab content */}
+          {detailTab === 'grid' && renderGridPosts()}
+          {detailTab === 'stats' && renderActivityStats()}
+          {detailTab === 'calendar' && <GoalCalendar />}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 // ---------- SMALL COMPONENTS ----------
-
-function ProfileStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.profileStat}>
-      <Text style={styles.profileStatValue}>{value}</Text>
-      <Text style={styles.profileStatLabel}>{label}</Text>
-    </View>
-  );
-}
 
 function LifetimeStat({
   label,
@@ -251,98 +335,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 
-  // Header
-  profileHeader: {
-    flexDirection: 'row',
+  // Loading / error
+  loadingWrapper: {
+    flex: 1,
+    backgroundColor: BG,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: TEXT_MUTED,
+    fontSize: 13,
     marginTop: 8,
   },
-  avatarWrapper: {
-    marginRight: 24,
-  },
-  avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  headerStatsRow: {
-    flexDirection: 'row',
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  profileStat: {
-    alignItems: 'center',
-  },
-  profileStatValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  profileStatLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginTop: 2,
-  },
-
-  // Bio
-  bioSection: {
-    marginTop: 12,
-  },
-  nameText: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  usernameText: {
-    color: TEXT_MUTED,
+  errorText: {
+    color: '#FCA5A5',
     fontSize: 13,
-    marginTop: 2,
-  },
-  bioText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 8,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: ACCENT,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '500',
-    fontSize: 14,
+    paddingHorizontal: 16,
+    textAlign: 'center',
   },
 
   // Lifetime stats
@@ -412,7 +421,7 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
   },
 
-  // Empty-state cards for Posts / Activity
+  // Empty-state cards
   emptyStateCard: {
     marginTop: 16,
     padding: 16,
