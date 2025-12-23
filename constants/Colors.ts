@@ -6,6 +6,7 @@ export const Colors = {
   },
   dark: {
     background: '#151516ff',
+    popUpCard: '#373737b9',
     card: '#202836ff',
     card2: '#424953ff',
     offset1: '#6C6C6C',
@@ -20,6 +21,7 @@ export const Colors = {
     milesRan:        '#f5873eff',
     weightLifted:        '#f1d63aff',
     text: '#ffffff',
+    textMuted: '#ffffff84',
     textOffSt:  '#e2e2e286',
     blkText: '#000000ff',
     link: '#1e90ff',

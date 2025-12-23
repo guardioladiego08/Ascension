@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   TextInput,
@@ -15,12 +14,14 @@ import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
-const PRIMARY = Colors.dark.highlight4;
+const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = '#9AA4BF';
+const TEXT_MUTED = Colors.dark.textMuted;
 
 export default function Login() {
   const router = useRouter();
@@ -68,11 +69,17 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]} // darker -> lighter (adjust to taste)
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+    <View style={styles.container}>
       <LogoHeader showBackButton/>
       <View style={styles.header}>
 
-        <Text style={styles.headerTitle}>Log in</Text>
+        <Text style={styles.headerTitle}>Log In</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -118,21 +125,27 @@ export default function Login() {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 20 },
+  container: { flex: 1, paddingHorizontal: 20 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 32,
     justifyContent: 'space-between',
   },
-  headerTitle: { fontSize: 24, color: TEXT_PRIMARY, fontWeight: '600' },
+  headerTitle: { 
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 24,
+    color: TEXT_PRIMARY,
+    fontWeight: '600',
+   },
   card: {
-    backgroundColor: CARD,
     borderRadius: 18,
     padding: 18,
     marginTop: 16,
@@ -141,7 +154,8 @@ const styles = StyleSheet.create({
   input: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2C3648',
+    borderColor: '#7b7b7bff',
+    backgroundColor: '#b0b0b050',
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: TEXT_PRIMARY,
@@ -149,12 +163,14 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     marginTop: 20,
-    backgroundColor: PRIMARY,
-    borderRadius: 999,
+    backgroundColor: 'transparent',
+    borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: PRIMARY,
   },
-  primaryText: { color: '#020817', fontWeight: '600', fontSize: 15 },
+  primaryText: { color: PRIMARY, fontWeight: '600', fontSize: 15 },
   dividerText: {
     textAlign: 'center',
     color: TEXT_MUTED,
@@ -165,7 +181,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 999,
+    borderRadius: 15,
     borderWidth: 1,
     borderColor: '#3A465E',
     paddingVertical: 10,

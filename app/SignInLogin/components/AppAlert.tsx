@@ -11,7 +11,7 @@ import {
 import { Colors } from '@/constants/Colors';
 
 const BG_OVERLAY = 'rgba(0,0,0,0.6)';
-const CARD = Colors.dark.card;
+const CARD = Colors.dark.popUpCard;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = '#9AA4BF';
 const PRIMARY = Colors.dark.tint;

@@ -278,6 +278,7 @@ export default function OutdoorSession() {
           ? `lat: ${current.lat.toFixed(5)}  lon: ${current.lon.toFixed(5)}  acc: ~${current.acc ?? '?'}m`
           : 'Waiting for GPS...'}
       </Text>
+      
       <View style={styles.mapContainer}>
         <MapboxGL.MapView
           styleURL={MapboxGL.StyleURL.Outdoors}

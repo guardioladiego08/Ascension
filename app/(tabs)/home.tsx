@@ -190,7 +190,7 @@ export default function BlankHome() {
           <TouchableOpacity
             activeOpacity={0.9}
             style={GlobalStyles.quickCard}
-            onPress={() => router.push('/add/Cardio/outdoorRun')}
+            onPress={() => router.push('/add/Cardio/OutdoorSession')}
           >
             <Ionicons
               name="walk"
@@ -202,7 +202,7 @@ export default function BlankHome() {
           <TouchableOpacity
             activeOpacity={0.9}
             style={GlobalStyles.quickCard}
-            onPress={() => router.push('/new/bike')}
+            onPress={() => router.push('/add/Cardio/OutdoorSession.tsx')}
           >
             <Ionicons
               name="bicycle"

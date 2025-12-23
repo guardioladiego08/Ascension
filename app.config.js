@@ -5,6 +5,7 @@ export default {
   expo: {
     name: 'Tensr Fitness',
     slug: 'tensr-fitness',
+    owner: 'dguardiola01', 
     scheme: 'tensr',
     version: '1.0.0',
     orientation: 'portrait',
@@ -14,8 +15,10 @@ export default {
     assetBundlePatterns: ['**/*'],
 
     ios: {
+      "bundleIdentifier": "com.alterastudio.ascension",
       supportsTablet: true,
       infoPlist: {
+        "ITSAppUsesNonExemptEncryption": false,
         NSLocationWhenInUseUsageDescription:
           'Tensr Fitness uses your location to record and display outdoor runs and walks on the map.',
         NSLocationAlwaysAndWhenInUseUsageDescription:
@@ -42,6 +45,7 @@ export default {
     },
 
     plugins: [
+  "@rnmapbox/maps",
   'expo-router',
   'expo-web-browser',
   [
@@ -70,8 +74,8 @@ export default {
       ANDROID_MAPS_API_KEY: process.env.ANDROID_MAPS_API_KEY,
       MAPBOX_ACCESS_TOKEN: process.env.MAPBOX_ACCESS_TOKEN,
       MAPBOX_DOWNLOAD_TOKEN: process.env.MAPBOX_DOWNLOAD_TOKEN,
-      eas: {
-        projectId: 'your-eas-project-id', // optional if using EAS updates
+      "eas": {
+        "projectId": "857ce362-d79d-4af3-9f5b-f76bb3195877"
       },
     },
 
