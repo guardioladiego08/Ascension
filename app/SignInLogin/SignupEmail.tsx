@@ -144,7 +144,7 @@ export default function SignupEmail() {
       'We sent you a confirmation link. You can continue onboarding now and confirm your email after finishing.',
       () => {
         router.replace({
-          pathname: './onboarding/UserInfo',
+          pathname: './onboarding/UserInfo1',
           params: { authUserId: userId },
         });
       },

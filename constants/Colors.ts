@@ -6,7 +6,7 @@ export const Colors = {
   },
   dark: {
     background: '#151516ff',
-    popUpCard: '#373737b9',
+    popUpCard: '#373737c7',
     card: '#202836ff',
     card2: '#424953ff',
     offset1: '#6C6C6C',
