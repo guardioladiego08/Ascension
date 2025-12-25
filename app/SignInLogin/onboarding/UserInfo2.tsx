@@ -266,8 +266,7 @@ export default function UserInfo2() {
         return;
       }
 
-      showAlert('Saved', 'Step 2/5 completed.');
-      // router.replace({ pathname: './UserInfo3', params: { authUserId } });
+      router.replace({ pathname: './UserInfo3', params: { authUserId } });
     } finally {
       setSaving(false);
     }
@@ -763,7 +762,7 @@ const styles = StyleSheet.create({
   },
   genderSelected: { backgroundColor: '#fff', borderColor: '#fff' },
   genderUnselected: { backgroundColor: 'rgba(176,176,176,0.18)', borderColor: 'rgba(123,123,123,0.9)' },
-  genderText: { fontSize: 14, fontWeight: '800', letterSpacing: 1.2 },
+  genderText: { fontSize: 12, fontWeight: '800', letterSpacing: 1.2 },
   genderTextSelected: { color: '#0b0f18' },
   genderTextUnselected: { color: TEXT_PRIMARY },
 

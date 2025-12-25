@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// app/SignInLogin/Login.tsx
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,124 +9,218 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
-import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
-
 const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
 
+type Params = { email?: string };
+
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const params = useLocalSearchParams<Params>();
+  const prefillEmail = Array.isArray(params.email) ? params.email[0] : params.email;
 
+  const [email, setEmail] = useState(prefillEmail ?? '');
+  const [password, setPassword] = useState('');
   const [loadingEmail, setLoadingEmail] = useState(false);
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [loadingApple, setLoadingApple] = useState(false);
+
+  const routingRef = useRef(false);
+
+  const ensureProfileRow = async (userId: string) => {
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) {
+      return { ok: false as const, message: 'You are not signed in. Please sign in again.' };
+    }
+
+    const metaUsername =
+      (user.user_metadata as any)?.username?.trim?.() ||
+      (user.user_metadata as any)?.Username?.trim?.();
+
+    const fallbackUsername = `${(user.email?.split('@')[0] ?? 'user')}_${user.id.slice(0, 6)}`;
+
+    const { error: ensureErr } = await supabase
+      .schema('user')
+      .from('profiles')
+      .upsert(
+        { auth_user_id: userId, username: metaUsername || fallbackUsername },
+        { onConflict: 'auth_user_id' },
+      );
+
+    if (ensureErr) {
+      return { ok: false as const, message: ensureErr.message };
+    }
+
+    return { ok: true as const };
+  };
+
+  const routeAfterLogin = async (userId: string) => {
+    if (routingRef.current) return;
+    routingRef.current = true;
+
+    try {
+      // Ensure profile exists (avoids NOT NULL username insert failures later)
+      const ensure = await ensureProfileRow(userId);
+      if (!ensure.ok) {
+        Alert.alert('Error', ensure.message);
+        routingRef.current = false;
+        return;
+      }
+
+      // Fetch gating flags
+      const { data, error } = await supabase
+        .schema('user')
+        .from('profiles')
+        .select('onboarding_completed, has_accepted_privacy_policy')
+        .eq('auth_user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        routingRef.current = false;
+        return;
+      }
+
+      const onboardingCompleted = data?.onboarding_completed === true;
+      const hasAcceptedPrivacy = data?.has_accepted_privacy_policy === true;
+
+      /**
+       * ✅ Corrected order:
+       * 1) If onboarding is NOT complete -> always start onboarding (UserInfo1).
+       * 2) Only AFTER onboarding is complete do we enforce Terms/Privacy gate.
+       * 3) Then go home.
+       */
+
+      if (!onboardingCompleted) {
+        router.replace({
+          pathname: '/SignInLogin/onboarding/UserInfo1',
+          params: { authUserId: userId },
+        });
+        return;
+      }
+
+      if (!hasAcceptedPrivacy) {
+        // Onboarding is done; now require terms acceptance before app access
+        router.replace({
+          pathname: '/SignInLogin/onboarding/TermsAndPrivacy',
+          params: { nextPath: '/(tabs)/home' },
+        });
+        return;
+      }
+
+      router.replace('/(tabs)/home');
+    } finally {
+      // keep routingRef true to prevent double routing
+    }
+  };
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
       Alert.alert('Missing info', 'Please enter your email and password.');
       return;
     }
+
     setLoadingEmail(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
     setLoadingEmail(false);
 
     if (error) {
       Alert.alert('Login failed', error.message);
       return;
     }
-    router.replace('/(tabs)/home');
+
+    const userId = data.user?.id;
+    if (!userId) {
+      Alert.alert('Login failed', 'Could not read user session. Please try again.');
+      return;
+    }
+
+    await routeAfterLogin(userId);
   };
 
-  const handleOAuth = async (provider: 'google' | 'apple') => {
-    try {
-      provider === 'google' ? setLoadingGoogle(true) : setLoadingApple(true);
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: 'yourapp://auth-callback', // adjust to your scheme
-        },
-      });
-      provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
-      if (error) {
-        Alert.alert('Auth error', error.message);
+  // Handles OAuth completion or any auth state changes
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const id = session?.user?.id;
+      if (id) {
+        await routeAfterLogin(id);
       }
-      // After OAuth completes & session is set, index.tsx will redirect to /home
-    } catch (e: any) {
-      provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
-      Alert.alert('Auth error', e?.message ?? 'Something went wrong.');
-    }
-  };
+    });
+
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]} // darker -> lighter (adjust to taste)
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
       style={{ flex: 1 }}
     >
-    <View style={styles.container}>
-      <LogoHeader showBackButton/>
-      <View style={styles.header}>
+      <View style={styles.container}>
+        <LogoHeader showBackButton />
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Log In</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-        <Text style={styles.headerTitle}>Log In</Text>
-        <View style={{ width: 24 }} />
-      </View>
+        <View style={styles.card}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            placeholder="you@example.com"
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
 
-      <View style={styles.card}>
-        {/* Email & password */}
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="you@example.com"
-          placeholderTextColor={TEXT_MUTED}
-          style={styles.input}
-        />
+          <Text style={[styles.label, { marginTop: 14 }]}>Password</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="••••••••"
+            placeholderTextColor={TEXT_MUTED}
+            style={styles.input}
+          />
 
-        <Text style={[styles.label, { marginTop: 14 }]}>Password</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="••••••••"
-          placeholderTextColor={TEXT_MUTED}
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={[styles.primaryButton, loadingEmail && { opacity: 0.7 }]}
-          onPress={handleEmailLogin}
-          disabled={loadingEmail}
-        >
-          {loadingEmail ? (
-            <ActivityIndicator color="#020817" />
-          ) : (
-            <Text style={styles.primaryText}>Log in</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Don’t have an account?</Text>
-          <TouchableOpacity onPress={() => router.replace('/SignupEmail')}>
-            <Text style={styles.footerLink}> Sign up</Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, loadingEmail && { opacity: 0.7 }]}
+            onPress={handleEmailLogin}
+            disabled={loadingEmail}
+          >
+            {loadingEmail ? (
+              <ActivityIndicator color="#020817" />
+            ) : (
+              <Text style={styles.primaryText}>Log in</Text>
+            )}
           </TouchableOpacity>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Don’t have an account?</Text>
+            <TouchableOpacity onPress={() => router.replace('/SignInLogin/SignupEmail')}>
+              <Text style={styles.footerLink}> Sign up</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </View>
     </LinearGradient>
   );
 }
@@ -138,13 +233,13 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     justifyContent: 'space-between',
   },
-  headerTitle: { 
+  headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 24,
     color: TEXT_PRIMARY,
     fontWeight: '600',
-   },
+  },
   card: {
     borderRadius: 18,
     padding: 18,
@@ -171,24 +266,6 @@ const styles = StyleSheet.create({
     borderColor: PRIMARY,
   },
   primaryText: { color: PRIMARY, fontWeight: '600', fontSize: 15 },
-  dividerText: {
-    textAlign: 'center',
-    color: TEXT_MUTED,
-    marginVertical: 12,
-    fontSize: 12,
-  },
-  oauthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#3A465E',
-    paddingVertical: 10,
-    justifyContent: 'center',
-    marginTop: 6,
-  },
-  oauthText: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '500' },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',

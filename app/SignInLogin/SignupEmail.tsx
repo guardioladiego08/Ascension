@@ -8,7 +8,6 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
@@ -17,7 +16,6 @@ import AppAlert from './components/AppAlert';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
@@ -29,8 +27,6 @@ export default function SignupEmail() {
   const [password, setPassword] = useState('');
 
   const [loadingEmail, setLoadingEmail] = useState(false);
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [loadingApple, setLoadingApple] = useState(false);
 
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
@@ -78,7 +74,11 @@ export default function SignupEmail() {
   };
 
   const handleEmailSignup = async () => {
-    if (!email.trim() || !password.trim() || !username.trim()) {
+    const emailTrim = email.trim();
+    const passwordTrim = password.trim();
+    const usernameTrim = username.trim();
+
+    if (!emailTrim || !passwordTrim || !usernameTrim) {
       showAlert('Missing info', 'Please enter email, username, and password.');
       return;
     }
@@ -91,12 +91,10 @@ export default function SignupEmail() {
     setLoadingEmail(true);
 
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password: password.trim(),
+      email: emailTrim,
+      password: passwordTrim,
       options: {
-        data: {
-          username: username.trim(),
-        },
+        data: { username: usernameTrim },
       },
     });
 
@@ -109,73 +107,39 @@ export default function SignupEmail() {
     const userId = data.user?.id;
     if (!userId) {
       setLoadingEmail(false);
-      showAlert(
-        'Error',
-        'Account was created, but we did not receive an ID. Please try again.',
-      );
+      showAlert('Error', 'Account was created, but we did not receive an ID. Please try again.');
       return;
     }
 
+    // Best-effort profile seed.
+    // If email confirmations are ON, there may not be a session yet (RLS can block this).
+    // It’s OK: we will ensure profile exists after login.
     const { error: profileError } = await supabase
       .schema('user')
       .from('profiles')
       .upsert(
-        {
-          auth_user_id: userId,
-          username: username.trim(),
-        },
+        { auth_user_id: userId, username: usernameTrim },
         { onConflict: 'auth_user_id' },
       );
 
     setLoadingEmail(false);
 
     if (profileError) {
-      console.log('profile upsert error', profileError);
-      showAlert(
-        'Error',
-        'Your account was created, but we could not save your profile. Please try again.',
-      );
-      return;
+      console.log('profile upsert error (non-fatal)', profileError);
     }
 
-    // ✅ Show custom popup and then navigate after user closes it
     showAlert(
       'Check your email',
-      'We sent you a confirmation link. You can continue onboarding now and confirm your email after finishing.',
+      'We sent you a confirmation link. After confirming your email, return and log in to continue onboarding.',
       () => {
-        router.replace({
-          pathname: './onboarding/UserInfo1',
-          params: { authUserId: userId },
-        });
+        router.replace({ pathname: '/SignInLogin/Login', params: { email: emailTrim } });
       },
     );
   };
 
-  const handleOAuth = async (provider: 'google' | 'apple') => {
-    try {
-      provider === 'google' ? setLoadingGoogle(true) : setLoadingApple(true);
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: 'yourapp://auth-callback',
-        },
-      });
-
-      provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
-
-      if (error) {
-        showAlert('Auth error', error.message);
-      }
-    } catch (e: any) {
-      provider === 'google' ? setLoadingGoogle(false) : setLoadingApple(false);
-      showAlert('Auth error', e?.message ?? 'Something went wrong.');
-    }
-  };
-
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]} // darker -> lighter (adjust to taste)
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
       style={{ flex: 1 }}
@@ -188,7 +152,6 @@ export default function SignupEmail() {
         </View>
 
         <View style={styles.card}>
-          {/* Email */}
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
@@ -200,7 +163,6 @@ export default function SignupEmail() {
             style={styles.input}
           />
 
-          {/* Username + check */}
           <Text style={styles.label}>Username</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TextInput
@@ -210,7 +172,7 @@ export default function SignupEmail() {
                 setUsernameAvailable(null);
               }}
               autoCapitalize="none"
-              placeholder="diego_lifts"
+              placeholder="my_username"
               placeholderTextColor={TEXT_MUTED}
               style={[styles.input, { flex: 1 }]}
             />
@@ -226,18 +188,14 @@ export default function SignupEmail() {
               )}
             </TouchableOpacity>
           </View>
+
           {usernameAvailable === true && (
-            <Text style={[styles.helperText, { color: '#15C779' }]}>
-              Username is available.
-            </Text>
+            <Text style={[styles.helperText, { color: '#15C779' }]}>Username is available.</Text>
           )}
           {usernameAvailable === false && (
-            <Text style={[styles.helperText, { color: '#FF6B81' }]}>
-              Username is already taken.
-            </Text>
+            <Text style={[styles.helperText, { color: '#FF6B81' }]}>Username is already taken.</Text>
           )}
 
-          {/* Password */}
           <Text style={styles.label}>Password</Text>
           <TextInput
             value={password}
@@ -268,7 +226,6 @@ export default function SignupEmail() {
           </View>
         </View>
 
-        {/* 🔔 Global popup for this screen */}
         <AppAlert
           visible={alertVisible}
           title={alertTitle}
@@ -288,32 +245,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     justifyContent: 'space-between',
   },
-  headerTitle: { 
+  headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 24,
     color: TEXT_PRIMARY,
     fontWeight: '600',
-   },
+  },
   card: { borderRadius: 18, padding: 18, marginTop: 16 },
-  oauthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#010408ff',
-    paddingVertical: 10,
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  oauthText: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '500' },
-  dividerText: {
-    textAlign: 'center',
-    color: TEXT_MUTED,
-    marginVertical: 12,
-    fontSize: 12,
-  },
   label: { fontSize: 13, color: TEXT_PRIMARY, marginTop: 10, marginBottom: 4 },
   input: {
     borderRadius: 12,
