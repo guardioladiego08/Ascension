@@ -36,24 +36,24 @@ export default function FinishConfirmModal({ visible, onConfirm, onCancel }: Pro
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   box: {
     width: '80%',
-    backgroundColor: '#1b2338',
+    backgroundColor: Colors.dark.popUpCard,
     padding: 24,
     borderRadius: 20,
   },
   title: {
-    color: '#fff',
+    color: Colors.dark.text,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 8,
   },
   subtitle: {
-    color: '#aeb6cf',
+    color: Colors.dark.text,
     fontSize: 14,
     marginBottom: 24,
   },
@@ -68,19 +68,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelBtn: {
-    backgroundColor: '#2c3550',
+    borderColor: '#fff',
+    borderWidth: 1,
     marginRight: 10,
   },
   confirmBtn: {
-    backgroundColor: Colors.dark.highlight1,
+    borderColor: '#fff',
+    borderWidth: 1,
     marginLeft: 10,
   },
   cancelText: {
-    color: '#aeb6cf',
+    color: '#fff',
     fontSize: 15,
   },
   confirmText: {
-    color: Colors.dark.text,
+    color: '#5c976eff',
     fontSize: 15,
     fontWeight: '600',
   },

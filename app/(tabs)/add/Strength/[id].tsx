@@ -13,6 +13,10 @@ import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const BG = Colors.dark.background;
+const PRIMARY = Colors.dark.highlight1;
 
 const LB_PER_KG = 2.20462;
 
@@ -274,108 +278,113 @@ export default function StrengthSummaryPage() {
     : '';
 
   return (
-    <View style={styles.container}>
-      <LogoHeader />
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    > 
+      <View style={styles.container}>
+        <LogoHeader />
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-        {/* --- Workout Header --- */}
-        <Text style={styles.headerDate}>{dateStr}</Text>
-        <Text style={styles.headerDuration}>Duration: {durationStr}</Text>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
+          {/* --- Workout Header --- */}
+          <Text style={styles.headerDate}>{dateStr}</Text>
+          <Text style={styles.headerDuration}>Duration: {durationStr}</Text>
 
-        <Text style={styles.title}>Workout Summary</Text>
+          <Text style={styles.title}>Workout Summary</Text>
 
-        <Text style={styles.totalVol}>
-          Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
-        </Text>
-
-        {/* ---- Per Exercise Summary ---- */}
-        {exercises.length === 0 && (
-          <Text style={{ color: '#9aa4bf', marginTop: 8 }}>
-            No exercises logged for this workout.
+          <Text style={styles.totalVol}>
+            Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
           </Text>
-        )}
 
-        {exercises.map((ex, i) => (
-          <View key={ex.exercise_id ?? i} style={styles.card}>
-            <Text style={styles.exerciseName}>
-              {ex.exercise_name ?? 'Exercise'}
+          {/* ---- Per Exercise Summary ---- */}
+          {exercises.length === 0 && (
+            <Text style={{ color: '#9aa4bf', marginTop: 8 }}>
+              No exercises logged for this workout.
             </Text>
+          )}
 
-            <Text style={styles.detail}>
-              Volume: {formatFromKg(ex.vol, weightUnit)}
-            </Text>
-            <Text style={styles.detail}>
-              Strongest Set: {formatFromKg(ex.strongest_set, weightUnit)}
-            </Text>
-            <Text style={styles.detail}>
-              Best Est 1RM: {formatFromKg(ex.best_est_1rm, weightUnit)}
-            </Text>
-            <Text style={styles.detail}>
-              Avg Set Weight: {formatFromKg(ex.avg_set, weightUnit)}
-            </Text>
+          {exercises.map((ex, i) => (
+            <View key={ex.exercise_id ?? i} style={styles.card}>
+              <Text style={styles.exerciseName}>
+                {ex.exercise_name ?? 'Exercise'}
+              </Text>
 
-            {/* ---- Table of Sets ---- */}
-            <View style={styles.table}>
-              {/* Header */}
-              <View style={[styles.row, styles.tableHeader]}>
-                <Text style={[styles.col, styles.hCol]}>Set</Text>
-                <Text style={[styles.col, styles.hCol]}>Type</Text>
-                <Text style={[styles.col, styles.hCol]}>Weight</Text>
-                <Text style={[styles.col, styles.hCol]}>Reps</Text>
-                <Text style={[styles.col, styles.hCol]}>RPE</Text>
-                <Text style={[styles.col, styles.hCol]}>1RM</Text>
-              </View>
+              <Text style={styles.detail}>
+                Volume: {formatFromKg(ex.vol, weightUnit)}
+              </Text>
+              <Text style={styles.detail}>
+                Strongest Set: {formatFromKg(ex.strongest_set, weightUnit)}
+              </Text>
+              <Text style={styles.detail}>
+                Best Est 1RM: {formatFromKg(ex.best_est_1rm, weightUnit)}
+              </Text>
+              <Text style={styles.detail}>
+                Avg Set Weight: {formatFromKg(ex.avg_set, weightUnit)}
+              </Text>
 
-              {/* Rows */}
-              {setsByExercise[ex.exercise_id]?.map((s: any, idx: number) => (
-                <View key={idx} style={styles.row}>
-                  <Text style={styles.col}>{s.set_index}</Text>
-                  <Text style={styles.col}>{s.set_type}</Text>
-                  <Text style={styles.col}>
-                    {formatSetWeight(
-                      s.weight,
-                      s.weight_unit_csv,
-                      weightUnit
-                    )}
-                  </Text>
-                  <Text style={styles.col}>{s.reps ?? '-'}</Text>
-                  <Text style={styles.col}>{s.rpe ?? '-'}</Text>
-                  <Text style={styles.col}>
-                    {formatFromKg(s.est_1rm, weightUnit)}
-                  </Text>
+              {/* ---- Table of Sets ---- */}
+              <View style={styles.table}>
+                {/* Header */}
+                <View style={[styles.row, styles.tableHeader]}>
+                  <Text style={[styles.col, styles.hCol]}>Set</Text>
+                  <Text style={[styles.col, styles.hCol]}>Type</Text>
+                  <Text style={[styles.col, styles.hCol]}>Weight</Text>
+                  <Text style={[styles.col, styles.hCol]}>Reps</Text>
+                  <Text style={[styles.col, styles.hCol]}>RPE</Text>
+                  <Text style={[styles.col, styles.hCol]}>1RM</Text>
                 </View>
-              ))}
+
+                {/* Rows */}
+                {setsByExercise[ex.exercise_id]?.map((s: any, idx: number) => (
+                  <View key={idx} style={styles.row}>
+                    <Text style={styles.col}>{s.set_index}</Text>
+                    <Text style={styles.col}>{s.set_type}</Text>
+                    <Text style={styles.col}>
+                      {formatSetWeight(
+                        s.weight,
+                        s.weight_unit_csv,
+                        weightUnit
+                      )}
+                    </Text>
+                    <Text style={styles.col}>{s.reps ?? '-'}</Text>
+                    <Text style={styles.col}>{s.rpe ?? '-'}</Text>
+                    <Text style={styles.col}>
+                      {formatFromKg(s.est_1rm, weightUnit)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
+          ))}
 
-        {/* DELETE + HOME BUTTONS */}
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={handleDeleteWorkout}
-        >
-          <Text style={styles.deleteBtnText}>Delete Workout</Text>
-        </TouchableOpacity>
+          {/* DELETE + HOME BUTTONS */}
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={handleDeleteWorkout}
+          >
+            <Text style={styles.deleteBtnText}>Delete Workout</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.homeBtn}
-          onPress={() => router.replace('/')}
-        >
-          <Text style={styles.homeBtnText}>Return Home</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+          <TouchableOpacity
+            style={styles.homeBtn}
+            onPress={() => router.replace('/')}
+          >
+            <Text style={styles.homeBtnText}>Return Home</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
   },
   loading: {
     flex: 1,
-    backgroundColor: '#0f1525',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -452,25 +461,27 @@ const styles = StyleSheet.create({
   },
 
   deleteBtn: {
-    backgroundColor: '#FF4D4F',
+    borderColor: '#FF4D4F',
+    borderWidth: 1,
     paddingVertical: 14,
     borderRadius: 14,
     marginTop: 10,
   },
   deleteBtnText: {
-    color: '#fff',
+    color: '#FF4D4F',
     fontWeight: '700',
     textAlign: 'center',
   },
 
   homeBtn: {
-    backgroundColor: Colors.dark.highlight1,
+    borderColor: Colors.dark.highlight1,
+    borderWidth: 1,
     paddingVertical: 14,
     borderRadius: 14,
     marginTop: 12,
   },
   homeBtnText: {
-    color: '#0b1020',
+    color: Colors.dark.highlight1,
     fontWeight: '700',
     textAlign: 'center',
   },

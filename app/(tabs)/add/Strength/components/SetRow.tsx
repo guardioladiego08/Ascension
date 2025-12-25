@@ -15,6 +15,12 @@ import { useUnits } from '@/contexts/UnitsContext';
 
 // --- helpers -------------------------------------------------
 
+const CARD = Colors.dark.card;
+const BORDER = Colors.dark.border;
+const PRIMARY = Colors.dark.highlight1;
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
+
 const LB_PER_KG = 2.20462;
 
 const convertBetweenUnits = (
@@ -153,7 +159,7 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
           style={styles.weightInput}
           inputMode="decimal"
           placeholder="0"
-          placeholderTextColor="#56607f"
+          placeholderTextColor={TEXT_MUTED}
           value={displayWeight != null && !Number.isNaN(displayWeight)
             ? String(displayWeight)
             : ''}
@@ -170,7 +176,7 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
         style={styles.reps}
         inputMode="numeric"
         placeholder="reps"
-        placeholderTextColor={Colors.dark.textOffSt}
+        placeholderTextColor={TEXT_MUTED}
         value={setDraft.reps?.toString() ?? ''}
         onChangeText={handleRepsChange}
       />
@@ -231,7 +237,6 @@ const styles = StyleSheet.create({
   },
   idxBtnActive: {
     borderColor: '#f9b24e',
-    backgroundColor: '#2b2233',
   },
   idxText: {
     color: Colors.dark.text,
@@ -251,14 +256,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 0.2,
-    backgroundColor: Colors.dark.background,
+    backgroundColor: Colors.dark.textInput,
     borderRadius: 10,
     overflow: 'hidden',
     width: 1,
   },
   weightInput: {
     flex: 1,
-    color: Colors.dark.text,
+    color: TEXT_PRIMARY,
     paddingHorizontal: 10,
     height: 40,
     width: 100,
@@ -280,26 +285,25 @@ const styles = StyleSheet.create({
     width: 70,
     height: 40,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2b3559',
-    backgroundColor: Colors.dark.background,
-    color: Colors.dark.text,
+    backgroundColor: Colors.dark.textInput,
+    color: TEXT_PRIMARY,
     textAlign: 'center',
     paddingRight: 10,
   },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCard: {
     width: '70%',
-    backgroundColor: '#151b30',
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
+    borderWidth: .5,
+    borderColor: '#fff'
   },
   modalTitle: {
     color: Colors.dark.text,
@@ -314,10 +318,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   modeRowActive: {
-    backgroundColor: '#243162',
+    backgroundColor: '#161617ff',
   },
   modeText: {
-    color: '#d5dbff',
+    color: TEXT_PRIMARY,
     fontSize: 14,
   },
 });

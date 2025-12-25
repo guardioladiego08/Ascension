@@ -18,6 +18,12 @@ import { Colors } from '@/constants/Colors';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useUnits } from '@/contexts/UnitsContext';
 
+const CARD = Colors.dark.card;
+const BORDER = Colors.dark.border;
+const PRIMARY = Colors.dark.highlight1;
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
+
 
 type Props = {
   exercise: ExerciseDraft;
@@ -121,7 +127,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
             renderRightActions={() => (
               <View style={styles.deleteAction}>
                 <TouchableOpacity onPress={() => deleteSet(s.tempId)}>
-                  <Ionicons name="trash" size={20} color="#fff" />
+                  <Ionicons name="trash" size={20} color='#d9534f' />
                 </TouchableOpacity>
               </View>
             )}
@@ -200,7 +206,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
                     numberOfLines={6}
                     style={styles.textArea}
                     placeholder="Write notes here..."
-                    placeholderTextColor="#6b7390"
+                    placeholderTextColor={TEXT_MUTED}
                     value={notesText}
                     onChangeText={setNotesText}
                   />
@@ -246,13 +252,11 @@ export default ExerciseCard;
 // ---------------------------------------------------------------------
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#202836ff',
+    backgroundColor: CARD,
     borderRadius: 16,
     padding: 12,
     marginHorizontal: 12,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#2a3344',
   },
 
   headerRow: {
@@ -267,7 +271,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: Colors.dark.background,
+    borderWidth: 1,
+    borderColor: BORDER
   },
 
   tableHeader: {
@@ -279,7 +284,6 @@ const styles = StyleSheet.create({
   th: { color: Colors.dark.text, fontSize: 12, letterSpacing: 1 },
 
   deleteAction: {
-    backgroundColor: '#d9534f',
     justifyContent: 'center',
     alignItems: 'center',
     width: 70,
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
   },
 
   addSet: {
-    height: 40,
+    height: 35,
     borderRadius: 10,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -303,17 +307,16 @@ const styles = StyleSheet.create({
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalCard: {
     width: '80%',
-    backgroundColor: '#151b30',
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#2a3557',
+
   },
   modalTitle: {
     color: '#e7ecff',
@@ -334,18 +337,16 @@ const styles = StyleSheet.create({
   // NOTES MODAL STYLES
 notesCard: {
   width: '85%',
-  backgroundColor: Colors.dark.card,
+  backgroundColor: Colors.dark.popUpCard,
   borderRadius: 16,
   padding: 18,
-  borderWidth: 1,
-  borderColor: '#2a3557',
+
 },
 
 textAreaWrap: {
-  backgroundColor: Colors.dark.background,
+  backgroundColor: '#b0b0b050',
   borderRadius: 12,
-  borderWidth: 1,
-  borderColor: '#2a3344',
+
   marginTop: 12,
   padding: 10,
 },

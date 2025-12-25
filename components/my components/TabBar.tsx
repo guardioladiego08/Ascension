@@ -75,6 +75,7 @@ export default CustomTabBar;
 
 const styles = StyleSheet.create({
   wrapper: {
+    marginBottom: -30,
     backgroundColor: Colors.dark.background,
     zIndex: 10,
   },

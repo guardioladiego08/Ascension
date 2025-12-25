@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { v4 as uuidv4 } from 'uuid';
 import { GlobalStyles } from '@/constants/GlobalStyles';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -23,6 +24,10 @@ import CancelConfirmModal from './components/CancelConfirmModal';
 import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
+import { updateWeeklyAndLifetimeFromStrengthWorkout } from './components/strengthStats';
+
+const BG = Colors.dark.background;
+const PRIMARY = Colors.dark.highlight1;
 
 export type UnitMass = 'kg' | 'lb';
 export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
@@ -239,16 +244,26 @@ export default function StrengthTrain() {
       }
 
       // 3) Update workout with total volume + end time
+      const endedAt = new Date();
       const totalVol = +totalVolumeKg.toFixed(2);
+
       const { error: wErr } = await supabase
         .schema('strength')
         .from('strength_workouts')
-        .update({ ended_at: new Date().toISOString(), total_vol: totalVol })
+        .update({ ended_at: endedAt.toISOString(), total_vol: totalVol })
         .eq('id', workoutId);
       if (wErr) throw wErr;
 
-      console.log('✅ workout saved', { workoutId });
+      // 4) Update weekly + lifetime stats (atomic via one RPC)
+      await updateWeeklyAndLifetimeFromStrengthWorkout({
+        endedAt,
+        durationSeconds: seconds,
+        totalWeightLiftedKg: totalVol,
+      });
+
+      console.log('✅ workout saved + stats updated', { workoutId });
       router.replace(`/(tabs)/add/Strength/${workoutId}`);
+
     } catch (err: any) {
       console.error(err);
       Alert.alert('Save failed', err?.message ?? 'Unknown error');
@@ -266,94 +281,101 @@ export default function StrengthTrain() {
   }
 
   return (
-    <View style={[GlobalStyles.container, { flex: 1 }]}>
-      <LogoHeader showBackButton></LogoHeader>
-      <SessionHeader
-        key={workoutId}               // keep if you're using unique workout per session
-        title="Strength Training Session"
-        paused={paused}
-        timerResetKey={timerResetKey}   // 👈 NEW
-        onPauseToggle={() => setPaused(p => !p)}
-        onCancel={handleCancel}
-      />
-      <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>EXERCISES</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
-            <Ionicons name="add" size={18} color="#fff" />
-          </TouchableOpacity>
-        </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        
-
-        {exercises.map(ex => (
-          <ExerciseCard
-            key={ex.instanceId}
-            exercise={ex}
-            onDelete={() => removeExercise(ex.instanceId)}
-            onChange={updated => updateExercise(ex.instanceId, () => updated)}
-          />
-        ))}
-
-        {exercises.length === 0 && (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>Tap + to add your first exercise</Text>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    > 
+      <View style={[GlobalStyles.container, { flex: 1 }]}>
+        <LogoHeader showBackButton></LogoHeader>
+        <SessionHeader
+          key={workoutId}               // keep if you're using unique workout per session
+          title="Strength Training Session"
+          paused={paused}
+          timerResetKey={timerResetKey}   // 👈 NEW
+          onPauseToggle={() => setPaused(p => !p)}
+          onCancel={handleCancel}
+        />
+        <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>EXERCISES</Text>
+            <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
+              <Ionicons name="add" size={18} color={PRIMARY}/>
+            </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
+        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+          
 
-      <TouchableOpacity style={styles.finishBtn} onPress={() => setFinishModalOpen(true)}>
-        <Text style={styles.finishText}>Finish Workout</Text>
-      </TouchableOpacity>
+          {exercises.map(ex => (
+            <ExerciseCard
+              key={ex.instanceId}
+              exercise={ex}
+              onDelete={() => removeExercise(ex.instanceId)}
+              onChange={updated => updateExercise(ex.instanceId, () => updated)}
+            />
+          ))}
 
-      <ExercisePickerModal
-        visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onPick={ex => {
-          addExercise(ex);
-          setPickerOpen(false);
-        }}
-      />
-      <CancelConfirmModal
-        visible={cancelModalOpen}
-        onKeep={() => {
-          setPaused(false);
-          setCancelModalOpen(false);
-        }}
-        onDiscard={async () => {
-          // 1) delete workout row (keep this exactly as you had it)
-          if (workoutId) {
-            await supabase.schema('strength').from('strength_workouts').delete().eq('id', workoutId);
-          }
+          {exercises.length === 0 && (
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Tap + to add your first exercise</Text>
+            </View>
+          )}
+        </ScrollView>
 
-          // 2) clear local workout state so nothing persists
-          setExercises([]);          // 👈 clear all exercises from this session
-          setSeconds(0);             // optional: reset StrengthTrain’s seconds state
-          setPaused(false);          // optional: make sure timer is unpaused
-          setTimerResetKey(k => k + 1);  // still reset SessionHeader timer
+        <TouchableOpacity style={styles.finishBtn} onPress={() => setFinishModalOpen(true)}>
+          <Text style={styles.finishText}>Finish Workout</Text>
+        </TouchableOpacity>
 
-          // 3) close modal + navigate away
-          setCancelModalOpen(false);
-          router.back();
-        }}
-      />
-      <ExerciseRequiredModal
-        visible={exerciseRequiredOpen}
-        onClose={() => setExerciseRequiredOpen(false)}
-      />
-      <FinishConfirmModal
-        visible={finishModalOpen}
-        onCancel={() => setFinishModalOpen(false)}
-        onConfirm={async () => {
-          setFinishModalOpen(false);
-          await handleFinish();  // triggers your actual save logic
-        }}
-      />
-    </View>
+        <ExercisePickerModal
+          visible={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onPick={ex => {
+            addExercise(ex);
+            setPickerOpen(false);
+          }}
+        />
+        <CancelConfirmModal
+          visible={cancelModalOpen}
+          onKeep={() => {
+            setPaused(false);
+            setCancelModalOpen(false);
+          }}
+          onDiscard={async () => {
+            // 1) delete workout row (keep this exactly as you had it)
+            if (workoutId) {
+              await supabase.schema('strength').from('strength_workouts').delete().eq('id', workoutId);
+            }
+
+            // 2) clear local workout state so nothing persists
+            setExercises([]);          // 👈 clear all exercises from this session
+            setSeconds(0);             // optional: reset StrengthTrain’s seconds state
+            setPaused(false);          // optional: make sure timer is unpaused
+            setTimerResetKey(k => k + 1);  // still reset SessionHeader timer
+
+            // 3) close modal + navigate away
+            setCancelModalOpen(false);
+            router.back();
+          }}
+        />
+        <ExerciseRequiredModal
+          visible={exerciseRequiredOpen}
+          onClose={() => setExerciseRequiredOpen(false)}
+        />
+        <FinishConfirmModal
+          visible={finishModalOpen}
+          onCancel={() => setFinishModalOpen(false)}
+          onConfirm={async () => {
+            setFinishModalOpen(false);
+            await handleFinish();  // triggers your actual save logic
+          }}
+        />
+      </View>
+    </LinearGradient>   
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f1525' },
+  container: { flex: 1},
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -366,7 +388,8 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: Colors.dark.highlight1,
+    borderWidth: 2,
+    borderColor: Colors.dark.highlight1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -378,8 +401,9 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 24,
     height: 52,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.highlight1,
+    borderRadius: 10,
+    borderColor: PRIMARY,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -387,5 +411,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 8 },
   },
-  finishText: { color: Colors.dark.text, fontWeight: '700', fontSize: 16 },
+  finishText: { color: PRIMARY, fontWeight: '700', fontSize: 18 },
 });

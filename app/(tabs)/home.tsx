@@ -3,7 +3,6 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   StyleSheet,
@@ -13,11 +12,19 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+
+import WeeklyKpiRow from './home/WeeklyKpiRow';
+
+const BG = Colors.dark.background;
+const PRIMARY = Colors.dark.highlight1;
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
 
 type DiaryDay = {
   id: string;
@@ -40,9 +47,6 @@ type DiaryDay = {
   updated_at: string;
   goal_hit: boolean;
 };
-
-const CARD = '#1A2230';
-const PRIMARY = '#6EA8FF';
 
 const formatNumber = (value: number) =>
   Number.isFinite(value) ? Math.round(value).toLocaleString() : '0';
@@ -146,201 +150,193 @@ export default function BlankHome() {
   };
 
   return (
-    <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader />
-      <ScrollView
-        contentContainerStyle={GlobalStyles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={GlobalStyles.safeArea}>
+        <LogoHeader />
         <Text style={GlobalStyles.header}>HOME</Text>
-
-        {/* KPI Row */}
-        <Text style={styles.sectionTitle}>SO FAR THIS WEEK</Text>
-        <View style={styles.kpiRow}>
-          <View style={GlobalStyles.kpiCard}>
-            <Text style={GlobalStyles.kpiNumber}>12</Text>
-            <Text style={GlobalStyles.kpiLabel}>Workouts</Text>
-          </View>
-          <View style={GlobalStyles.kpiCard}>
-            <Text style={GlobalStyles.kpiNumber}>8.5</Text>
-            <Text style={GlobalStyles.kpiLabel}>Hours</Text>
-          </View>
-          <View style={GlobalStyles.kpiCard}>
-            <Text style={GlobalStyles.kpiNumber}>2.4k</Text>
-            <Text style={GlobalStyles.kpiLabel}>Calories</Text>
-          </View>
-        </View>
-
-        {/* Start Workout */}
-        <Text style={styles.sectionTitle}>START WORKOUT</Text>
-        <View style={styles.quickRow}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={GlobalStyles.quickCard}
-            onPress={() => router.replace('/add/Strength/StrengthTrain')}
-          >
-            <MaterialCommunityIcons
-              name="arm-flex"
-              size={28}
-              color={Colors.dark.highlight1}
-            />
-            <Text style={styles.quickText}>Weights</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={GlobalStyles.quickCard}
-            onPress={() => router.push('/add/Cardio/OutdoorSession')}
-          >
-            <Ionicons
-              name="walk"
-              size={28}
-              color={Colors.dark.highlight2}
-            />
-            <Text style={styles.quickText}>Run</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={GlobalStyles.quickCard}
-            onPress={() => router.push('/add/Cardio/OutdoorSession.tsx')}
-          >
-            <Ionicons
-              name="bicycle"
-              size={28}
-              color={Colors.dark.highlight3}
-            />
-            <Text style={styles.quickText}>Bike</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Nutrition Today */}
-        <Text style={styles.sectionTitle}>NUTRITION TODAY</Text>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={styles.card}
-          onPress={handleOpenDailySummary}
+        <ScrollView
+          contentContainerStyle={GlobalStyles.container}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <Ionicons
-                name="checkmark-circle"
-                size={18}
-                color="#7BE495"
+          {/* KPI Row */}s
+          <Text style={styles.sectionTitle}>SO FAR THIS WEEK</Text>
+         <WeeklyKpiRow />
+
+          {/* Start Workout */}
+          <Text style={styles.sectionTitle}>START WORKOUT</Text>
+          <View style={styles.quickRow}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={GlobalStyles.quickCard}
+              onPress={() => router.replace('/add/Strength/StrengthTrain')}
+            >
+              <MaterialCommunityIcons
+                name="arm-flex"
+                size={28}
+                color={Colors.dark.highlight1}
               />
-              <Text style={styles.cardHeaderTitle}>Daily Summary</Text>
-            </View>
-            <Text style={styles.link}>View Details</Text>
+              <Text style={styles.quickText}>Weights</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={GlobalStyles.quickCard}
+              onPress={() => router.push('/add/Cardio/OutdoorSession')}
+            >
+              <Ionicons
+                name="walk"
+                size={28}
+                color={Colors.dark.highlight2}
+              />
+              <Text style={styles.quickText}>Run</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={GlobalStyles.quickCard}
+              onPress={() => router.push('/add/Cardio/OutdoorSession.tsx')}
+            >
+              <Ionicons
+                name="bicycle"
+                size={28}
+                color={Colors.dark.highlight3}
+              />
+              <Text style={styles.quickText}>Bike</Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.calRow}>
-            <Text style={styles.calLeft}>
-              {loadingDiary ? '...' : formatNumber(caloriesEaten)}
-            </Text>
-            <Text style={styles.calRight}>
-              {loadingDiary
-                ? ''
-                : `/ ${formatNumber(caloriesTarget)} kcal`}
-            </Text>
-          </View>
-
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${caloriePct}%` },
-              ]}
-            />
-          </View>
-
-          <View style={styles.macroRow}>
-            <View style={styles.macroItem}>
-              <Text style={styles.macroNumber}>
-                {loadingDiary ? '—' : `${Math.round(protein)}g`}
-              </Text>
-              <Text style={styles.macroLabel}>PROTEIN</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <Text style={styles.macroNumber}>
-                {loadingDiary ? '—' : `${Math.round(carbs)}g`}
-              </Text>
-              <Text style={styles.macroLabel}>CARBS</Text>
-            </View>
-            <View style={styles.macroItem}>
-              <Text style={styles.macroNumber}>
-                {loadingDiary ? '—' : `${Math.round(fats)}g`}
-              </Text>
-              <Text style={styles.macroLabel}>FAT</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.row2}>
+          {/* Nutrition Today */}
+          <Text style={styles.sectionTitle}>NUTRITION TODAY</Text>
           <TouchableOpacity
             activeOpacity={0.9}
-            style={[styles.ctaButton, { marginRight: 14 }]}
-            onPress={() => router.push('/add/Nutrition/logMeal')}
+            style={styles.card}
+            onPress={handleOpenDailySummary}
           >
-            <Ionicons name="add-circle" size={18} color="#0E151F" />
-            <Text style={styles.ctaText}>Log Meal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.9} style={styles.ctaButton}>
-            <Ionicons name="camera" size={18} color="#0E151F" />
-            <Text style={styles.ctaText}>Scan Food</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color="#7BE495"
+                />
+                <Text style={styles.cardHeaderTitle}>Daily Summary</Text>
+              </View>
+              <Text style={styles.link}>View Details</Text>
+            </View>
 
-        {/* Social */}
-        <Text style={styles.sectionTitle}>SOCIAL</Text>
-        <View style={styles.listCard}>
-          <View style={styles.listIconWrap}>
-            <Ionicons name="people" size={20} color="#F4B3FF" />
+            <View style={styles.calRow}>
+              <Text style={styles.calLeft}>
+                {loadingDiary ? '...' : formatNumber(caloriesEaten)}
+              </Text>
+              <Text style={styles.calRight}>
+                {loadingDiary
+                  ? ''
+                  : `/ ${formatNumber(caloriesTarget)} kcal`}
+              </Text>
+            </View>
+
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${caloriePct}%` },
+                ]}
+              />
+            </View>
+
+            <View style={styles.macroRow}>
+              <View style={styles.macroItem}>
+                <Text style={styles.macroNumber}>
+                  {loadingDiary ? '—' : `${Math.round(protein)}g`}
+                </Text>
+                <Text style={styles.macroLabel}>PROTEIN</Text>
+              </View>
+              <View style={styles.macroItem}>
+                <Text style={styles.macroNumber}>
+                  {loadingDiary ? '—' : `${Math.round(carbs)}g`}
+                </Text>
+                <Text style={styles.macroLabel}>CARBS</Text>
+              </View>
+              <View style={styles.macroItem}>
+                <Text style={styles.macroNumber}>
+                  {loadingDiary ? '—' : `${Math.round(fats)}g`}
+                </Text>
+                <Text style={styles.macroLabel}>FAT</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.row2}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.ctaButton, { marginRight: 14 }]}
+              onPress={() => router.push('/add/Nutrition/logMeal')}
+            >
+              <Ionicons name="add-circle" size={18} color="#0E151F" />
+              <Text style={styles.ctaText}>Log Meal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.9} style={styles.ctaButton}>
+              <Ionicons name="camera" size={18} color="#0E151F" />
+              <Text style={styles.ctaText}>Scan Food</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.listTextWrap}>
-            <Text style={styles.listTitle}>Workout Feed</Text>
-            <Text style={styles.listSubtitle}>
-              See what friends are doing
-            </Text>
+
+          {/* Social */}
+          <Text style={styles.sectionTitle}>SOCIAL</Text>
+          <View style={styles.listCard}>
+            <View style={styles.listIconWrap}>
+              <Ionicons name="people" size={20} color="#F4B3FF" />
+            </View>
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>Workout Feed</Text>
+              <Text style={styles.listSubtitle}>
+                See what friends are doing
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#AAB2C5"
+            />
           </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#AAB2C5"
-          />
-        </View>
-        <View style={styles.listCard}>
-          <View style={styles.listIconWrap}>
-            <Ionicons name="trophy" size={20} color="#FFD38C" />
+          <View style={styles.listCard}>
+            <View style={styles.listIconWrap}>
+              <Ionicons name="trophy" size={20} color="#FFD38C" />
+            </View>
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>Leaderboards</Text>
+              <Text style={styles.listSubtitle}>
+                Compete with the community
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#AAB2C5"
+            />
           </View>
-          <View style={styles.listTextWrap}>
-            <Text style={styles.listTitle}>Leaderboards</Text>
-            <Text style={styles.listSubtitle}>
-              Compete with the community
-            </Text>
+          <View style={styles.listCard}>
+            <View style={styles.listIconWrap}>
+              <Ionicons name="medal" size={20} color="#8CE0FF" />
+            </View>
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>Challenges</Text>
+              <Text style={styles.listSubtitle}>
+                Join active challenges
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color="#AAB2C5"
+            />
           </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#AAB2C5"
-          />
-        </View>
-        <View style={styles.listCard}>
-          <View style={styles.listIconWrap}>
-            <Ionicons name="medal" size={20} color="#8CE0FF" />
-          </View>
-          <View style={styles.listTextWrap}>
-            <Text style={styles.listTitle}>Challenges</Text>
-            <Text style={styles.listSubtitle}>
-              Join active challenges
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color="#AAB2C5"
-          />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -371,68 +367,81 @@ function TabItem({
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 18, paddingTop: 8 },
-  greeting: {
-    color: '#AAB2C5',
-    marginTop: 6,
-    marginBottom: 12,
-    fontSize: 13,
+
+  // Tighten vertical rhythm + match onboarding label treatment
+  sectionTitle: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    marginTop: 16,
+    marginBottom: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
+
   kpiRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: '#97A3B6',
-    fontSize: 12,
-    marginTop: 10,
-    marginBottom: 8,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    marginBottom: 6,
   },
 
   quickRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  quickText: { color: '#D6DEEE', fontWeight: '600', marginTop: 8 },
-
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 10,
+  quickText: {
+    color: TEXT_PRIMARY,
+    fontWeight: '700',
+    marginTop: 8,
+    fontSize: 13,
   },
+
+  // Onboarding-style "panel" card (border + subtle depth)
+  card: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 0,
+    borderWidth: 1,
+  },
+
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   cardHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
   cardHeaderTitle: {
-    color: '#D6DEEE',
-    fontWeight: '700',
-    marginLeft: 6,
+    color: TEXT_PRIMARY,
+    fontWeight: '800',
+    marginLeft: 8,
+    letterSpacing: 0.2,
   },
-  link: { color: PRIMARY, fontSize: 12, fontWeight: '600' },
+  link: { color: PRIMARY, fontSize: 12, fontWeight: '700' },
 
   calRow: { flexDirection: 'row', alignItems: 'baseline' },
   calLeft: {
-    color: '#EAF2FF',
-    fontSize: 22,
-    fontWeight: '800',
+    color: TEXT_PRIMARY,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 0.2,
   },
-  calRight: { color: '#97A3B6', marginLeft: 6 },
+  calRight: {
+    color: TEXT_MUTED,
+    marginLeft: 8,
+    fontSize: 12,
+    fontWeight: '700',
+  },
 
   progressTrack: {
-    height: 6,
-    backgroundColor: '#2A3344',
+    height: 7,
+    backgroundColor: '#222A3A',
     borderRadius: 999,
-    marginTop: 10,
+    marginTop: 12,
+    overflow: 'hidden',
   },
   progressFill: {
-    height: 6,
+    height: 7,
     backgroundColor: PRIMARY,
     borderRadius: 999,
   },
@@ -440,50 +449,65 @@ const styles = StyleSheet.create({
   macroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 14,
   },
   macroItem: { alignItems: 'center', flex: 1 },
-  macroNumber: { color: '#EAF2FF', fontWeight: '800' },
-  macroLabel: { color: '#97A3B6', fontSize: 10, marginTop: 2 },
+  macroNumber: { color: TEXT_PRIMARY, fontWeight: '900', fontSize: 13 },
+  macroLabel: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    marginTop: 3,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
 
   row2: { flexDirection: 'row', marginTop: 12 },
+
+  // Match onboarding CTAs (use primary accent instead of green)
   ctaButton: {
     flex: 1,
-    backgroundColor: '#7BE495',
-    borderRadius: 12,
+    backgroundColor: PRIMARY,
+    borderRadius: 14,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  ctaText: { color: '#0E151F', fontWeight: '800' },
+  ctaText: { color: '#0E151F', fontWeight: '900', letterSpacing: 0.2 },
 
+  // Social list cards = same panel treatment as onboarding
   listCard: {
-    backgroundColor: CARD,
-    borderRadius: 14,
+    backgroundColor: Colors.dark.card,
+    borderRadius: 16,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
+    borderWidth: 1,
   },
   listIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: '#111826',
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#0a0a0aff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   listTextWrap: { flex: 1 },
-  listTitle: { color: '#EAF2FF', fontWeight: '700' },
+  listTitle: { color: TEXT_PRIMARY, fontWeight: '900', letterSpacing: 0.2 },
   listSubtitle: {
-    color: '#97A3B6',
+    color: TEXT_MUTED,
     fontSize: 12,
     marginTop: 2,
+    fontWeight: '600',
   },
 
   tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { color: '#AAB2C5', fontSize: 10, marginTop: 4 },
+  tabLabel: { color: TEXT_MUTED, fontSize: 10, marginTop: 4 },
 });

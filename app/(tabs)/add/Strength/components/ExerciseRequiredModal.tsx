@@ -1,3 +1,4 @@
+import { Colors } from '@/constants/Colors';
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
   },
   box: {
     width: '80%',
-    backgroundColor: '#1b2338',
+    backgroundColor: Colors.dark.popUpCard,
     padding: 24,
     borderRadius: 20,
   },
@@ -45,12 +46,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
-    color: '#aeb6cf',
+    color: '#fff',
     fontSize: 14,
     marginBottom: 24,
   },
   btn: {
-    backgroundColor: '#2c3550',
+    borderColor: '#fff',
+    borderWidth: 1,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',

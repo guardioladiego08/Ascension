@@ -104,7 +104,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
 
       const userId = data.user.id;
 
-      const { error } = await supabase.schema('strength').from("exercises").insert({
+      const { error } = await supabase.schema('public').from("exercises").insert({
         exercise_name: name.trim(),
         body_parts: bodyParts,                 // string[] -> body_part[]
         workout_category: category || null,    // enum or null
@@ -154,7 +154,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
             <TextInput
               style={styles.input}
               placeholder="Enter name"
-              placeholderTextColor="#888"
+              placeholderTextColor={Colors.dark.textMuted}
               value={name}
               onChangeText={setName}
             />
@@ -201,7 +201,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
             <TextInput
               style={[styles.input, { height: 80 }]}
               placeholder="Optional description..."
-              placeholderTextColor="#777"
+              placeholderTextColor={Colors.dark.textMuted}
               multiline
               value={info}
               onChangeText={setInfo}
@@ -279,12 +279,12 @@ export default CustomExerciseModal;
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     padding: 20,
   },
   modalBox: {
-    backgroundColor: Colors.dark.card,
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 12,
     padding: 16,
   },
@@ -297,12 +297,12 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: "#ccc",
+    color: Colors.dark.text,
     marginTop: 10,
     fontSize: 13,
   },
   input: {
-    backgroundColor: "#1b2337",
+    backgroundColor: Colors.dark.textInput,
     padding: 10,
     borderRadius: 8,
     color: "#fff",
@@ -319,11 +319,11 @@ const styles = StyleSheet.create({
   bpBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
-    backgroundColor: "#2a3350",
+    backgroundColor: Colors.dark.offset1,
     borderRadius: 8,
   },
   bpBtnSelected: { backgroundColor: "#ff950a" },
-  bpText: { color: "#ccc", fontSize: 12 },
+  bpText: { color: Colors.dark.text, fontSize: 12 },
 
   /* Category field */
   dropdownField: {
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 12,
     borderRadius: 8,
-    backgroundColor: "#1b2337",
+    backgroundColor: Colors.dark.offset1,
     marginTop: 6,
   },
   dropdownFieldText: {
@@ -345,27 +345,27 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 14,
   },
-  cancelBtn: { padding: 10 },
-  cancelText: { color: "#ccc" },
+  cancelBtn: { padding: 10, },
+  cancelText: { color: "#fff" },
   submitBtn: {
-    backgroundColor: "#ff950a",
+
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 8,
   },
-  submitText: { color: "#fff", fontWeight: "700" },
+  submitText: { color: Colors.dark.highlight1, fontWeight: "700" },
 
   /* Category Dropdown Modal */
   dropdownBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
   dropdownBox: {
     width: "80%",
-    backgroundColor: Colors.dark.card,
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 12,
     padding: 16,
     maxHeight: "70%",
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
   dropdownItem: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#1c253d",
+    backgroundColor: Colors.dark.card2,
     borderRadius: 8,
     marginVertical: 4,
   },
@@ -394,9 +394,11 @@ const styles = StyleSheet.create({
     marginTop: 14,
     alignItems: "center",
     padding: 10,
+    borderColor: '#fff',
+    borderWidth: 1
   },
   dropdownCancelText: {
-    color: "#ccc",
+    color: Colors.dark.text,
     fontSize: 14,
   },
 });

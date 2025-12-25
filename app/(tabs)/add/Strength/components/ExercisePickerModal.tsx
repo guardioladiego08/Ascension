@@ -16,6 +16,10 @@ import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import CustomExerciseModal from './CustomExerciseModal';
 
+const PRIMARY = Colors.dark.highlight1;
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
+
 /* -------------------------------------------------------
    TYPES
 ------------------------------------------------------- */
@@ -267,7 +271,7 @@ const ExercisePickerModal: React.FC<Props> = ({
             <TextInput
               style={styles.searchInput}
               placeholder="Search exercises..."
-              placeholderTextColor="#888"
+              placeholderTextColor="#ffffffff"
               value={query}
               onChangeText={setQuery}
             />
@@ -452,30 +456,31 @@ const styles = StyleSheet.create({
 
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 8,
     alignItems: 'center',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a3350',
+    borderColor: '#fff',
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 10,
     gap: 4,
   },
   addBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  title: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  title: { color: '#fff', fontSize: 16, fontWeight: '700', marginLeft:22},
 
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1b2337',
+    backgroundColor: '#696969ff',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderColor: '#2a3350',
+    borderColor: '#9c9c9cff',
     borderWidth: 1,
     gap: 8,
     marginBottom: 8,
@@ -490,12 +495,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    backgroundColor: '#2a3350',
+    borderColor: '#fff',
+    borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 6,
+    borderRadius: 10,
     gap: 6,
-    marginBottom: 8,
+    marginLeft: -32
   },
   filterBtnText: {
     color: '#fff',
@@ -507,7 +513,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderColor: '#222b46',
+    borderColor: '#ebebeb54',
   },
   rowMain: {
     flex: 1,

@@ -113,7 +113,7 @@ export default function Login() {
         // Onboarding is done; now require terms acceptance before app access
         router.replace({
           pathname: '/SignInLogin/onboarding/TermsAndPrivacy',
-          params: { nextPath: '/(tabs)/home' },
+          params: { nextPath: './(tabs)/home' },
         });
         return;
       }

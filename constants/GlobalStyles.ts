@@ -6,12 +6,10 @@ import { Fonts } from './Fonts';
 export const GlobalStyles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
     paddingHorizontal: 15
   },
   container: {
     padding: 10,
-    backgroundColor: Colors.dark.background,
   },
   header: {
     color: Colors.dark.text, 
