@@ -1,4 +1,4 @@
-// app/(tabs)/home/BlankHome.tsx
+// app/(tabs)/home/home.tsx
 // Home screen with live "Nutrition Today" data from nutrition.diary_days.
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -18,13 +18,19 @@ import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 
 import WeeklyKpiRow from './home/WeeklyKpiRow';
+import RunWalkTypeModal, {
+  RunWalkExerciseType,
+} from './home/RunWalkTypeModal';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
+
+
 
 type DiaryDay = {
   id: string;
@@ -56,6 +62,21 @@ export default function BlankHome() {
 
   const [todaySummary, setTodaySummary] = useState<DiaryDay | null>(null);
   const [loadingDiary, setLoadingDiary] = useState(false);
+
+  const [showRunWalkModal, setShowRunWalkModal] = useState(false);
+
+  const start = async (mode: 'indoor_run' | 'indoor_walk' | 'outdoor_run' | 'outdoor_walk') => {
+    const active = await getActiveRunWalkLock();
+    if (active) {
+      Alert.alert(
+        'Session in progress',
+        `You already have a ${active.mode.replace('_', ' ')} session in progress. Finish or cancel it first.`
+      );
+      return;
+    }
+
+    router.push({ pathname: '/add/Cardio/IndoorSession', params: { mode } });
+  };
 
   // YYYY-MM-DD for "today"
   const todayISO = useMemo(() => {
@@ -185,7 +206,7 @@ export default function BlankHome() {
             <TouchableOpacity
               activeOpacity={0.9}
               style={GlobalStyles.quickCard}
-              onPress={() => router.push('/add/Cardio/OutdoorSession')}
+              onPress={() => setShowRunWalkModal(true)}
             >
               <Ionicons
                 name="walk"
@@ -336,6 +357,28 @@ export default function BlankHome() {
           </View>
         </ScrollView>
       </View>
+      <RunWalkTypeModal
+        visible={showRunWalkModal}
+        onClose={() => setShowRunWalkModal(false)}
+        onSelect={(type: RunWalkExerciseType) => {
+          setShowRunWalkModal(false);
+
+          if (type === 'indoor_run' || type === 'indoor_walk') {
+            router.push({
+              pathname: '/add/Cardio/IndoorSession',
+              params: { mode: type },
+            });
+            return;
+          }
+
+          // Outdoor types route to your existing outdoor session screen for now
+          router.push({
+            pathname: '/add/Cardio/OutdoorSession',
+            params: { mode: type },
+          });
+        }}
+      />
+
     </LinearGradient>
   );
 }

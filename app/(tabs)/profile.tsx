@@ -12,18 +12,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import GoalCalendar from './profile/components/GoalCalendar';
 import ProfileHeaderSection from './profile/components/ProfileHeaderSection';
 import { supabase } from '@/lib/supabase';
+import LifetimeStatsCard from './profile/components/LifetimeStatsCard';
 
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
+const BG = Colors.dark.background;
+const PRIMARY = Colors.dark.highlight1;
+const CARD = Colors.dark.card;
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
 const ACCENT = Colors.primary ?? '#6366F1';
 
 type ProfileRow = {
@@ -175,95 +178,88 @@ export default function ProfileScreen() {
   // --------- MAIN RENDER ---------
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <LogoHeader />
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={styles.safeArea}>
+        <LogoHeader />
 
-      {/* Instagram-style top bar */}
-      <View style={styles.topBar}>
-        <Text style={styles.topBarUsername}>@{username}</Text>
-        <View style={styles.topBarIcons}>
-          <TouchableOpacity onPress={goToSettings} style={styles.iconButton}>
-            <Ionicons name="settings-outline" size={22} color={TEXT_PRIMARY} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingWrapper}>
-          <ActivityIndicator size="small" color={ACCENT} />
-          <Text style={styles.loadingText}>Loading profile…</Text>
-        </View>
-      ) : errorText ? (
-        <View style={styles.loadingWrapper}>
-          <Text style={styles.errorText}>{errorText}</Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header: avatar + stats + bio from Supabase */}
-          {profile && (
-            <ProfileHeaderSection
-              fullName={fullName}
-              username={profile.username}
-              bio={profile.bio}
-              profileImageUrl={profile.profile_image_url}
-              stats={stats}
-              isOwnProfile={true}
-              onEditProfile={() => router.push('/profile/edit')}
-            />
-          )}
-
-          {/* Lifetime stat badges */}
-          <View style={styles.lifetimeCard}>
-            <Text style={styles.sectionTitle}>Lifetime Stats</Text>
-            <View style={styles.lifetimeRow}>
-              <LifetimeStat
-                label="Workouts"
-                value="0"
-                icon="barbell-outline"
-              />
-              <LifetimeStat label="Miles" value="0" icon="trail-sign-outline" />
-              <LifetimeStat
-                label="Lbs Lifted"
-                value="0"
-                icon="fitness-outline"
-              />
-            </View>
+        {/* Instagram-style top bar */}
+        <View style={styles.topBar}>
+          <Text style={styles.topBarUsername}>@{username}</Text>
+          <View style={styles.topBarIcons}>
+            <TouchableOpacity onPress={goToSettings} style={styles.iconButton}>
+              <Ionicons name="settings-outline" size={22} color={TEXT_PRIMARY} />
+            </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Detail tabs */}
-          {renderDetailTabs()}
+        {loading ? (
+          <View style={styles.loadingWrapper}>
+            <ActivityIndicator size="small" color={ACCENT} />
+            <Text style={styles.loadingText}>Loading profile…</Text>
+          </View>
+        ) : errorText ? (
+          <View style={styles.loadingWrapper}>
+            <Text style={styles.errorText}>{errorText}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header: avatar + stats + bio from Supabase */}
+            {profile && (
+              <ProfileHeaderSection
+                fullName={fullName}
+                username={profile.username}
+                bio={profile.bio}
+                profileImageUrl={profile.profile_image_url}
+                stats={stats}
+                isOwnProfile={true}
+                onEditProfile={() => router.push('/profile/edit')}
+              />
+            )}
 
-          {/* Tab content */}
-          {detailTab === 'grid' && renderGridPosts()}
-          {detailTab === 'stats' && renderActivityStats()}
-          {detailTab === 'calendar' && <GoalCalendar />}
-        </ScrollView>
-      )}
-    </SafeAreaView>
-  );
-}
+            {/* Lifetime stat badges */}
+            <LifetimeStatsCard />
 
-// ---------- SMALL COMPONENTS ----------
+            {/* Detail tabs */}
+            {renderDetailTabs()}
 
-function LifetimeStat({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: any;
-}) {
-  return (
-    <View style={styles.lifetimeStat}>
-      <Ionicons name={icon} size={20} color={TEXT_MUTED} />
-      <Text style={styles.lifetimeValue}>{value}</Text>
-      <Text style={styles.lifetimeLabel}>{label}</Text>
-    </View>
+            {/* Tab content */}
+            {detailTab === 'grid' && renderGridPosts()}
+            {detailTab === 'stats' && renderActivityStats()}
+            {detailTab === 'calendar' && <GoalCalendar />}
+          </ScrollView>
+        )}
+      </View>
+      </LinearGradient>
+    );
+  }
+
+  // ---------- SMALL COMPONENTS ----------
+
+  function LifetimeStat({
+    label,
+    value,
+    icon,
+  }: {
+    label: string;
+    value: string;
+    icon: any;
+  }) {
+    return (
+      <View style={styles.lifetimeStat}>
+        <Ionicons name={icon} size={20} color={TEXT_MUTED} />
+        <Text style={styles.lifetimeValue}>{value}</Text>
+        <Text style={styles.lifetimeLabel}>{label}</Text>
+      </View>
+    
   );
 }
 
@@ -300,11 +296,9 @@ function TabButton({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: BG,
   },
   container: {
     flex: 1,
-    backgroundColor: BG,
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -319,7 +313,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 4,
-    backgroundColor: BG,
   },
   topBarUsername: {
     color: TEXT_PRIMARY,
