@@ -15,8 +15,8 @@ import { useRouter } from 'expo-router';
 
 const CARD_SOFT = Colors.dark.card;
 const PRIMARY_GREEN = '#15C779';
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
 
 export type TabKey = 'My Meals' | 'My Foods' | 'All';
 

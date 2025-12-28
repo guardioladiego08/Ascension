@@ -19,11 +19,13 @@ import LogoHeader from '@/components/my components/logoHeader';
 import MealSummaryCard from './components/MealSummaryCard';
 import IngredientsList from './components/IngredientsList';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
+const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
-const PRIMARY_GREEN = '#15C779';
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
+const PRIMARY = Colors.dark.highlight1
 const DANGER_RED = '#FF6B81';
 
 type Ingredient = {
@@ -303,172 +305,178 @@ export default function CreateMeal() {
   };
 
   return (
-    <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader showBackButton />
-      <View style={styles.main}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={GlobalStyles.header}>Create Meal</Text>
-        </View>
-
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Recipe name input */}
-          <TextInput
-            style={styles.nameInput}
-            placeholder="Name your recipe..."
-            placeholderTextColor={TEXT_MUTED}
-            value={recipeName}
-            onChangeText={setRecipeName}
-          />
-
-          {/* Recipe description */}
-          <TextInput
-            style={styles.descriptionInput}
-            placeholder="Add a short description (optional)"
-            placeholderTextColor={TEXT_MUTED}
-            value={recipeDescription}
-            onChangeText={setRecipeDescription}
-            multiline
-          />
-
-          {/* Meal summary with donut chart */}
-          <MealSummaryCard
-            totalKcal={totalKcal}
-            totalProtein={totalProtein}
-            totalCarbs={totalCarbs}
-            totalFat={totalFat}
-          />
-
-          {/* Ingredients */}
-          <Text style={[styles.sectionLabel, { marginTop: 18 }]}>INGREDIENTS</Text>
-
-          <View style={styles.ingredientsContainer}>
-            <IngredientsList
-              ingredients={ingredients}
-              onChangeQuantity={handleQuantityChange}
-            />
-          </View>
-        </ScrollView>
-
-        {/* Footer: Submit / Cancel + Add Ingredient */}
-        <View style={styles.footer}>
-          <View style={styles.footerButtonsRow}>
-            <TouchableOpacity
-              style={[styles.footerBtn, styles.cancelBtn]}
-              activeOpacity={0.9}
-              onPress={handleCancelPress}
-              disabled={saving}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.footerBtn, styles.submitBtn]}
-              activeOpacity={0.9}
-              onPress={handleSubmitPress}
-              disabled={saving}
-            >
-              <Text style={styles.submitBtnText}>
-                {saving ? 'Saving...' : 'Save Recipe'}
-              </Text>
-            </TouchableOpacity>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={GlobalStyles.safeArea}>
+        <LogoHeader showBackButton />
+        <View style={styles.main}>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <Text style={GlobalStyles.header}>Create Meal</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.addIngredientBtn}
-            activeOpacity={0.9}
-            onPress={() => router.push('./addIngredient')}
-            disabled={saving}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
           >
-            <Ionicons name="add" size={18} color="#05101F" />
-            <Text style={styles.addIngredientBtnText}>Add Ingredient</Text>
-          </TouchableOpacity>
+            {/* Recipe name input */}
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Name your recipe..."
+              placeholderTextColor={TEXT_MUTED}
+              value={recipeName}
+              onChangeText={setRecipeName}
+            />
+
+            {/* Recipe description */}
+            <TextInput
+              style={styles.descriptionInput}
+              placeholder="Add a short description (optional)"
+              placeholderTextColor={TEXT_MUTED}
+              value={recipeDescription}
+              onChangeText={setRecipeDescription}
+              multiline
+            />
+
+            {/* Meal summary with donut chart */}
+            <MealSummaryCard
+              totalKcal={totalKcal}
+              totalProtein={totalProtein}
+              totalCarbs={totalCarbs}
+              totalFat={totalFat}
+            />
+
+            {/* Ingredients */}
+            <Text style={[styles.sectionLabel, { marginTop: 18 }]}>INGREDIENTS</Text>
+
+            <View style={styles.ingredientsContainer}>
+              <IngredientsList
+                ingredients={ingredients}
+                onChangeQuantity={handleQuantityChange}
+              />
+            </View>
+          </ScrollView>
+
+          {/* Footer: Submit / Cancel + Add Ingredient */}
+          <View style={styles.footer}>
+            <View style={styles.footerButtonsRow}>
+              <TouchableOpacity
+                style={[styles.footerBtn, styles.cancelBtn]}
+                activeOpacity={0.9}
+                onPress={handleCancelPress}
+                disabled={saving}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.footerBtn, styles.submitBtn]}
+                activeOpacity={0.9}
+                onPress={handleSubmitPress}
+                disabled={saving}
+              >
+                <Text style={styles.submitBtnText}>
+                  {saving ? 'Saving...' : 'Save Recipe'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addIngredientBtn}
+              activeOpacity={0.9}
+              onPress={() => router.push('./addIngredient')}
+              disabled={saving}
+            >
+              <Ionicons name="add" size={18} color="#05101F" />
+              <Text style={styles.addIngredientBtnText}>Add Ingredient</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Submit confirm modal */}
+          <Modal
+            transparent
+            animationType="fade"
+            visible={showSubmitConfirm}
+            onRequestClose={() => setShowSubmitConfirm(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Create this recipe?</Text>
+                <Text style={styles.modalBody}>
+                  Choose whether to just save it, or save and add it to today&apos;s
+                  diary.
+                </Text>
+
+                <View style={styles.modalButtonsRowMulti}>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalCancelBtn]}
+                    onPress={() => setShowSubmitConfirm(false)}
+                  >
+                    <Text style={styles.modalCancelText}>Go Back</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalConfirmBtn]}
+                    onPress={handleSubmitRecipeOnly}
+                  >
+                    <Text style={styles.modalConfirmText}>Submit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalAltBtn]}
+                    onPress={handleCreateAndAdd}
+                  >
+                    <Text style={styles.modalAltText}>Create &amp; Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+
+          {/* Cancel confirm modal */}
+          <Modal
+            transparent
+            animationType="fade"
+            visible={showCancelConfirm}
+            onRequestClose={() => setShowCancelConfirm(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Discard this recipe?</Text>
+                <Text style={styles.modalBody}>
+                  Any changes you&apos;ve made will be lost.
+                </Text>
+
+                <View style={styles.modalButtonsRow}>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalCancelBtn]}
+                    onPress={() => setShowCancelConfirm(false)}
+                  >
+                    <Text style={styles.modalCancelText}>Keep Editing</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalDangerBtn]}
+                    onPress={confirmCancel}
+                  >
+                    <Text style={styles.modalDangerText}>Discard</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
-
-        {/* Submit confirm modal */}
-        <Modal
-          transparent
-          animationType="fade"
-          visible={showSubmitConfirm}
-          onRequestClose={() => setShowSubmitConfirm(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Create this recipe?</Text>
-              <Text style={styles.modalBody}>
-                Choose whether to just save it, or save and add it to today&apos;s
-                diary.
-              </Text>
-
-              <View style={styles.modalButtonsRowMulti}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalCancelBtn]}
-                  onPress={() => setShowSubmitConfirm(false)}
-                >
-                  <Text style={styles.modalCancelText}>Go Back</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalConfirmBtn]}
-                  onPress={handleSubmitRecipeOnly}
-                >
-                  <Text style={styles.modalConfirmText}>Submit</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalAltBtn]}
-                  onPress={handleCreateAndAdd}
-                >
-                  <Text style={styles.modalAltText}>Create &amp; Add</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Cancel confirm modal */}
-        <Modal
-          transparent
-          animationType="fade"
-          visible={showCancelConfirm}
-          onRequestClose={() => setShowCancelConfirm(false)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Discard this recipe?</Text>
-              <Text style={styles.modalBody}>
-                Any changes you&apos;ve made will be lost.
-              </Text>
-
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalCancelBtn]}
-                  onPress={() => setShowCancelConfirm(false)}
-                >
-                  <Text style={styles.modalCancelText}>Keep Editing</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalDangerBtn]}
-                  onPress={confirmCancel}
-                >
-                  <Text style={styles.modalDangerText}>Discard</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </View>
-    </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   main: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
     paddingHorizontal: 18,
     paddingTop: 8,
   },
@@ -527,7 +535,7 @@ const styles = StyleSheet.create({
   footerBtn: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -538,7 +546,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   submitBtn: {
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
     marginLeft: 8,
   },
   cancelBtnText: {
@@ -553,8 +561,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2D3C5A',
-    borderRadius: 999,
+    borderColor: '#fff',
+    borderWidth: 1,
+    borderRadius: 10,
     paddingVertical: 11,
     marginTop: 4,
   },
@@ -567,13 +576,13 @@ const styles = StyleSheet.create({
   // Modals
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCard: {
     width: '82%',
-    backgroundColor: Colors.dark.card,
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 18,
     paddingHorizontal: 18,
     paddingVertical: 16,
@@ -585,7 +594,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   modalBody: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 13,
     marginBottom: 14,
   },
@@ -601,26 +610,28 @@ const styles = StyleSheet.create({
   modalBtn: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: 10,
     marginLeft: 8,
     marginTop: 4,
   },
   modalCancelBtn: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: TEXT_MUTED,
+    borderColor: TEXT_PRIMARY,
   },
   modalConfirmBtn: {
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
   },
   modalAltBtn: {
     backgroundColor: '#3E8CFF',
   },
   modalDangerBtn: {
-    backgroundColor: DANGER_RED,
+    borderColor: DANGER_RED,
+    borderWidth: 1,
+    borderRadius: 10,
   },
   modalCancelText: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontWeight: '600',
   },
   modalConfirmText: {
@@ -632,7 +643,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalDangerText: {
-    color: '#05101F',
+    color: DANGER_RED,
     fontWeight: '700',
   },
 });

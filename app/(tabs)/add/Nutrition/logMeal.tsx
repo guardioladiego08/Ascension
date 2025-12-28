@@ -17,12 +17,14 @@ import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import MealsFoodsList from './components/MealsFoodsList';
+import { LinearGradient } from 'expo-linear-gradient';
 
+const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
 const CARD_SOFT = Colors.dark.card;
-const PRIMARY_GREEN = '#15C779';
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
+const PRIMARY = Colors.dark.highlight1;
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
 
 const TABS = ['My Meals', 'My Foods', 'All'] as const;
 type TabKey = (typeof TABS)[number];
@@ -54,115 +56,121 @@ export default function LogMeal() {
   }, [tabWidth]);
 
   return (
-    <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader showBackButton />
-      <View style={styles.main}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={GlobalStyles.header}>Log Meal</Text>
-        </View>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={GlobalStyles.safeArea}>
+        <LogoHeader showBackButton />
+        <View style={styles.main}>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <Text style={GlobalStyles.header}>Log Meal</Text>
+          </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Tabs with sliding indicator */}
-          <View
-            style={styles.tabRow}
-            onLayout={e => {
-              const width = e.nativeEvent.layout.width;
-              setTabWidth(width / TABS.length);
-            }}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
           >
-            {tabWidth > 0 && (
-              <Animated.View
-                style={[
-                  styles.tabIndicator,
-                  {
-                    width: tabWidth,
-                    transform: [{ translateX: indicatorX }],
-                  },
-                ]}
-              />
-            )}
-            {TABS.map((tab, index) => {
-              const isActive = tab === activeTab;
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  style={styles.tabBtn}
-                  activeOpacity={0.8}
-                  onPress={() => handleTabPress(tab, index)}
-                >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      isActive && styles.tabTextActive,
-                    ]}
+            {/* Tabs with sliding indicator */}
+            <View
+              style={styles.tabRow}
+              onLayout={e => {
+                const width = e.nativeEvent.layout.width;
+                setTabWidth(width / TABS.length);
+              }}
+            >
+              {tabWidth > 0 && (
+                <Animated.View
+                  style={[
+                    styles.tabIndicator,
+                    {
+                      width: tabWidth,
+                      transform: [{ translateX: indicatorX }],
+                    },
+                  ]}
+                />
+              )}
+              {TABS.map((tab, index) => {
+                const isActive = tab === activeTab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={styles.tabBtn}
+                    activeOpacity={0.8}
+                    onPress={() => handleTabPress(tab, index)}
                   >
-                    {tab}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <Text
+                      style={[
+                        styles.tabText,
+                        isActive && styles.tabTextActive,
+                      ]}
+                    >
+                      {tab}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-          {/* Action buttons: Create Meal + Scan */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.actionBtnPrimary}
-              activeOpacity={0.9}
-              onPress={() => router.push('./createMeal')}
-            >
-              <Ionicons name="add-circle" size={18} color="#05101F" />
-              <Text style={styles.actionBtnPrimaryText}>Create Meal</Text>
-            </TouchableOpacity>
+            {/* Action buttons: Create Meal + Scan */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={styles.actionBtnPrimary}
+                activeOpacity={0.9}
+                onPress={() => router.push('./createMeal')}
+              >
+                <Ionicons name="add-circle" size={18} color="#05101F" />
+                <Text style={styles.actionBtnPrimaryText}>Create Meal</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.actionBtnSecondary}
-              activeOpacity={0.9}
-              onPress={() =>
-                Alert.alert(
-                  'Coming soon',
-                  'Barcode scanning will be available in a future update.'
-                )
-              }
-            >
-              <MaterialCommunityIcons
-                name="barcode-scan"
-                size={18}
-                color={TEXT_PRIMARY}
+              <TouchableOpacity
+                style={styles.actionBtnSecondary}
+                activeOpacity={0.9}
+                onPress={() =>
+                  Alert.alert(
+                    'Coming soon',
+                    'Barcode scanning will be available in a future update.'
+                  )
+                }
+              >
+                <MaterialCommunityIcons
+                  name="barcode-scan"
+                  size={18}
+                  color={TEXT_PRIMARY}
+                />
+                <Text style={styles.actionBtnSecondaryText}>Scan</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search bar */}
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={16} color={TEXT_MUTED} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search meals and foods"
+                placeholderTextColor={TEXT_MUTED}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
               />
-              <Text style={styles.actionBtnSecondaryText}>Scan</Text>
-            </TouchableOpacity>
-          </View>
+            </View>
 
-          {/* Search bar */}
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={16} color={TEXT_MUTED} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search meals and foods"
-              placeholderTextColor={TEXT_MUTED}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-          </View>
-
-          {/* List of items – driven entirely by the separate component */}
-          <MealsFoodsList activeTab={activeTab} searchQuery={searchQuery} />
-        </ScrollView>
+            {/* List of items – driven entirely by the separate component */}
+            <MealsFoodsList activeTab={activeTab} searchQuery={searchQuery} />
+          </ScrollView>
+        </View>
       </View>
-    </SafeAreaView>
-  );
+    </LinearGradient>
+  );  
 }
 
 const styles = StyleSheet.create({
   main: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
     paddingHorizontal: 18,
     paddingTop: 8,
   },
@@ -189,7 +197,7 @@ const styles = StyleSheet.create({
     top: 4,
     bottom: 4,
     borderRadius: 12,
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
   },
   tabBtn: {
     flex: 1,
@@ -218,7 +226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 16,
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
     marginRight: 8,
   },
   actionBtnPrimaryText: {

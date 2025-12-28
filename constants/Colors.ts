@@ -16,11 +16,9 @@ export const Colors = {
     highlight2: '#6AE5E5',
     highlight3: '#41dd22ff',
     highlight4: '#c023f0ff',
-    macroProtein:    '#b6b5b5ff',   // light-grey
-    macroCarbs:      '#f3cf30ff',   // yellow
-    macroFats:       '#f3a435ff',   // orange
-    milesRan:        '#f5873eff',
-    weightLifted:        '#f1d63aff',
+    macroProtein:    '#f8cc19ff',   
+    macroCarbs:      '#f35e30ff',   
+    macroFats:      '#f39830ff',  
     text: '#ffffff',
     textInput: '#b0b0b050',
     textMuted: '#ffffff84',

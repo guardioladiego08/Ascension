@@ -21,11 +21,13 @@ import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { PieChart } from 'react-native-gifted-charts';
+import { LinearGradient } from 'expo-linear-gradient';
 
+const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
-const PRIMARY_GREEN = '#15C779';
+const TEXT_PRIMARY = Colors.dark.text;
+const TEXT_MUTED = Colors.dark.textMuted;
+const PRIMARY = Colors.dark.highlight1;
 
 type JsonValue = any;
 
@@ -289,79 +291,86 @@ export default function AddIngredient() {
   );
 
   return (
-    <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader showBackButton />
-      <View style={styles.main}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Text style={GlobalStyles.header}>Add Ingredient</Text>
-        </View>
-
-        {/* Search bar */}
-        <View style={styles.searchCard}>
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={18} color={TEXT_MUTED} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search foods…"
-              placeholderTextColor={TEXT_MUTED}
-              value={query}
-              onChangeText={setQuery}
-              returnKeyType="search"
-              onSubmitEditing={handleSearch}
-            />
-            <TouchableOpacity
-              style={styles.searchBtn}
-              onPress={handleSearch}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.searchBtnText}>Search</Text>
-            </TouchableOpacity>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={GlobalStyles.safeArea}>
+        <LogoHeader showBackButton />
+        <View style={styles.main}>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <Text style={GlobalStyles.header}>Add Ingredient</Text>
           </View>
-          {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
-        </View>
 
-        {/* Results */}
-        <View style={styles.listContainer}>
-          {loading && (
-            <View style={styles.center}>
-              <ActivityIndicator size="small" color={PRIMARY_GREEN} />
-              <Text style={styles.loadingText}>Searching foods.</Text>
+          {/* Search bar */}
+          <View style={styles.searchCard}>
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={18} color={TEXT_MUTED} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search foods…"
+                placeholderTextColor={TEXT_MUTED}
+                value={query}
+                onChangeText={setQuery}
+                returnKeyType="search"
+                onSubmitEditing={handleSearch}
+              />
+              <TouchableOpacity
+                style={styles.searchBtn}
+                onPress={handleSearch}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.searchBtnText}>Search</Text>
+              </TouchableOpacity>
             </View>
-          )}
+            {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+          </View>
 
-          {!loading && hasSearched && results.length === 0 && !errorText && (
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>No foods found.</Text>
-            </View>
-          )}
+          {/* Results */}
+          <View style={styles.listContainer}>
+            {loading && (
+              <View style={styles.center}>
+                <ActivityIndicator size="small" color={PRIMARY} />
+                <Text style={styles.loadingText}>Searching foods.</Text>
+              </View>
+            )}
 
-          {!loading && results.length > 0 && (
-            <FlatList
-              data={results}
-              keyExtractor={item => item.id}
-              renderItem={renderItem}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
-              showsVerticalScrollIndicator={false}
-            />
-          )}
+            {!loading && hasSearched && results.length === 0 && !errorText && (
+              <View style={styles.center}>
+                <Text style={styles.emptyText}>No foods found.</Text>
+              </View>
+            )}
+
+            {!loading && results.length > 0 && (
+              <FlatList
+                data={results}
+                keyExtractor={item => item.id}
+                renderItem={renderItem}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+          </View>
+
+          {/* Portion selection modal (separate component) */}
+          <IngredientPortionModal
+            visible={modalVisible}
+            onClose={() => setModalVisible(false)}
+            onConfirm={handleConfirmPortion}
+            food={selectedFood}
+            unitKey={selectedUnitKey}
+            setUnitKey={setSelectedUnitKey}
+            amount={amount}
+            setAmount={setAmount}
+            macrosPreview={macrosPreview}
+            getUnitOptions={getUnitOptions}
+          />
         </View>
-
-        {/* Portion selection modal (separate component) */}
-        <IngredientPortionModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          onConfirm={handleConfirmPortion}
-          food={selectedFood}
-          unitKey={selectedUnitKey}
-          setUnitKey={setSelectedUnitKey}
-          amount={amount}
-          setAmount={setAmount}
-          macrosPreview={macrosPreview}
-          getUnitOptions={getUnitOptions}
-        />
       </View>
-    </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -387,9 +396,9 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
   const totalMacroKcal = proteinKcal + carbsKcal + fatKcal || 1;
 
   const data = [
-    { value: proteinKcal, label: 'P', color: '#4FD1C5' },
-    { value: carbsKcal, label: 'C', color: '#F6AD55' },
-    { value: fatKcal, label: 'F', color: '#F56565' },
+    { value: proteinKcal, label: 'P', color: Colors.dark.macroProtein},
+    { value: carbsKcal, label: 'C', color: Colors.dark.macroCarbs },
+    { value: fatKcal, label: 'F', color: Colors.dark.macroFats},
   ];
 
   const pct = (part: number) =>
@@ -583,7 +592,7 @@ function FoodSearchRow({ item, onPress }: FoodSearchRowProps) {
         <Text style={styles.foodSubtitle}>{macroText}</Text>
         <Text style={styles.foodServing}>per 100g</Text>
       </View>
-      <Ionicons name="add-circle-outline" size={22} color={PRIMARY_GREEN} />
+      <Ionicons name="add-circle-outline" size={22} color={PRIMARY} />
     </TouchableOpacity>
   );
 }
@@ -591,7 +600,6 @@ function FoodSearchRow({ item, onPress }: FoodSearchRowProps) {
 const styles = StyleSheet.create({
   main: {
     flex: 1,
-    backgroundColor: Colors.dark.background,
     paddingHorizontal: 18,
     paddingTop: 8,
   },
@@ -621,11 +629,10 @@ const styles = StyleSheet.create({
   searchBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: PRIMARY_GREEN,
+
   },
   searchBtnText: {
-    color: '#05101F',
+    color: PRIMARY,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -686,7 +693,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   modalCard: {
-    backgroundColor: CARD,
+    backgroundColor: Colors.dark.popUpCard,
     borderRadius: 20,
     padding: 16,
   },
@@ -743,7 +750,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   modalConfirmBtn: {
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
     marginLeft: 8,
   },
   modalCancelText: {
