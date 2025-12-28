@@ -14,9 +14,9 @@ type Props = {
   totalFat: number;
 };
 
-const PROTEIN_COLOR = '#5E8BFF';
-const CARB_COLOR = '#FFB347';
-const FAT_COLOR = '#FF6B81';
+const PROTEIN_COLOR = Colors.dark.macroProtein;
+const CARB_COLOR = Colors.dark.macroCarbs;
+const FAT_COLOR = Colors.dark.macroFats;
 
 const MealSummaryCard: React.FC<Props> = ({
   totalKcal,
@@ -49,6 +49,7 @@ const MealSummaryCard: React.FC<Props> = ({
               showText
               textColor={TEXT_PRIMARY}
               textSize={12}
+              innerCircleColor={Colors.dark.popUpCard}
               innerRadius={40}
               radius={60}
               centerLabelComponent={() => (
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   sectionLabel: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,

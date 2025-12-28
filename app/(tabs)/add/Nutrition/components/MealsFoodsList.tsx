@@ -13,8 +13,8 @@ import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 
-const CARD_SOFT = Colors.dark.card;
-const PRIMARY_GREEN = '#15C779';
+const CARD = Colors.dark.card;
+const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
 
@@ -340,7 +340,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
             <View style={styles.itemMetaRow}>
               {typeof item.calories === 'number' && (
                 <View style={styles.metaItem}>
-                  <Ionicons name="flame" size={12} color={TEXT_MUTED} />
+                  <Ionicons name="flame" size={12} color={TEXT_PRIMARY} />
                   <Text style={styles.metaText}>{item.calories} kcal</Text>
                 </View>
               )}
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   stateText: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 13,
     marginTop: 6,
     textAlign: 'center',
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
   itemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: CARD_SOFT,
+    backgroundColor: CARD,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -412,11 +412,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: '#1E293B',
+    borderRadius: 90,
+    backgroundColor: Colors.dark.card2,
   },
   itemTagText: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 10,
     fontWeight: '600',
   },
@@ -430,19 +430,19 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   metaText: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 11,
     marginLeft: 4,
   },
   itemSubtitle: {
-    color: TEXT_MUTED,
+    color: TEXT_PRIMARY,
     fontSize: 11,
   },
   plusBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: PRIMARY_GREEN,
+    backgroundColor: PRIMARY,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,

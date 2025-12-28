@@ -411,6 +411,7 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
         donut
         radius={60}
         innerRadius={38}
+        innerCircleColor={Colors.dark.popUpCard}
         showText={false}
         strokeWidth={0}
         centerLabelComponent={() => (
@@ -426,7 +427,7 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
       <View style={styles.macroLegend}>
         <View style={styles.macroLegendRow}>
           <View
-            style={[styles.macroDot, { backgroundColor: '#4FD1C5' }]}
+            style={[styles.macroDot, { backgroundColor: Colors.dark.macroProtein }]}
           />
           <Text style={styles.macroLegendText}>
             Protein · {proteinG.toFixed(1)} g ({pct(proteinKcal)}%)
@@ -434,7 +435,7 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
         </View>
         <View style={styles.macroLegendRow}>
           <View
-            style={[styles.macroDot, { backgroundColor: '#F6AD55' }]}
+            style={[styles.macroDot, { backgroundColor: Colors.dark.macroCarbs }]}
           />
           <Text style={styles.macroLegendText}>
             Carbs · {carbsG.toFixed(1)} g ({pct(carbsKcal)}%)
@@ -442,7 +443,7 @@ const MacroDonut: React.FC<MacroDonutProps> = ({
         </View>
         <View style={styles.macroLegendRow}>
           <View
-            style={[styles.macroDot, { backgroundColor: '#F56565' }]}
+            style={[styles.macroDot, { backgroundColor: Colors.dark.macroFats }]}
           />
           <Text style={styles.macroLegendText}>
             Fat · {fatG.toFixed(1)} g ({pct(fatKcal)}%)
@@ -740,7 +741,9 @@ const styles = StyleSheet.create({
   modalBtn: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderColor: PRIMARY,
+    borderWidth: 1,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -750,7 +753,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   modalConfirmBtn: {
-    backgroundColor: PRIMARY,
+    borderColor: PRIMARY,
+    borderRadius: 10,
     marginLeft: 8,
   },
   modalCancelText: {
@@ -759,7 +763,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   modalConfirmText: {
-    color: '#05101F',
+    color: PRIMARY,
     fontSize: 13,
     fontWeight: '700',
   },

@@ -12,7 +12,7 @@ const CARD_SOFT = '#202B42';
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
 const ACCENT_BLUE = '#4E8BFF';
-const ACCENT_GREEN = '#3ED598';
+const PRIMARY = Colors.dark.highlight1;
 
 type Ingredient = {
   food_id: string;
@@ -75,7 +75,7 @@ const IngredientsList: React.FC<Props> = ({ ingredients, onChangeQuantity }) => 
               )}
 
               <View style={styles.macroChipsRow}>
-                <View style={[styles.chip, { borderColor: ACCENT_BLUE }]}>
+                <View style={[styles.chip, { borderColor: '#fffffff3' }]}>
                   <Text style={styles.chipLabel}>kcal</Text>
                   <Text style={styles.chipValue}>{Math.round(kcal)}</Text>
                 </View>
@@ -134,18 +134,17 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    backgroundColor: CARD_SOFT,
     borderRadius: 16,
     overflow: 'hidden',
     paddingRight: 10,
   },
   leftAccent: {
     width: 4,
-    backgroundColor: ACCENT_GREEN,
+    backgroundColor: PRIMARY,
   },
   rowContent: {
     flex: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 5,
     paddingVertical: 10,
   },
   title: {
@@ -163,9 +162,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   chip: {
-    borderRadius: 999,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#3E4A6B',
+    borderColor: '#ffffff9c',
     paddingHorizontal: 8,
     paddingVertical: 3,
     marginRight: 6,
@@ -184,9 +183,7 @@ const styles = StyleSheet.create({
   },
   portionBox: {
     width: 80,
-    borderLeftWidth: 1,
-    borderLeftColor: '#2E3A56',
-    paddingHorizontal: 6,
+    paddingLeft: 35,
     paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -197,7 +194,7 @@ const styles = StyleSheet.create({
   },
   portionInput: {
     marginTop: 3,
-    backgroundColor: '#1A2336',
+    backgroundColor: Colors.dark.card2,
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 4,
