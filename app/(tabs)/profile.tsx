@@ -1,5 +1,5 @@
 // app/(tabs)/profile.tsx
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -16,18 +16,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import { supabase } from '@/lib/supabase';
+
 import GoalCalendar from './profile/components/GoalCalendar';
 import ProfileHeaderSection from './profile/components/ProfileHeaderSection';
-import { supabase } from '@/lib/supabase';
 import LifetimeStatsCard from './profile/components/LifetimeStatsCard';
+import ActivityGrid from './profile/components/ActivityGrid';
 
 const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
 const CARD = Colors.dark.card;
 const BORDER = Colors.dark?.border ?? '#1F2937';
 const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
-const ACCENT = Colors.primary ?? '#6366F1';
+const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
+const ACCENT = Colors.dark.highlight1;
 
 type ProfileRow = {
   id: string;
@@ -45,87 +46,68 @@ type ProfileStats = {
   following: number;
 };
 
+type DetailTab = 'grid' | 'stats' | 'calendar';
+
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const [detailTab, setDetailTab] = useState<'grid' | 'stats' | 'calendar'>(
-    'grid'
-  );
+  const [detailTab, setDetailTab] = useState<DetailTab>('grid');
   const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [stats, setStats] = useState<ProfileStats>({
-    posts: 0,
-    followers: 0,
-    following: 0,
-  });
+  const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const goToSettings = () => {
-    router.push('/profile/settings');
-  };
+  const username = useMemo(() => profile?.username ?? 'user', [profile]);
+  const fullName = useMemo(() => {
+    if (!profile) return '';
+    return [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+  }, [profile]);
 
-  // --------- LOAD PROFILE (reusable) ---------
+  const goToSettings = () => router.push('/profile/settings');
+
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
       setErrorText(null);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+      if (!userRes?.user) throw new Error('Not signed in');
 
-      if (userError) {
-        console.error('[Profile] getUser error', userError);
-        throw userError;
-      }
-
-      if (!user) {
-        throw new Error('Not signed in');
-      }
+      const user = userRes.user;
 
       const { data, error } = await supabase
         .schema('user')
         .from('profiles')
-        .select(
-          'id, auth_user_id, first_name, last_name, username, bio, profile_image_url'
-        )
+        .select('id, auth_user_id, first_name, last_name, username, bio, profile_image_url')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 
-      if (error) {
-        console.error('[Profile] profiles query error', error);
-        throw error;
-      }
-
-      if (!data) {
-        throw new Error('Profile not found for current user.');
-      }
+      if (error) throw error;
+      if (!data) throw new Error('Profile not found for current user.');
 
       setProfile(data as ProfileRow);
 
-      // TODO: later, fetch stats (posts/followers/following)
+      // You can wire these later (posts/followers/following)
+      // setStats(...)
     } catch (err: any) {
       console.error('[Profile] loadProfile failed', err);
       setErrorText(err?.message ?? 'Failed to load profile');
+      setProfile(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load on mount
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  // Re-run whenever the Profile tab regains focus (e.g. returning from /profile/edit)
   useFocusEffect(
     useCallback(() => {
       loadProfile();
     }, [loadProfile])
   );
-
-  // --------- RENDER HELPERS ---------
 
   const renderDetailTabs = () => (
     <View style={styles.detailTabs}>
@@ -159,23 +141,33 @@ export default function ProfileScreen() {
     </View>
   );
 
-  const renderActivityStats = () => (
-    <View style={styles.emptyStateCard}>
-      <Text style={styles.emptyStateTitle}>No activity tracked</Text>
-      <Text style={styles.emptyStateText}>
-        When you complete strength or cardio sessions, your recent activity will
-        show up here.
-      </Text>
-    </View>
+  /**
+   * This header block is used both by:
+   * - ScrollView (Posts / Calendar)
+   * - ActivityGrid FlatList (Activity tab)
+   */
+  const renderHeaderBlock = () => (
+    <>
+      {profile && (
+        <ProfileHeaderSection
+          fullName={fullName}
+          username={profile.username}
+          bio={profile.bio}
+          profileImageUrl={profile.profile_image_url}
+          stats={stats}
+          isOwnProfile={true}
+          onEditProfile={() => router.push('/profile/edit')}
+        />
+      )}
+
+      <LifetimeStatsCard />
+
+      {renderDetailTabs()}
+
+      {/* subtle separator like IG (optional) */}
+      <View style={styles.headerDivider} />
+    </>
   );
-
-  const fullName =
-    profile &&
-    [profile.first_name, profile.last_name].filter(Boolean).join(' ');
-
-  const username = profile?.username ?? 'user';
-
-  // --------- MAIN RENDER ---------
 
   return (
     <LinearGradient
@@ -184,10 +176,10 @@ export default function ProfileScreen() {
       end={{ x: 0.8, y: 1 }}
       style={{ flex: 1 }}
     >
-      <View style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea}>
         <LogoHeader />
 
-        {/* Instagram-style top bar */}
+        {/* Top bar */}
         <View style={styles.topBar}>
           <Text style={styles.topBarUsername}>@{username}</Text>
           <View style={styles.topBarIcons}>
@@ -198,68 +190,44 @@ export default function ProfileScreen() {
         </View>
 
         {loading ? (
-          <View style={styles.loadingWrapper}>
+          <View style={styles.stateWrap}>
             <ActivityIndicator size="small" color={ACCENT} />
-            <Text style={styles.loadingText}>Loading profile…</Text>
+            <Text style={styles.stateText}>Loading profile…</Text>
           </View>
         ) : errorText ? (
-          <View style={styles.loadingWrapper}>
+          <View style={styles.stateWrap}>
             <Text style={styles.errorText}>{errorText}</Text>
           </View>
         ) : (
-          <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Header: avatar + stats + bio from Supabase */}
-            {profile && (
-              <ProfileHeaderSection
-                fullName={fullName}
-                username={profile.username}
-                bio={profile.bio}
-                profileImageUrl={profile.profile_image_url}
-                stats={stats}
-                isOwnProfile={true}
-                onEditProfile={() => router.push('/profile/edit')}
+          <>
+            {/* ACTIVITY TAB: Instagram-style infinite grid using FlatList */}
+            {detailTab === 'stats' ? (
+              <ActivityGrid
+                userId={profile?.auth_user_id ?? ''}
+                header={renderHeaderBlock()}
+                // Optional: route to a detail page later
+                onPressActivity={(a) => {
+                  // if (a.kind === 'strength') router.push(`/add/Strength/${a.id}`);
+                  // else router.push(`/progress/run_walk/${a.id}`);
+                }}
               />
+            ) : (
+              /* POSTS/CALENDAR: normal ScrollView content */
+              <ScrollView
+                style={styles.container}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {renderHeaderBlock()}
+
+                {detailTab === 'grid' && renderGridPosts()}
+                {detailTab === 'calendar' && <GoalCalendar />}
+              </ScrollView>
             )}
-
-            {/* Lifetime stat badges */}
-            <LifetimeStatsCard />
-
-            {/* Detail tabs */}
-            {renderDetailTabs()}
-
-            {/* Tab content */}
-            {detailTab === 'grid' && renderGridPosts()}
-            {detailTab === 'stats' && renderActivityStats()}
-            {detailTab === 'calendar' && <GoalCalendar />}
-          </ScrollView>
+          </>
         )}
-      </View>
-      </LinearGradient>
-    );
-  }
-
-  // ---------- SMALL COMPONENTS ----------
-
-  function LifetimeStat({
-    label,
-    value,
-    icon,
-  }: {
-    label: string;
-    value: string;
-    icon: any;
-  }) {
-    return (
-      <View style={styles.lifetimeStat}>
-        <Ionicons name={icon} size={20} color={TEXT_MUTED} />
-        <Text style={styles.lifetimeValue}>{value}</Text>
-        <Text style={styles.lifetimeLabel}>{label}</Text>
-      </View>
-    
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -275,43 +243,27 @@ function TabButton({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.tabButton, active && styles.tabButtonActive]}
-      onPress={onPress}
-    >
-      <Ionicons
-        name={icon}
-        size={18}
-        color={active ? TEXT_PRIMARY : TEXT_MUTED}
-      />
-      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-        {label}
-      </Text>
+    <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
+      <Ionicons name={icon} size={18} color={active ? TEXT_PRIMARY : TEXT_MUTED} />
+      <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-// ---------- STYLES ----------
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  container: { flex: 1 },
   scrollContent: {
     paddingHorizontal: 16,
     paddingBottom: 32,
   },
 
-  // Top bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 4,
   },
   topBarUsername: {
@@ -328,17 +280,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
 
-  // Loading / error
-  loadingWrapper: {
+  stateWrap: {
     flex: 1,
-    backgroundColor: BG,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: BG,
+    gap: 10,
   },
-  loadingText: {
+  stateText: {
     color: TEXT_MUTED,
     fontSize: 13,
-    marginTop: 8,
   },
   errorText: {
     color: '#FCA5A5',
@@ -347,48 +298,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Lifetime stats
-  lifetimeCard: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  sectionTitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  lifetimeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  lifetimeStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  lifetimeValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  lifetimeLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  // Detail tabs
   detailTabs: {
     flexDirection: 'row',
-    marginTop: 18,
+    marginTop: 16,
     backgroundColor: CARD,
-    borderRadius: 999,
+    borderRadius: 12,
     padding: 4,
     borderWidth: 1,
     borderColor: BORDER,
@@ -398,12 +312,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    borderRadius: 999,
+    paddingVertical: 7,
+    borderRadius: 10,
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: '#1F2937',
+    backgroundColor: Colors.dark.card2,
   },
   tabLabel: {
     color: TEXT_MUTED,
@@ -414,7 +328,12 @@ const styles = StyleSheet.create({
     color: TEXT_PRIMARY,
   },
 
-  // Empty-state cards
+  headerDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 12,
+  },
+
   emptyStateCard: {
     marginTop: 16,
     padding: 16,

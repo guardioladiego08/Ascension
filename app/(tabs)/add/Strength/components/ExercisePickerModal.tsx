@@ -605,8 +605,8 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#1b2337',
+    borderRadius: 8,
+    backgroundColor: Colors.dark.card2,
   },
   chipActive: {
     backgroundColor: Colors.dark.highlight1,

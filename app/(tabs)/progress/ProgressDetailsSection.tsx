@@ -19,19 +19,57 @@ type StrengthWorkoutRow = {
   ended_at: string | null;
 };
 
+type RunWalkSessionRow = {
+  id: string;
+  ended_at: string | null;
+  exercise_type: string;
+  status: string | null;
+  total_time_s: number | null;
+  total_distance_m: number | null;
+};
+
 const DETAIL_SEGMENTS = [
   { key: 'weights', label: 'Weights', icon: 'barbell-outline' as const },
   { key: 'running', label: 'Running', icon: 'trail-sign-outline' as const },
   { key: 'nutrition', label: 'Nutrition', icon: 'fast-food-outline' as const },
 ];
 
+const M_PER_MI = 1609.344;
+
+function formatDurationFromSeconds(totalSeconds: number | null | undefined) {
+  if (!totalSeconds || totalSeconds <= 0) return '';
+  const min = Math.round(totalSeconds / 60);
+  return min > 0 ? `${min} min` : '';
+}
+
+function formatDistanceMiFromMeters(meters: number | null | undefined) {
+  if (!meters || meters <= 0) return '';
+  const mi = meters / M_PER_MI;
+  return `${mi.toFixed(2)} mi`;
+}
+
+function formatExerciseTypeLabel(exerciseType: string) {
+  // keep it robust even if you later add outdoor_run, etc.
+  if (!exerciseType) return 'Run/Walk session';
+  if (exerciseType.includes('walk')) return 'Walk session';
+  if (exerciseType.includes('run')) return 'Run session';
+  return 'Run/Walk session';
+}
+
 const ProgressDetailsSection: React.FC = () => {
   const [selectedDetailIndex, setSelectedDetailIndex] = useState(0);
   const detailAnim = useRef(new Animated.Value(0)).current;
   const [segmentWidth, setSegmentWidth] = useState(0);
 
-  const [weightsWorkouts, setWeightsWorkouts] = useState<StrengthWorkoutRow[]>([]);
+  const [weightsWorkouts, setWeightsWorkouts] = useState<StrengthWorkoutRow[]>(
+    []
+  );
   const [loadingWeights, setLoadingWeights] = useState(true);
+
+  const [runWalkSessions, setRunWalkSessions] = useState<RunWalkSessionRow[]>(
+    []
+  );
+  const [loadingRunWalk, setLoadingRunWalk] = useState(true);
 
   // --- SEGMENTED CONTROL HANDLERS -------------------------------------------
   const handleDetailSelect = (index: number) => {
@@ -49,26 +87,34 @@ const ProgressDetailsSection: React.FC = () => {
     setSegmentWidth(totalWidth / DETAIL_SEGMENTS.length);
   };
 
-  // 🆕 Navigate to "all strength workouts" screen
-  const handleViewAllPress = () => {
+  // Navigate to "all strength workouts" screen
+  const handleViewAllStrengthPress = () => {
     router.push('/progress/strength/allStrengthWorkouts');
   };
 
-  // --- LOAD 5 MOST RECENT STRENGTH WORKOUTS ---------------------------------
+  // Navigate to "all run/walk sessions" screen (create this route if you haven’t yet)
+  const handleViewAllRunWalkPress = () => {
+    router.push('/progress/run_walk/allRunWalkSessions');
+  };
+
+  // --- LOAD RECENT ITEMS -----------------------------------------------------
   useEffect(() => {
-    const fetchRecentWeights = async () => {
+    const load = async () => {
       try {
         const {
           data: { user },
           error: userError,
         } = await supabase.auth.getUser();
         if (userError) throw userError;
+
         if (!user) {
           setLoadingWeights(false);
+          setLoadingRunWalk(false);
           return;
         }
 
-        const { data, error } = await supabase
+        // Strength (as you already had)
+        const strengthPromise = supabase
           .schema('strength')
           .from('strength_workouts')
           .select('id, started_at, ended_at')
@@ -76,21 +122,48 @@ const ProgressDetailsSection: React.FC = () => {
           .order('started_at', { ascending: false })
           .limit(5);
 
-        if (error) throw error;
+        // Run/Walk sessions (finished only)
+        // Note: if your table does not have user_id, remove the eq('user_id', user.id)
+        // and rely on RLS.
+        const runWalkPromise = supabase
+          .schema('run_walk')
+          .from('sessions')
+          .select('id, ended_at, exercise_type, status, total_time_s, total_distance_m')
+          .eq('user_id', user.id)
+          .eq('status', 'finished')
+          .order('ended_at', { ascending: false })
+          .limit(5);
 
-        setWeightsWorkouts((data ?? []) as StrengthWorkoutRow[]);
+        const [strengthRes, runWalkRes] = await Promise.all([
+          strengthPromise,
+          runWalkPromise,
+        ]);
+
+        if (strengthRes.error) throw strengthRes.error;
+        if (runWalkRes.error) throw runWalkRes.error;
+
+        setWeightsWorkouts((strengthRes.data ?? []) as StrengthWorkoutRow[]);
+        setRunWalkSessions((runWalkRes.data ?? []) as RunWalkSessionRow[]);
       } catch (err) {
-        console.warn('Error loading recent strength workouts', err);
+        console.warn('Error loading progress details', err);
       } finally {
         setLoadingWeights(false);
+        setLoadingRunWalk(false);
       }
     };
 
-    fetchRecentWeights();
+    load();
   }, []);
 
-  const handleWorkoutPress = (workoutId: string) => {
+  // Strength navigation (existing)
+  const handleStrengthWorkoutPress = (workoutId: string) => {
     router.push(`/add/Strength/${workoutId}`);
+  };
+
+  // ✅ Run/Walk navigation to summary for a particular session
+  // This assumes you add the route file shown below: app/progress/run_walk/[sessionId].tsx
+  const handleRunWalkSessionPress = (sessionId: string) => {
+    router.push(`/progress/run_walk/${sessionId}`);
   };
 
   const renderWeightsContent = () => {
@@ -101,15 +174,12 @@ const ProgressDetailsSection: React.FC = () => {
     if (!weightsWorkouts.length) {
       return (
         <View style={styles.listContainer}>
-          <Text style={styles.contentMuted}>
-            No recent strength workouts.
-          </Text>
+          <Text style={styles.contentMuted}>No recent strength workouts.</Text>
 
-          {/* Still show the "view all" button so user can jump to full list */}
           <TouchableOpacity
             style={styles.viewAllButton}
             activeOpacity={0.85}
-            onPress={handleViewAllPress}
+            onPress={handleViewAllStrengthPress}
           >
             <Text style={styles.viewAllText}>View all strength workouts</Text>
             <Ionicons
@@ -124,7 +194,7 @@ const ProgressDetailsSection: React.FC = () => {
 
     return (
       <View style={styles.listContainer}>
-        {weightsWorkouts.map(workout => {
+        {weightsWorkouts.map((workout) => {
           const date = new Date(workout.started_at);
           const dateLabel = date.toLocaleDateString(undefined, {
             month: 'short',
@@ -148,7 +218,7 @@ const ProgressDetailsSection: React.FC = () => {
               key={workout.id}
               style={styles.listItem}
               activeOpacity={0.8}
-              onPress={() => handleWorkoutPress(workout.id)}
+              onPress={() => handleStrengthWorkoutPress(workout.id)}
             >
               <View>
                 <Text style={styles.listTitle}>{dateLabel}</Text>
@@ -159,11 +229,10 @@ const ProgressDetailsSection: React.FC = () => {
           );
         })}
 
-        {/* 🆕 View all button at bottom of list */}
         <TouchableOpacity
           style={styles.viewAllButton}
           activeOpacity={0.85}
-          onPress={handleViewAllPress}
+          onPress={handleViewAllStrengthPress}
         >
           <Text style={styles.viewAllText}>View all strength workouts</Text>
           <Ionicons
@@ -176,13 +245,92 @@ const ProgressDetailsSection: React.FC = () => {
     );
   };
 
-  const renderContent = () => {
-    if (selectedDetailIndex === 0) {
-      return renderWeightsContent();
+  const renderRunWalkContent = () => {
+    if (loadingRunWalk) {
+      return <Text style={styles.contentMuted}>Loading...</Text>;
     }
 
-    // Running & Nutrition blank for now
-    return null;
+    if (!runWalkSessions.length) {
+      return (
+        <View style={styles.listContainer}>
+          <Text style={styles.contentMuted}>No recent run/walk sessions.</Text>
+
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            activeOpacity={0.85}
+            onPress={handleViewAllRunWalkPress}
+          >
+            <Text style={styles.viewAllText}>View all run/walk sessions</Text>
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={18}
+              color="#A5B4FC"
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.listContainer}>
+        {runWalkSessions.map((sesh) => {
+          const baseDate = sesh.ended_at ? new Date(sesh.ended_at) : null;
+          const dateLabel = baseDate
+            ? baseDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            : 'Session';
+
+          const typeLabel = formatExerciseTypeLabel(sesh.exercise_type);
+          const dur = formatDurationFromSeconds(sesh.total_time_s);
+          const dist = formatDistanceMiFromMeters(sesh.total_distance_m);
+
+          const parts = [typeLabel];
+          if (dur) parts.push(dur);
+          if (dist) parts.push(dist);
+
+          const subtitle = parts.join(' · ');
+
+          return (
+            <TouchableOpacity
+              key={sesh.id}
+              style={styles.listItem}
+              activeOpacity={0.8}
+              onPress={() => handleRunWalkSessionPress(sesh.id)}
+            >
+              <View>
+                <Text style={styles.listTitle}>{dateLabel}</Text>
+                <Text style={styles.listSubtitle}>{subtitle}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+            </TouchableOpacity>
+          );
+        })}
+
+        <TouchableOpacity
+          style={styles.viewAllButton}
+          activeOpacity={0.85}
+          onPress={handleViewAllRunWalkPress}
+        >
+          <Text style={styles.viewAllText}>View all run/walk sessions</Text>
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={18}
+            color="#A5B4FC"
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderContent = () => {
+    if (selectedDetailIndex === 0) return renderWeightsContent();
+    if (selectedDetailIndex === 1) return renderRunWalkContent();
+
+    // Nutrition blank for now
+    return (
+      <Text style={styles.contentMuted}>
+        Nutrition details coming soon.
+      </Text>
+    );
   };
 
   return (
@@ -274,7 +422,7 @@ const styles = StyleSheet.create({
 
   contentCard: {
     marginTop: 12,
-    marginBottom: 24, // 🆕 add this so the list isn’t cut off at the bottom
+    marginBottom: 24,
     backgroundColor: Colors.dark.card,
     borderRadius: 18,
     paddingHorizontal: 16,
@@ -287,7 +435,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     gap: 10,
-    paddingBottom: 8, // 🆕 small extra space inside the card
+    paddingBottom: 8,
   },
   listItem: {
     flexDirection: 'row',
@@ -308,7 +456,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // 🆕 View all button styles
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',

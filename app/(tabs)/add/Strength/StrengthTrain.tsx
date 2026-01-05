@@ -82,10 +82,11 @@ export default function StrengthTrain() {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        Alert.alert('Auth error', sessionError.message);
-        router.back();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        Alert.alert('Authentication required');
+        router.replace('/SignInLogin');
         return;
       }
       const uid = session?.user?.id ?? null;

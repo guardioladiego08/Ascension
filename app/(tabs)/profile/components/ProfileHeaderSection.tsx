@@ -3,12 +3,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Colors } from '@/constants/Colors';
 
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
+const BG = Colors.dark.background
+const CARD = Colors.dark.card
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.primary ?? '#6366F1';
+const TEXT_PRIMARY = Colors.dark.text
+const TEXT_MUTED = Colors.dark.textMuted
+const ACCENT = Colors.dark.highlight1
 
 type ProfileHeaderSectionProps = {
   fullName?: string | null;
@@ -199,21 +199,22 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: ACCENT,
+    borderColor: ACCENT,
+    borderWidth: 1,
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: ACCENT,
     fontWeight: '600',
     fontSize: 14,
   },
   secondaryButton: {
     flex: 1,
     borderWidth: 1,
-    borderColor: BORDER,
+    borderColor: '#fff',
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
