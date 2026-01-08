@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,16 +22,12 @@ import { supabase } from '@/lib/supabase';
 import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 
 import WeeklyKpiRow from './home/WeeklyKpiRow';
-import RunWalkTypeModal, {
-  RunWalkExerciseType,
-} from './home/RunWalkTypeModal';
+import RunWalkTypeModal, { RunWalkExerciseType } from './home/RunWalkTypeModal';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
-
-
 
 type DiaryDay = {
   id: string;
@@ -65,19 +62,6 @@ export default function BlankHome() {
 
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
 
-  const start = async (mode: 'indoor_run' | 'indoor_walk' | 'outdoor_run' | 'outdoor_walk') => {
-    const active = await getActiveRunWalkLock();
-    if (active) {
-      Alert.alert(
-        'Session in progress',
-        `You already have a ${active.mode.replace('_', ' ')} session in progress. Finish or cancel it first.`
-      );
-      return;
-    }
-
-    router.push({ pathname: '/add/Cardio/IndoorSession', params: { mode } });
-  };
-
   // YYYY-MM-DD for "today"
   const todayISO = useMemo(() => {
     const d = new Date();
@@ -91,13 +75,9 @@ export default function BlankHome() {
         try {
           setLoadingDiary(true);
 
-          const { data: userData, error: userError } =
-            await supabase.auth.getUser();
+          const { data: userData, error: userError } = await supabase.auth.getUser();
           if (userError) {
-            console.error(
-              'Error fetching auth user for diary_days:',
-              userError
-            );
+            console.error('Error fetching auth user for diary_days:', userError);
             return;
           }
 
@@ -109,7 +89,7 @@ export default function BlankHome() {
             .from('diary_days')
             .select('*')
             .eq('user_id', user.id)
-            .eq('date', todayISO) // <-- real column name
+            .eq('date', todayISO)
             .maybeSingle();
 
           if (error) {
@@ -121,11 +101,7 @@ export default function BlankHome() {
             return;
           }
 
-          if (data) {
-            setTodaySummary(data as DiaryDay);
-          } else {
-            setTodaySummary(null);
-          }
+          setTodaySummary((data as DiaryDay) ?? null);
         } catch (err) {
           console.error('Unexpected error loading today diary_days:', err);
         } finally {
@@ -138,30 +114,18 @@ export default function BlankHome() {
   );
 
   // Safely pull totals/targets from diary_days
-  const caloriesEaten = todaySummary?.kcal_total != null
-    ? Number(todaySummary.kcal_total)
-    : 0;
+  const caloriesEaten = todaySummary?.kcal_total != null ? Number(todaySummary.kcal_total) : 0;
 
-  const caloriesTarget = todaySummary?.kcal_target != null
-    ? Number(todaySummary.kcal_target)
-    : 0;
+  const caloriesTarget = todaySummary?.kcal_target != null ? Number(todaySummary.kcal_target) : 0;
 
-  const protein = todaySummary?.protein_g_total != null
-    ? Number(todaySummary.protein_g_total)
-    : 0;
+  const protein = todaySummary?.protein_g_total != null ? Number(todaySummary.protein_g_total) : 0;
 
-  const carbs = todaySummary?.carbs_g_total != null
-    ? Number(todaySummary.carbs_g_total)
-    : 0;
+  const carbs = todaySummary?.carbs_g_total != null ? Number(todaySummary.carbs_g_total) : 0;
 
-  const fats = todaySummary?.fat_g_total != null
-    ? Number(todaySummary.fat_g_total)
-    : 0;
+  const fats = todaySummary?.fat_g_total != null ? Number(todaySummary.fat_g_total) : 0;
 
   const caloriePct =
-    caloriesTarget > 0
-      ? Math.min(100, (caloriesEaten / caloriesTarget) * 100)
-      : 0;
+    caloriesTarget > 0 ? Math.min(100, (caloriesEaten / caloriesTarget) * 100) : 0;
 
   const handleOpenDailySummary = () => {
     router.push({
@@ -180,13 +144,14 @@ export default function BlankHome() {
       <View style={GlobalStyles.safeArea}>
         <LogoHeader />
         <Text style={GlobalStyles.header}>HOME</Text>
+
         <ScrollView
           contentContainerStyle={GlobalStyles.container}
           showsVerticalScrollIndicator={false}
         >
-          {/* KPI Row */}s
+          {/* KPI Row */}
           <Text style={styles.sectionTitle}>SO FAR THIS WEEK</Text>
-         <WeeklyKpiRow />
+          <WeeklyKpiRow />
 
           {/* Start Workout */}
           <Text style={styles.sectionTitle}>START WORKOUT</Text>
@@ -203,28 +168,22 @@ export default function BlankHome() {
               />
               <Text style={styles.quickText}>Weights</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.9}
               style={GlobalStyles.quickCard}
               onPress={() => setShowRunWalkModal(true)}
             >
-              <Ionicons
-                name="walk"
-                size={28}
-                color={Colors.dark.highlight2}
-              />
+              <Ionicons name="walk" size={28} color={Colors.dark.highlight2} />
               <Text style={styles.quickText}>Run</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               activeOpacity={0.9}
               style={GlobalStyles.quickCard}
-              onPress={() => router.push('/add/Cardio/OutdoorSession.tsx')}
+              onPress={() => router.push('/add/Cardio/OutdoorSession')}
             >
-              <Ionicons
-                name="bicycle"
-                size={28}
-                color={Colors.dark.highlight3}
-              />
+              <Ionicons name="bicycle" size={28} color={Colors.dark.highlight3} />
               <Text style={styles.quickText}>Bike</Text>
             </TouchableOpacity>
           </View>
@@ -238,34 +197,21 @@ export default function BlankHome() {
           >
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={18}
-                  color="#7BE495"
-                />
+                <Ionicons name="checkmark-circle" size={18} color="#7BE495" />
                 <Text style={styles.cardHeaderTitle}>Daily Summary</Text>
               </View>
               <Text style={styles.link}>View Details</Text>
             </View>
 
             <View style={styles.calRow}>
-              <Text style={styles.calLeft}>
-                {loadingDiary ? '...' : formatNumber(caloriesEaten)}
-              </Text>
+              <Text style={styles.calLeft}>{loadingDiary ? '...' : formatNumber(caloriesEaten)}</Text>
               <Text style={styles.calRight}>
-                {loadingDiary
-                  ? ''
-                  : `/ ${formatNumber(caloriesTarget)} kcal`}
+                {loadingDiary ? '' : `/ ${formatNumber(caloriesTarget)} kcal`}
               </Text>
             </View>
 
             <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${caloriePct}%` },
-                ]}
-              />
+              <View style={[styles.progressFill, { width: `${caloriePct}%` }]} />
             </View>
 
             <View style={styles.macroRow}>
@@ -299,6 +245,7 @@ export default function BlankHome() {
               <Ionicons name="add-circle" size={18} color="#0E151F" />
               <Text style={styles.ctaText}>Log Meal</Text>
             </TouchableOpacity>
+
             <TouchableOpacity activeOpacity={0.9} style={styles.ctaButton}>
               <Ionicons name="camera" size={18} color="#0E151F" />
               <Text style={styles.ctaText}>Scan Food</Text>
@@ -307,61 +254,56 @@ export default function BlankHome() {
 
           {/* Social */}
           <Text style={styles.sectionTitle}>SOCIAL</Text>
+
           <View style={styles.listCard}>
             <View style={styles.listIconWrap}>
               <Ionicons name="people" size={20} color="#F4B3FF" />
             </View>
             <View style={styles.listTextWrap}>
               <Text style={styles.listTitle}>Workout Feed</Text>
-              <Text style={styles.listSubtitle}>
-                See what friends are doing
-              </Text>
+              <Text style={styles.listSubtitle}>See what friends are doing</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color="#AAB2C5"
-            />
+            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
           </View>
+
           <View style={styles.listCard}>
             <View style={styles.listIconWrap}>
               <Ionicons name="trophy" size={20} color="#FFD38C" />
             </View>
             <View style={styles.listTextWrap}>
               <Text style={styles.listTitle}>Leaderboards</Text>
-              <Text style={styles.listSubtitle}>
-                Compete with the community
-              </Text>
+              <Text style={styles.listSubtitle}>Compete with the community</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color="#AAB2C5"
-            />
+            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
           </View>
+
           <View style={styles.listCard}>
             <View style={styles.listIconWrap}>
               <Ionicons name="medal" size={20} color="#8CE0FF" />
             </View>
             <View style={styles.listTextWrap}>
               <Text style={styles.listTitle}>Challenges</Text>
-              <Text style={styles.listSubtitle}>
-                Join active challenges
-              </Text>
+              <Text style={styles.listSubtitle}>Join active challenges</Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color="#AAB2C5"
-            />
+            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
           </View>
         </ScrollView>
       </View>
+
       <RunWalkTypeModal
         visible={showRunWalkModal}
         onClose={() => setShowRunWalkModal(false)}
-        onSelect={(type: RunWalkExerciseType) => {
+        onSelect={async (type: RunWalkExerciseType) => {
           setShowRunWalkModal(false);
+
+          const active = await getActiveRunWalkLock();
+          if (active) {
+            Alert.alert(
+              'Session in progress',
+              `You already have a ${active.mode.replace('_', ' ')} session in progress. Finish or cancel it first.`
+            );
+            return;
+          }
 
           if (type === 'indoor_run' || type === 'indoor_walk') {
             router.push({
@@ -371,46 +313,18 @@ export default function BlankHome() {
             return;
           }
 
-          // Outdoor types route to your existing outdoor session screen for now
+          // Outdoor run/walk => Strava-like recorder
           router.push({
-            pathname: '/add/Cardio/OutdoorSession',
+            pathname: '/progress/outdoor/record',
             params: { mode: type },
           });
         }}
       />
-
     </LinearGradient>
   );
 }
 
-function TabItem({
-  label,
-  icon,
-  active = false,
-}: {
-  label: string;
-  icon: any;
-  active?: boolean;
-}) {
-  return (
-    <View style={styles.tabItem}>
-      <Ionicons
-        name={icon}
-        size={20}
-        color={active ? '#6EA8FF' : '#AAB2C5'}
-      />
-      <Text
-        style={[styles.tabLabel, active && { color: '#6EA8FF' }]}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  scroll: { paddingHorizontal: 18, paddingTop: 8 },
-
   // Tighten vertical rhythm + match onboarding label treatment
   sectionTitle: {
     color: TEXT_MUTED,
@@ -419,12 +333,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontWeight: '800',
     letterSpacing: 1.2,
-  },
-
-  kpiRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
   },
 
   quickRow: {
@@ -550,7 +458,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: '600',
   },
-
-  tabItem: { alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { color: TEXT_MUTED, fontSize: 10, marginTop: 4 },
 });

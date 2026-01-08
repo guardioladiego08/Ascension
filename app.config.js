@@ -17,13 +17,11 @@ export default {
     ios: {
       "bundleIdentifier": "com.alterastudio.ascension",
       supportsTablet: true,
-      infoPlist: {
-        "ITSAppUsesNonExemptEncryption": false,
-        NSLocationWhenInUseUsageDescription:
-          'Tensr Fitness uses your location to record and display outdoor runs and walks on the map.',
-        NSLocationAlwaysAndWhenInUseUsageDescription:
-          'Tensr Fitness uses your location to record and display outdoor runs and walks on the map.',
-      },
+      "infoPlist": {
+        "UIBackgroundModes": ["location"],
+        "NSLocationWhenInUseUsageDescription": "We use your location to record outdoor runs and walks.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location in the background to record outdoor sessions."
+      }
     },
 
     android: {
@@ -33,9 +31,10 @@ export default {
         backgroundColor: '#000000',
       },
       permissions: [
-        'ACCESS_COARSE_LOCATION',
-        'ACCESS_FINE_LOCATION',
-        'FOREGROUND_SERVICE',
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
       ],
       config: {
         googleMaps: {

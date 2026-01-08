@@ -46,12 +46,14 @@ type ProfileStats = {
   following: number;
 };
 
-type DetailTab = 'grid' | 'stats' | 'calendar';
+// Removed "grid" tab
+type DetailTab = 'stats' | 'calendar';
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const [detailTab, setDetailTab] = useState<DetailTab>('grid');
+  // Default to Activity (since Posts removed)
+  const [detailTab, setDetailTab] = useState<DetailTab>('stats');
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
   const [loading, setLoading] = useState(true);
@@ -112,12 +114,6 @@ export default function ProfileScreen() {
   const renderDetailTabs = () => (
     <View style={styles.detailTabs}>
       <TabButton
-        label="Posts"
-        icon="grid-outline"
-        active={detailTab === 'grid'}
-        onPress={() => setDetailTab('grid')}
-      />
-      <TabButton
         label="Activity"
         icon="bar-chart-outline"
         active={detailTab === 'stats'}
@@ -132,18 +128,9 @@ export default function ProfileScreen() {
     </View>
   );
 
-  const renderGridPosts = () => (
-    <View style={styles.emptyStateCard}>
-      <Text style={styles.emptyStateTitle}>No posts yet</Text>
-      <Text style={styles.emptyStateText}>
-        Once you start sharing your sessions, they’ll appear here in a grid.
-      </Text>
-    </View>
-  );
-
   /**
    * This header block is used both by:
-   * - ScrollView (Posts / Calendar)
+   * - ScrollView (Calendar)
    * - ActivityGrid FlatList (Activity tab)
    */
   const renderHeaderBlock = () => (
@@ -200,28 +187,20 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <>
-            {/* ACTIVITY TAB: Instagram-style infinite grid using FlatList */}
+            {/* Default/Primary: Activity */}
             {detailTab === 'stats' ? (
               <ActivityGrid
                 userId={profile?.auth_user_id ?? ''}
                 header={renderHeaderBlock()}
-                // Optional: route to a detail page later
-                onPressActivity={(a) => {
-                  // if (a.kind === 'strength') router.push(`/add/Strength/${a.id}`);
-                  // else router.push(`/progress/run_walk/${a.id}`);
-                }}
               />
             ) : (
-              /* POSTS/CALENDAR: normal ScrollView content */
               <ScrollView
                 style={styles.container}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
               >
                 {renderHeaderBlock()}
-
-                {detailTab === 'grid' && renderGridPosts()}
-                {detailTab === 'calendar' && <GoalCalendar />}
+                <GoalCalendar />
               </ScrollView>
             )}
           </>
@@ -298,6 +277,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // Adjusted styling for 2-tab layout
   detailTabs: {
     flexDirection: 'row',
     marginTop: 16,
@@ -306,13 +286,14 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: BORDER,
+    gap: 4,
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
+    paddingVertical: 8, // slightly larger since only 2 tabs
     borderRadius: 10,
     gap: 6,
   },
@@ -322,7 +303,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     color: TEXT_MUTED,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   tabLabelActive: {
     color: TEXT_PRIMARY,
@@ -332,25 +313,5 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.06)',
     marginTop: 12,
-  },
-
-  emptyStateCard: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  emptyStateTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  emptyStateText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    lineHeight: 18,
   },
 });

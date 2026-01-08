@@ -19,13 +19,13 @@ type StrengthWorkoutRow = {
   ended_at: string | null;
 };
 
-type RunWalkSessionRow = {
+type OutdoorSessionRow = {
   id: string;
   ended_at: string | null;
-  exercise_type: string;
+  activity_type: 'run' | 'walk' | string;
   status: string | null;
-  total_time_s: number | null;
-  total_distance_m: number | null;
+  duration_s: number | null;
+  distance_m: number | null;
 };
 
 const DETAIL_SEGMENTS = [
@@ -48,12 +48,11 @@ function formatDistanceMiFromMeters(meters: number | null | undefined) {
   return `${mi.toFixed(2)} mi`;
 }
 
-function formatExerciseTypeLabel(exerciseType: string) {
-  // keep it robust even if you later add outdoor_run, etc.
-  if (!exerciseType) return 'Run/Walk session';
-  if (exerciseType.includes('walk')) return 'Walk session';
-  if (exerciseType.includes('run')) return 'Run session';
-  return 'Run/Walk session';
+function formatActivityTypeLabel(activityType: string) {
+  if (!activityType) return 'Outdoor session';
+  if (activityType.includes('walk')) return 'Outdoor walk';
+  if (activityType.includes('run')) return 'Outdoor run';
+  return 'Outdoor session';
 }
 
 const ProgressDetailsSection: React.FC = () => {
@@ -66,10 +65,10 @@ const ProgressDetailsSection: React.FC = () => {
   );
   const [loadingWeights, setLoadingWeights] = useState(true);
 
-  const [runWalkSessions, setRunWalkSessions] = useState<RunWalkSessionRow[]>(
+  const [outdoorSessions, setOutdoorSessions] = useState<OutdoorSessionRow[]>(
     []
   );
-  const [loadingRunWalk, setLoadingRunWalk] = useState(true);
+  const [loadingOutdoor, setLoadingOutdoor] = useState(true);
 
   // --- SEGMENTED CONTROL HANDLERS -------------------------------------------
   const handleDetailSelect = (index: number) => {
@@ -92,9 +91,9 @@ const ProgressDetailsSection: React.FC = () => {
     router.push('/progress/strength/allStrengthWorkouts');
   };
 
-  // Navigate to "all run/walk sessions" screen (create this route if you haven’t yet)
-  const handleViewAllRunWalkPress = () => {
-    router.push('/progress/run_walk/allRunWalkSessions');
+  // Navigate to "all outdoor sessions" screen (create this route if you haven’t yet)
+  const handleViewAllOutdoorPress = () => {
+    router.push('/progress/outdoor/allOutdoorSessions');
   };
 
   // --- LOAD RECENT ITEMS -----------------------------------------------------
@@ -109,11 +108,11 @@ const ProgressDetailsSection: React.FC = () => {
 
         if (!user) {
           setLoadingWeights(false);
-          setLoadingRunWalk(false);
+          setLoadingOutdoor(false);
           return;
         }
 
-        // Strength (as you already had)
+        // Strength (unchanged)
         const strengthPromise = supabase
           .schema('strength')
           .from('strength_workouts')
@@ -122,33 +121,32 @@ const ProgressDetailsSection: React.FC = () => {
           .order('started_at', { ascending: false })
           .limit(5);
 
-        // Run/Walk sessions (finished only)
-        // Note: if your table does not have user_id, remove the eq('user_id', user.id)
-        // and rely on RLS.
-        const runWalkPromise = supabase
+        // Outdoor Sessions (completed only)
+        // Note: if your table does not have user_id, remove eq('user_id', user.id) and rely on RLS.
+        const outdoorPromise = supabase
           .schema('run_walk')
-          .from('sessions')
-          .select('id, ended_at, exercise_type, status, total_time_s, total_distance_m')
+          .from('outdoor_sessions')
+          .select('id, ended_at, activity_type, status, duration_s, distance_m')
           .eq('user_id', user.id)
-          .eq('status', 'finished')
+          .eq('status', 'completed')
           .order('ended_at', { ascending: false })
           .limit(5);
 
-        const [strengthRes, runWalkRes] = await Promise.all([
+        const [strengthRes, outdoorRes] = await Promise.all([
           strengthPromise,
-          runWalkPromise,
+          outdoorPromise,
         ]);
 
         if (strengthRes.error) throw strengthRes.error;
-        if (runWalkRes.error) throw runWalkRes.error;
+        if (outdoorRes.error) throw outdoorRes.error;
 
         setWeightsWorkouts((strengthRes.data ?? []) as StrengthWorkoutRow[]);
-        setRunWalkSessions((runWalkRes.data ?? []) as RunWalkSessionRow[]);
+        setOutdoorSessions((outdoorRes.data ?? []) as OutdoorSessionRow[]);
       } catch (err) {
         console.warn('Error loading progress details', err);
       } finally {
         setLoadingWeights(false);
-        setLoadingRunWalk(false);
+        setLoadingOutdoor(false);
       }
     };
 
@@ -160,10 +158,10 @@ const ProgressDetailsSection: React.FC = () => {
     router.push(`/add/Strength/${workoutId}`);
   };
 
-  // ✅ Run/Walk navigation to summary for a particular session
-  // This assumes you add the route file shown below: app/progress/run_walk/[sessionId].tsx
-  const handleRunWalkSessionPress = (sessionId: string) => {
-    router.push(`/progress/run_walk/${sessionId}`);
+  // ✅ Outdoor navigation: open summary route for this session id
+  // Matches your file: app/progress/outdoor/summary/[id].tsx
+  const handleOutdoorSessionPress = (sessionId: string) => {
+    router.push(`/progress/outdoor/${sessionId}`);
   };
 
   const renderWeightsContent = () => {
@@ -245,22 +243,22 @@ const ProgressDetailsSection: React.FC = () => {
     );
   };
 
-  const renderRunWalkContent = () => {
-    if (loadingRunWalk) {
+  const renderOutdoorContent = () => {
+    if (loadingOutdoor) {
       return <Text style={styles.contentMuted}>Loading...</Text>;
     }
 
-    if (!runWalkSessions.length) {
+    if (!outdoorSessions.length) {
       return (
         <View style={styles.listContainer}>
-          <Text style={styles.contentMuted}>No recent run/walk sessions.</Text>
+          <Text style={styles.contentMuted}>No recent outdoor sessions.</Text>
 
           <TouchableOpacity
             style={styles.viewAllButton}
             activeOpacity={0.85}
-            onPress={handleViewAllRunWalkPress}
+            onPress={handleViewAllOutdoorPress}
           >
-            <Text style={styles.viewAllText}>View all run/walk sessions</Text>
+            <Text style={styles.viewAllText}>View all outdoor sessions</Text>
             <Ionicons
               name="arrow-forward-circle-outline"
               size={18}
@@ -273,15 +271,15 @@ const ProgressDetailsSection: React.FC = () => {
 
     return (
       <View style={styles.listContainer}>
-        {runWalkSessions.map((sesh) => {
+        {outdoorSessions.map((sesh) => {
           const baseDate = sesh.ended_at ? new Date(sesh.ended_at) : null;
           const dateLabel = baseDate
             ? baseDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
             : 'Session';
 
-          const typeLabel = formatExerciseTypeLabel(sesh.exercise_type);
-          const dur = formatDurationFromSeconds(sesh.total_time_s);
-          const dist = formatDistanceMiFromMeters(sesh.total_distance_m);
+          const typeLabel = formatActivityTypeLabel(sesh.activity_type);
+          const dur = formatDurationFromSeconds(sesh.duration_s);
+          const dist = formatDistanceMiFromMeters(sesh.distance_m);
 
           const parts = [typeLabel];
           if (dur) parts.push(dur);
@@ -294,7 +292,7 @@ const ProgressDetailsSection: React.FC = () => {
               key={sesh.id}
               style={styles.listItem}
               activeOpacity={0.8}
-              onPress={() => handleRunWalkSessionPress(sesh.id)}
+              onPress={() => handleOutdoorSessionPress(sesh.id)}
             >
               <View>
                 <Text style={styles.listTitle}>{dateLabel}</Text>
@@ -308,9 +306,9 @@ const ProgressDetailsSection: React.FC = () => {
         <TouchableOpacity
           style={styles.viewAllButton}
           activeOpacity={0.85}
-          onPress={handleViewAllRunWalkPress}
+          onPress={handleViewAllOutdoorPress}
         >
-          <Text style={styles.viewAllText}>View all run/walk sessions</Text>
+          <Text style={styles.viewAllText}>View all outdoor sessions</Text>
           <Ionicons
             name="arrow-forward-circle-outline"
             size={18}
@@ -323,14 +321,10 @@ const ProgressDetailsSection: React.FC = () => {
 
   const renderContent = () => {
     if (selectedDetailIndex === 0) return renderWeightsContent();
-    if (selectedDetailIndex === 1) return renderRunWalkContent();
+    if (selectedDetailIndex === 1) return renderOutdoorContent();
 
     // Nutrition blank for now
-    return (
-      <Text style={styles.contentMuted}>
-        Nutrition details coming soon.
-      </Text>
-    );
+    return <Text style={styles.contentMuted}>Nutrition details coming soon.</Text>;
   };
 
   return (
@@ -344,9 +338,7 @@ const ProgressDetailsSection: React.FC = () => {
               {
                 width: segmentWidth,
                 transform: [
-                  {
-                    translateX: Animated.multiply(detailAnim, segmentWidth),
-                  },
+                  { translateX: Animated.multiply(detailAnim, segmentWidth) },
                 ],
               },
             ]}

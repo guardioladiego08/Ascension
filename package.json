@@ -47,6 +47,7 @@
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-system-ui": "~6.0.7",
+    "expo-task-manager": "~14.0.9",
     "expo-web-browser": "~15.0.8",
     "jest-expo": "~54.0.12",
     "lato-font": "^3.0.0",
