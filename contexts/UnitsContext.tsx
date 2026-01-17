@@ -1,104 +1,109 @@
 // contexts/UnitsContext.tsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
-export type WeightUnit = 'lb' | 'kg';
 export type DistanceUnit = 'mi' | 'km';
+type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 type UnitsContextValue = {
-  weightUnit: WeightUnit;
   distanceUnit: DistanceUnit;
-  loading: boolean;
-  setWeightUnit: (unit: WeightUnit) => Promise<void>;
-  setDistanceUnit: (unit: DistanceUnit) => Promise<void>;
+  setDistanceUnit: (unit: DistanceUnit) => Promise<boolean>; // returns success
+  distanceSaveState: SaveState;
+  distanceSaveError: string | null;
+  refreshUnits: () => Promise<void>;
 };
 
-const UnitsContext = createContext<UnitsContextValue>({
-  weightUnit: 'lb',
-  distanceUnit: 'mi',
-  loading: true,
-  setWeightUnit: async () => {},
-  setDistanceUnit: async () => {},
-});
+const UnitsContext = createContext<UnitsContextValue | null>(null);
 
-export const UnitsProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const [weightUnit, setWeightUnitState] = useState<WeightUnit>('lb');
+const SCHEMA = 'user';
+const TABLE = 'user_preferences'; // adjust to your actual table name
+const DIST_COL = 'distance_unit'; // adjust to your actual column name
+
+export function UnitsProvider({ children }: { children: React.ReactNode }) {
   const [distanceUnit, setDistanceUnitState] = useState<DistanceUnit>('mi');
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadPrefs = async () => {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const user = userData?.user;
-        if (!user) {
-          setLoading(false);
-          return;
-        }
+  const [distanceSaveState, setDistanceSaveState] = useState<SaveState>('idle');
+  const [distanceSaveError, setDistanceSaveError] = useState<string | null>(null);
 
-        const { data, error } = await supabase
-          .from('user_preferences')
-          .select('weight_unit, distance_unit')
-          .eq('user_id', user.id)
-          .maybeSingle();
+  const refreshUnits = useCallback(async () => {
+    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    if (authErr) {
+      // Not fatal for UI; just keep defaults
+      console.warn('[UnitsContext] getUser failed:', authErr);
+      return;
+    }
+    if (!auth?.user) return;
 
-        if (!error && data) {
-          if (data.weight_unit === 'lb' || data.weight_unit === 'kg') {
-            setWeightUnitState(data.weight_unit as WeightUnit);
-          }
-          if (data.distance_unit === 'mi' || data.distance_unit === 'km') {
-            setDistanceUnitState(data.distance_unit as DistanceUnit);
-          }
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+    const { data, error } = await supabase
+      .schema(SCHEMA)
+      .from(TABLE)
+      .select(`${DIST_COL}`)
+      .eq('user_id', auth.user.id)
+      .maybeSingle();
 
-    loadPrefs();
+    if (error) {
+      console.warn('[UnitsContext] load unit_preferences failed:', error);
+      return;
+    }
+
+    const unit = (data?.[DIST_COL] as DistanceUnit | null) ?? null;
+    if (unit === 'mi' || unit === 'km') setDistanceUnitState(unit);
   }, []);
 
-  const setWeightUnit = async (unit: WeightUnit) => {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    const user = userData?.user;
-    if (userError || !user) return;
+  useEffect(() => {
+    refreshUnits();
+  }, [refreshUnits]);
 
-    await supabase.from('user_preferences').upsert(
-      {
-        user_id: user.id,
-        weight_unit: unit,
-      },
-      { onConflict: 'user_id' }
-    );
-
-    setWeightUnitState(unit);
-  };
-
-  const setDistanceUnit = async (unit: DistanceUnit) => {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    const user = userData?.user;
-    if (userError || !user) return;
-
-    await supabase.from('user_preferences').upsert(
-      {
-        user_id: user.id,
-        distance_unit: unit,
-      },
-      { onConflict: 'user_id' }
-    );
-
+  const setDistanceUnit = useCallback(async (unit: DistanceUnit) => {
+    // optimistic UI
+    const prev = distanceUnit;
     setDistanceUnitState(unit);
-  };
 
-  return (
-    <UnitsContext.Provider
-      value={{ weightUnit, distanceUnit, loading, setWeightUnit, setDistanceUnit }}
-    >
-      {children}
-    </UnitsContext.Provider>
+    setDistanceSaveState('saving');
+    setDistanceSaveError(null);
+
+    try {
+      const { data: auth, error: authErr } = await supabase.auth.getUser();
+      if (authErr) throw authErr;
+      if (!auth?.user) throw new Error('Not signed in');
+
+      const { error } = await supabase
+        .schema(SCHEMA)
+        .from(TABLE)
+        .upsert(
+          { user_id: auth.user.id, [DIST_COL]: unit },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) throw error;
+
+      setDistanceSaveState('saved');
+      return true;
+    } catch (e: any) {
+      console.error('[UnitsContext] setDistanceUnit failed:', e);
+      setDistanceUnitState(prev); // revert on failure
+      setDistanceSaveState('error');
+      setDistanceSaveError(e?.message ?? 'Failed to save preference');
+      return false;
+    }
+  }, [distanceUnit]);
+
+  const value = useMemo(
+    () => ({
+      distanceUnit,
+      setDistanceUnit,
+      distanceSaveState,
+      distanceSaveError,
+      refreshUnits,
+    }),
+    [distanceUnit, setDistanceUnit, distanceSaveState, distanceSaveError, refreshUnits]
   );
-};
 
-export const useUnits = () => useContext(UnitsContext);
+  return <UnitsContext.Provider value={value}>{children}</UnitsContext.Provider>;
+}
+
+export function useUnits() {
+  const ctx = useContext(UnitsContext);
+  if (!ctx) throw new Error('useUnits must be used within UnitsProvider');
+  return ctx;
+}

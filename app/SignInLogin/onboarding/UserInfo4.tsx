@@ -44,6 +44,25 @@ const JOURNEY_OPTIONS: Array<{
   { key: 'elite', title: 'ELITE', subtitle: 'Performance-driven, competing at a high level.', icon: 'trophy-outline' },
 ];
 
+function sanitizeUsername(raw: string) {
+  let u = (raw ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
+function buildFallbackUsername(email: string | null | undefined, userId: string) {
+  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
+  let u = sanitizeUsername(baseRaw);
+  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
 export default function UserInfo4() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -79,10 +98,10 @@ export default function UserInfo4() {
       if (!authUserId) return;
 
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('fitness_journey_stage')
-        .eq('auth_user_id', authUserId)
+        .eq('id', authUserId)
         .maybeSingle();
 
       if (error || !data) return;
@@ -110,7 +129,6 @@ export default function UserInfo4() {
 
     setSaving(true);
     try {
-      // Always verify auth session (prevents "not signed in" saves)
       const {
         data: { user },
         error: userErr,
@@ -121,22 +139,31 @@ export default function UserInfo4() {
         return;
       }
 
-      // Ensure profile exists with username (NOT NULL safety)
+      // Ensure profile exists with required fields
       const metaUsername =
         (user.user_metadata as any)?.username?.trim?.() ||
-        (user.user_metadata as any)?.Username?.trim?.();
+        (user.user_metadata as any)?.Username?.trim?.() ||
+        '';
 
-      const fallbackUsername = `${(user.email?.split('@')[0] ?? 'user')}_${user.id.slice(0, 6)}`;
+      const username = (() => {
+        const s = sanitizeUsername(metaUsername);
+        if (s.length >= 3) return s;
+        return buildFallbackUsername(user.email, user.id);
+      })();
+
+      const metaDisplayName =
+        (user.user_metadata as any)?.display_name?.trim?.() ||
+        (user.user_metadata as any)?.displayName?.trim?.() ||
+        '';
+
+      const displayName = (metaDisplayName || username).trim();
 
       const { error: ensureErr } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .upsert(
-          {
-            auth_user_id: user.id,
-            username: metaUsername || fallbackUsername,
-          },
-          { onConflict: 'auth_user_id' },
+          { id: user.id, username, display_name: displayName },
+          { onConflict: 'id' },
         );
 
       if (ensureErr) {
@@ -145,15 +172,15 @@ export default function UserInfo4() {
         return;
       }
 
-      // Save the journey stage AND mark onboarding complete
+      // Save stage + mark onboarding complete
       const { error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .update({
           fitness_journey_stage: journey,
-          onboarding_completed: true, // ✅ mark complete here (boolean)
+          onboarding_completed: true,
         })
-        .eq('auth_user_id', authUserId);
+        .eq('id', authUserId);
 
       if (error) {
         console.log('[UserInfo4] save error', error);
@@ -161,8 +188,6 @@ export default function UserInfo4() {
         return;
       }
 
-      // Next: force Terms/Privacy gate before app access
-      // After acceptance, go to home (since onboarding_completed is true)
       router.replace({
         pathname: './TermsAndPrivacy',
         params: { nextPath: '/(tabs)/home' },

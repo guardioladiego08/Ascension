@@ -1,230 +1,238 @@
-// app/(tabs)/profile/components/ProfileHeaderSection.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
 import { Colors } from '@/constants/Colors';
 
-const BG = Colors.dark.background
-const CARD = Colors.dark.card
+const CARD = Colors.dark.card;
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark.text
-const TEXT_MUTED = Colors.dark.textMuted
-const ACCENT = Colors.dark.highlight1
+const TEXT = Colors.dark.text;
+const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
+const ACCENT = Colors.dark.highlight1;
 
-type ProfileHeaderSectionProps = {
-  fullName?: string | null;
+export type ProfileStats = {
+  posts: number;
+  followers: number;
+  following: number;
+};
+
+export type ProfilePrimaryAction =
+  | { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'outline'; disabled?: boolean }
+  | null
+  | undefined;
+
+type Props = {
+  fullName: string;
   username: string;
   bio?: string | null;
   profileImageUrl?: string | null;
-  stats: {
-    posts: number | string;
-    followers: number | string;
-    following: number | string;
-  };
-  isOwnProfile?: boolean;
+  stats: ProfileStats;
+
+  isOwnProfile: boolean;
   onEditProfile?: () => void;
+
+  // For other-user profiles: Follow / Request / Following / Requested actions
+  primaryAction?: ProfilePrimaryAction;
+  secondaryAction?: ProfilePrimaryAction;
 };
 
-const ProfileHeaderSection: React.FC<ProfileHeaderSectionProps> = ({
+function Stat({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statValue}>{value ?? 0}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function ActionButton({
+  label,
+  onPress,
+  variant = 'primary',
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'primary' | 'secondary' | 'outline';
+  disabled?: boolean;
+}) {
+  const style =
+    variant === 'primary'
+      ? styles.btnPrimary
+      : variant === 'secondary'
+        ? styles.btnSecondary
+        : styles.btnOutline;
+
+  const textStyle =
+    variant === 'primary' ? styles.btnPrimaryText : styles.btnText;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.btnBase, style, disabled && styles.btnDisabled]}
+    >
+      <Text style={[textStyle, disabled && styles.btnDisabledText]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+export default function ProfileHeaderSection({
   fullName,
   username,
   bio,
   profileImageUrl,
   stats,
-  isOwnProfile = true,
+  isOwnProfile,
   onEditProfile,
-}) => {
-  const initials = React.useMemo(() => {
-    if (fullName && fullName.trim().length > 0) {
-      const parts = fullName.trim().split(/\s+/);
-      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    }
-    return username.slice(0, 2).toUpperCase();
-  }, [fullName, username]);
-
-  const displayName =
-    fullName && fullName.trim().length > 0 ? fullName : username;
-
-  const bioIsEmpty = !bio || bio.trim().length === 0;
-
-  const bioText = bioIsEmpty
-    ? 'No bio yet. Add one to share your story and training goals.'
-    : bio!;
-
-  const primaryLabel = isOwnProfile ? 'Edit Profile' : 'Follow';
-  const secondaryLabel = isOwnProfile ? 'Share Profile' : 'Message';
-
-  const handlePrimaryPress = () => {
-    if (isOwnProfile && onEditProfile) {
-      onEditProfile();
-    }
-  };
-
+  primaryAction,
+  secondaryAction,
+}: Props) {
   return (
-    <View>
-      {/* Avatar + stats */}
-      <View style={styles.profileHeader}>
-        <View style={styles.avatarWrapper}>
+    <View style={styles.card}>
+      <View style={styles.topRow}>
+        <View style={styles.avatarWrap}>
           {profileImageUrl ? (
-            <Image
-              source={{ uri: profileImageUrl }}
-              style={styles.avatarImage}
-            />
+            <Image source={{ uri: profileImageUrl }} style={styles.avatarImg} />
           ) : (
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+            <View style={styles.avatarFallback}>
+              <Ionicons name="person" size={22} color={MUTED} />
             </View>
           )}
         </View>
 
-        <View style={styles.headerStatsRow}>
-          <ProfileStat label="Posts" value={String(stats.posts)} />
-          <ProfileStat label="Followers" value={String(stats.followers)} />
-          <ProfileStat label="Following" value={String(stats.following)} />
+        <View style={styles.statsRow}>
+          <Stat label="Posts" value={stats.posts} />
+          <Stat label="Followers" value={stats.followers} />
+          <Stat label="Following" value={stats.following} />
         </View>
       </View>
 
-      {/* Name / username / bio */}
-      <View style={styles.bioSection}>
-        <Text style={styles.nameText}>{displayName}</Text>
-        <Text style={styles.usernameText}>@{username}</Text>
-
-        <Text
-          style={[
-            styles.bioText,
-            bioIsEmpty ? styles.bioPlaceholderText : null,
-          ]}
-        >
-          {bioText}
-        </Text>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handlePrimaryPress}
-          >
-            <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>{secondaryLabel}</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={{ marginTop: 10 }}>
+        <Text style={styles.fullName}>{fullName || username}</Text>
+        <Text style={styles.username}>@{username}</Text>
+        {!!bio ? <Text style={styles.bio}>{bio}</Text> : null}
       </View>
-    </View>
-  );
-};
 
-function ProfileStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.profileStat}>
-      <Text style={styles.profileStatValue}>{value}</Text>
-      <Text style={styles.profileStatLabel}>{label}</Text>
+      <View style={styles.actionsRow}>
+        {isOwnProfile ? (
+          <ActionButton
+            label="Edit Profile"
+            onPress={onEditProfile ?? (() => {})}
+            variant="outline"
+          />
+        ) : (
+          <>
+            {primaryAction ? (
+              <ActionButton
+                label={primaryAction.label}
+                onPress={primaryAction.onPress}
+                variant={primaryAction.variant ?? 'primary'}
+                disabled={primaryAction.disabled}
+              />
+            ) : null}
+
+            {secondaryAction ? (
+              <ActionButton
+                label={secondaryAction.label}
+                onPress={secondaryAction.onPress}
+                variant={secondaryAction.variant ?? 'outline'}
+                disabled={secondaryAction.disabled}
+              />
+            ) : null}
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  profileHeader: {
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 12,
+    marginTop: 10,
+  },
+  topRow: {
     flexDirection: 'row',
+    gap: 12,
     alignItems: 'center',
-    marginTop: 8,
   },
-  avatarWrapper: {
-    marginRight: 24,
+  avatarWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
-  avatarCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: ACCENT,
+  avatarImg: { width: '100%', height: '100%' },
+  avatarFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  headerStatsRow: {
-    flexDirection: 'row',
+  statsRow: {
     flex: 1,
-    justifyContent: 'space-between',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
-  profileStat: {
-    alignItems: 'center',
-  },
-  profileStatValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  profileStatLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginTop: 2,
-  },
+  stat: { alignItems: 'center' },
+  statValue: { color: TEXT, fontSize: 16, fontWeight: '800' },
+  statLabel: { color: MUTED, fontSize: 11, marginTop: 2 },
 
-  bioSection: {
+  fullName: { color: TEXT, fontSize: 16, fontWeight: '800' },
+  username: { color: MUTED, fontSize: 12, marginTop: 2 },
+  bio: { color: TEXT, fontSize: 12.5, marginTop: 8, lineHeight: 17 },
+
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
     marginTop: 12,
   },
-  nameText: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  usernameText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  bioText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  bioPlaceholderText: {
-    color: TEXT_MUTED,
-    fontStyle: 'italic',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    gap: 8,
-  },
-  primaryButton: {
-    flex: 1,
-    borderColor: ACCENT,
-    borderWidth: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: ACCENT,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#fff',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '500',
-    fontSize: 14,
-  },
-});
 
-export default ProfileHeaderSection;
+  btnBase: {
+    flex: 1,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  btnPrimary: {
+    backgroundColor: ACCENT,
+  },
+  btnPrimaryText: {
+    color: '#0B0F1A',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  btnSecondary: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  btnOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  btnText: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  btnDisabled: { opacity: 0.55 },
+  btnDisabledText: { opacity: 0.9 },
+});

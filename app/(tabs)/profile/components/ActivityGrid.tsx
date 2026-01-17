@@ -16,17 +16,23 @@ import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 
 type ActivityKind = 'strength' | 'run' | 'walk' | 'cycle';
+type ActivityFilter = 'all' | ActivityKind;
+
+type ActivitySource = 'strength' | 'session' | 'outdoor';
 
 type UnifiedActivity = {
   id: string;
+  source: ActivitySource;
   kind: ActivityKind;
+
   startedAt: string;
   durationS: number | null;
 
-  // run/walk
+  // cardio
   distanceM?: number | null;
   paceKm?: number | null;
   paceMi?: number | null;
+  speedMps?: number | null;
 
   // strength
   totalVolume?: number | null;
@@ -35,17 +41,12 @@ type UnifiedActivity = {
 type Props = {
   userId: string;
   header?: React.ReactElement | null;
-
-  // only refresh/fetch when active
   isActive?: boolean;
   refreshToken?: number;
-
-  // layout
   contentPaddingHorizontal?: number;
   gap?: number;
 };
 
-const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
 const TEXT = Colors.dark.text;
 const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
@@ -55,29 +56,57 @@ const PAGE_SIZE = 24;
 const TABLES = {
   strengthWorkouts: { schema: 'strength', table: 'strength_workouts' },
   strengthSummary: { schema: 'strength', table: 'exercise_summary' },
-  runWalkSessions: { schema: 'run_walk', table: 'sessions' },
+  indoorSessions: { schema: 'run_walk', table: 'sessions' },
+  outdoorSessions: { schema: 'run_walk', table: 'outdoor_sessions' },
 };
 
 function formatDuration(seconds?: number | null) {
-  if (!seconds || seconds <= 0) return '-';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds == null ? null : Number(seconds);
+  if (!s || s <= 0) return '-';
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function formatDistance(m?: number | null, unit: 'mi' | 'km') {
-  if (!m || m <= 0) return '-';
+  const v = m == null ? null : Number(m);
+  if (!v || v <= 0) return '-';
   return unit === 'mi'
-    ? `${(m / 1609.344).toFixed(2)} mi`
-    : `${(m / 1000).toFixed(2)} km`;
+    ? `${(v / 1609.344).toFixed(2)} mi`
+    : `${(v / 1000).toFixed(2)} km`;
 }
 
 function formatPace(km?: number | null, mi?: number | null, unit: 'mi' | 'km') {
   const sec = unit === 'mi' ? mi : km;
-  if (!sec || sec <= 0) return '-';
-  const mm = Math.floor(sec / 60);
-  const ss = Math.round(sec % 60);
+  const s = sec == null ? null : Number(sec);
+  if (!s || s <= 0) return '-';
+  const mm = Math.floor(s / 60);
+  let ss = Math.round(s % 60);
+  // guard for rounding to 60
+  if (ss === 60) {
+    ss = 0;
+    return `${mm + 1}:00 /${unit}`;
+  }
   return `${mm}:${ss < 10 ? '0' : ''}${ss} /${unit}`;
+}
+
+function formatSpeed(mps?: number | null, unit: 'mi' | 'km') {
+  const v0 = mps == null ? null : Number(mps);
+  if (!v0 || v0 <= 0) return '-';
+  const v = unit === 'mi' ? v0 * 2.236936 : v0 * 3.6;
+  return unit === 'mi' ? `${v.toFixed(1)} mph` : `${v.toFixed(1)} kph`;
+}
+
+function formatCardDate(iso: string) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: '2-digit' }),
+  });
 }
 
 function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
@@ -86,25 +115,43 @@ function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
   return 'walk-outline';
 }
 
-function safeSecondsFromDates(start?: string | null, end?: string | null): number | null {
-  if (!start || !end) return null;
-  const t0 = Date.parse(start);
-  const t1 = Date.parse(end);
-  if (!Number.isFinite(t0) || !Number.isFinite(t1)) return null;
-  const s = Math.round((t1 - t0) / 1000);
-  return s > 0 ? s : null;
+function kindFromText(t: string): ActivityKind {
+  const v = (t ?? '').toLowerCase();
+  if (v === 'walk') return 'walk';
+  if (v === 'bike' || v === 'cycle' || v === 'ride') return 'cycle';
+  return 'run';
 }
 
 /**
  * Attempt a select; if it fails with missing-column (42703), return null so caller can try next.
  */
 async function trySelectOrNull<T>(
-  query: Promise<{ data: T[] | null; error: any }>,
+  query: Promise<{ data: T[] | null; error: any }>
 ): Promise<{ data: T[]; error: null } | { data: []; error: any } | null> {
   const res = await query;
   if (!res.error) return { data: (res.data ?? []) as T[], error: null };
-  if (res.error?.code === '42703') return null; // missing column, try another shape
-  return { data: [], error: res.error }; // real error
+  if (res.error?.code === '42703') return null;
+  return { data: [], error: res.error };
+}
+
+function FilterPill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.9}
+      style={[styles.pill, active && styles.pillActive]}
+    >
+      <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 }
 
 export default function ActivityGrid({
@@ -120,36 +167,38 @@ export default function ActivityGrid({
   const { units } = useUnits();
   const distanceUnit = (units?.distance ?? 'mi') as 'mi' | 'km';
 
+  const [filter, setFilter] = useState<ActivityFilter>('all');
+
   const [items, setItems] = useState<UnifiedActivity[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const strengthOffset = useRef(0);
-  const runWalkOffset = useRef(0);
+  const sessionsOffset = useRef(0);
+  const outdoorOffset = useRef(0);
+
   const strengthDone = useRef(false);
-  const runWalkDone = useRef(false);
+  const sessionsDone = useRef(false);
+  const outdoorDone = useRef(false);
 
   const cardSize = useMemo(() => {
     const usable = width - contentPaddingHorizontal * 2 - gap * 2;
     return Math.floor(usable / 3);
   }, [width, contentPaddingHorizontal, gap]);
 
+  // -----------------------------
+  // Strength page
+  // -----------------------------
   const fetchStrengthPage = useCallback(
     async (from: number, to: number) => {
       const base = supabase
         .schema(TABLES.strengthWorkouts.schema)
         .from(TABLES.strengthWorkouts.table);
 
-      // Try multiple schema shapes to avoid 42703
-      // Order matters: prefer explicit stored duration, then computed from ended_at, then none.
       let workouts: any[] = [];
-      let durationMode:
-        | { type: 'col'; key: string }
-        | { type: 'dates'; startKey: 'started_at'; endKey: 'ended_at' }
-        | { type: 'none' } = { type: 'none' };
+      let durationMode: { type: 'col'; key: string } | { type: 'none' } = { type: 'none' };
 
-      // 1) started_at + total_time_s
       const t1 = await trySelectOrNull<any>(
         base
           .select('id, started_at, total_time_s')
@@ -163,7 +212,6 @@ export default function ActivityGrid({
         durationMode = { type: 'col', key: 'total_time_s' };
       }
 
-      // 2) started_at + duration_s
       if (!t1) {
         const t2 = await trySelectOrNull<any>(
           base
@@ -179,55 +227,6 @@ export default function ActivityGrid({
         }
       }
 
-      // 3) started_at + total_duration_s
-      if (!t1 && workouts.length === 0) {
-        const t3 = await trySelectOrNull<any>(
-          base
-            .select('id, started_at, total_duration_s')
-            .eq('user_id', userId)
-            .order('started_at', { ascending: false })
-            .range(from, to)
-        );
-        if (t3 && t3.error) throw t3.error;
-        if (t3) {
-          workouts = t3.data;
-          durationMode = { type: 'col', key: 'total_duration_s' };
-        }
-      }
-
-      // 4) started_at + time_s
-      if (!t1 && workouts.length === 0) {
-        const t4 = await trySelectOrNull<any>(
-          base
-            .select('id, started_at, time_s')
-            .eq('user_id', userId)
-            .order('started_at', { ascending: false })
-            .range(from, to)
-        );
-        if (t4 && t4.error) throw t4.error;
-        if (t4) {
-          workouts = t4.data;
-          durationMode = { type: 'col', key: 'time_s' };
-        }
-      }
-
-      // 5) Compute duration from ended_at (if column exists)
-      if (!t1 && workouts.length === 0) {
-        const t5 = await trySelectOrNull<any>(
-          base
-            .select('id, started_at, ended_at')
-            .eq('user_id', userId)
-            .order('started_at', { ascending: false })
-            .range(from, to)
-        );
-        if (t5 && t5.error) throw t5.error;
-        if (t5) {
-          workouts = t5.data;
-          durationMode = { type: 'dates', startKey: 'started_at', endKey: 'ended_at' };
-        }
-      }
-
-      // 6) Minimal fallback
       if (!t1 && workouts.length === 0) {
         const res = await base
           .select('id, started_at')
@@ -242,7 +241,6 @@ export default function ActivityGrid({
 
       const workoutIds = workouts.map((w) => w.id);
 
-      // Aggregate volume from exercise_summary
       const volumeMap = new Map<string, number>();
       if (workoutIds.length) {
         const volRes = await supabase
@@ -262,16 +260,14 @@ export default function ActivityGrid({
 
       const page: UnifiedActivity[] = workouts.map((w) => {
         let durationS: number | null = null;
-
         if (durationMode.type === 'col') {
           const v = w[durationMode.key];
           durationS = v == null ? null : Number(v);
-        } else if (durationMode.type === 'dates') {
-          durationS = safeSecondsFromDates(w.started_at, w.ended_at);
         }
 
         return {
           id: String(w.id),
+          source: 'strength',
           kind: 'strength',
           startedAt: w.started_at,
           durationS,
@@ -284,52 +280,156 @@ export default function ActivityGrid({
     [userId]
   );
 
-  const fetchRunWalkPage = useCallback(
-    async (from: number, to: number) => {
-      const res = await supabase
-        .schema(TABLES.runWalkSessions.schema)
-        .from(TABLES.runWalkSessions.table)
+  // -----------------------------
+  // Indoor sessions: run_walk.sessions
+  // -----------------------------
+  const fetchSessionsPage = useCallback(
+    async (from: number, to: number, activeFilter: ActivityFilter) => {
+      let q = supabase
+        .schema(TABLES.indoorSessions.schema)
+        .from(TABLES.indoorSessions.table)
         .select(
-          'id, exercise_type, started_at, total_time_s, total_distance_m, avg_pace_s_per_km, avg_pace_s_per_mi'
+          'id, exercise_type, status, started_at, ended_at, total_time_s, total_distance_m, avg_speed_mps, avg_pace_s_per_km, avg_pace_s_per_mi'
         )
         .eq('user_id', userId)
+        .eq('status', 'completed')
         .order('started_at', { ascending: false })
         .range(from, to);
 
+      if (activeFilter === 'run') q = q.eq('exercise_type', 'run');
+      if (activeFilter === 'walk') q = q.eq('exercise_type', 'walk');
+      if (activeFilter === 'cycle') q = q.in('exercise_type', ['bike', 'cycle', 'ride']);
+
+      const res = await q;
       if (res.error) throw res.error;
 
-      return (res.data ?? []).map((r: any) => ({
-        id: String(r.id),
-        kind: r.exercise_type as ActivityKind, // enum is fine
-        startedAt: r.started_at,
-        durationS: r.total_time_s == null ? null : Number(r.total_time_s),
-        distanceM: r.total_distance_m == null ? null : Number(r.total_distance_m),
-        paceKm: r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km),
-        paceMi: r.avg_pace_s_per_mi == null ? null : Number(r.avg_pace_s_per_mi),
-      })) as UnifiedActivity[];
+      return (res.data ?? []).map((r: any) => {
+        const kind = kindFromText(String(r.exercise_type));
+
+        const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
+        const paceMi =
+          r.avg_pace_s_per_mi != null
+            ? Number(r.avg_pace_s_per_mi)
+            : paceKm == null
+              ? null
+              : paceKm * 1.609344;
+
+        return {
+          id: String(r.id),
+          source: 'session',
+          kind,
+          startedAt: r.started_at,
+          durationS: r.total_time_s == null ? null : Number(r.total_time_s),
+          distanceM: r.total_distance_m == null ? null : Number(r.total_distance_m),
+          paceKm,
+          paceMi,
+          speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
+        } as UnifiedActivity;
+      });
     },
     [userId]
   );
 
+  // -----------------------------
+  // Outdoor sessions: run_walk.outdoor_sessions
+  // -----------------------------
+  const fetchOutdoorPage = useCallback(
+    async (from: number, to: number, activeFilter: ActivityFilter) => {
+      let q = supabase
+        .schema(TABLES.outdoorSessions.schema)
+        .from(TABLES.outdoorSessions.table)
+        .select(
+          'id, activity_type, started_at, ended_at, duration_s, distance_m, avg_pace_s_per_km, avg_speed_mps'
+        )
+        .eq('user_id', userId)
+        .not('ended_at', 'is', null)
+        .order('started_at', { ascending: false })
+        .range(from, to);
+
+        if (activeFilter === 'run') {
+          // run could be outdoor_run or indoor_run
+          q = q.in('exercise_type', ['outdoor_run', 'indoor_run']);
+        }
+        if (activeFilter === 'walk') {
+          q = q.in('exercise_type', ['outdoor_walk', 'indoor_walk']);
+        }
+        // If you have cycling types, list them here; otherwise remove cycle support.
+
+
+      const res = await q;
+      if (res.error) throw res.error;
+
+      return (res.data ?? []).map((r: any) => {
+        const kind = kindFromText(String(r.activity_type));
+
+        const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
+        const paceMi = paceKm == null ? null : paceKm * 1.609344;
+
+        return {
+          id: String(r.id),
+          source: 'outdoor',
+          kind,
+          startedAt: r.started_at,
+          durationS: r.duration_s == null ? null : Number(r.duration_s),
+          distanceM: r.distance_m == null ? null : Number(r.distance_m),
+          paceKm,
+          paceMi,
+          speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
+        } as UnifiedActivity;
+      });
+    },
+    [userId]
+  );
+
+  const resetPagination = useCallback(() => {
+    strengthOffset.current = 0;
+    sessionsOffset.current = 0;
+    outdoorOffset.current = 0;
+
+    strengthDone.current = false;
+    sessionsDone.current = false;
+    outdoorDone.current = false;
+
+    setItems([]);
+  }, []);
+
   const fetchNext = useCallback(
     async (reset: boolean) => {
-      if (!userId || !isActive) return;
-
-      if (reset) {
-        strengthOffset.current = 0;
-        runWalkOffset.current = 0;
-        strengthDone.current = false;
-        runWalkDone.current = false;
-        setItems([]);
+      // Always render header; when userId not ready, stop loading and show empty state.
+      if (!isActive) {
+        setLoadingInitial(false);
+        setLoadingMore(false);
+        return;
       }
 
+      if (!userId) {
+        if (reset) resetPagination();
+        setError(null);
+        setLoadingInitial(false);
+        setLoadingMore(false);
+        return;
+      }
+
+      const wantsStrength = filter === 'all' || filter === 'strength';
+      const wantsCardio = filter === 'all' || filter === 'run' || filter === 'walk' || filter === 'cycle';
+
+      // If not reset and everything requested is already done, do nothing.
+      if (!reset) {
+        const strengthAllDone = !wantsStrength || strengthDone.current;
+        const cardioAllDone = !wantsCardio || (sessionsDone.current && outdoorDone.current);
+        if (strengthAllDone && cardioAllDone) return;
+      }
+
+      if (reset) resetPagination();
+
       setError(null);
-      reset ? setLoadingInitial(true) : setLoadingMore(true);
+      if (reset) setLoadingInitial(true);
+      else setLoadingMore(true);
 
       try {
         const incoming: UnifiedActivity[] = [];
 
-        if (!strengthDone.current) {
+        if (wantsStrength && !strengthDone.current) {
           const page = await fetchStrengthPage(
             strengthOffset.current,
             strengthOffset.current + PAGE_SIZE - 1
@@ -337,123 +437,209 @@ export default function ActivityGrid({
           strengthOffset.current += page.length;
           if (page.length < PAGE_SIZE) strengthDone.current = true;
           incoming.push(...page);
+        } else if (!wantsStrength) {
+          strengthDone.current = true;
         }
 
-        if (!runWalkDone.current) {
-          const page = await fetchRunWalkPage(
-            runWalkOffset.current,
-            runWalkOffset.current + PAGE_SIZE - 1
+        if (wantsCardio && !sessionsDone.current) {
+          const page = await fetchSessionsPage(
+            sessionsOffset.current,
+            sessionsOffset.current + PAGE_SIZE - 1,
+            filter
           );
-          runWalkOffset.current += page.length;
-          if (page.length < PAGE_SIZE) runWalkDone.current = true;
+          sessionsOffset.current += page.length;
+          if (page.length < PAGE_SIZE) sessionsDone.current = true;
           incoming.push(...page);
+        } else if (!wantsCardio) {
+          sessionsDone.current = true;
+        }
+
+        if (wantsCardio && !outdoorDone.current) {
+          const page = await fetchOutdoorPage(
+            outdoorOffset.current,
+            outdoorOffset.current + PAGE_SIZE - 1,
+            filter
+          );
+          outdoorOffset.current += page.length;
+          if (page.length < PAGE_SIZE) outdoorDone.current = true;
+          incoming.push(...page);
+        } else if (!wantsCardio) {
+          outdoorDone.current = true;
         }
 
         setItems((prev) => {
-          const map = new Map(prev.map((p) => [`${p.kind}:${p.id}`, p]));
-          for (const i of incoming) map.set(`${i.kind}:${i.id}`, i);
+          const map = new Map(prev.map((p) => [`${p.source}:${p.id}`, p]));
+          for (const i of incoming) map.set(`${i.source}:${i.id}`, i);
+
           return [...map.values()].sort(
             (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
           );
         });
       } catch (e: any) {
         console.error('[ActivityGrid] fetchNext failed', e);
-        setError(e?.message ?? 'Failed to load activities');
+        setError(e?.message?.trim?.() ? e.message : 'Failed to load activities');
       } finally {
         setLoadingInitial(false);
         setLoadingMore(false);
       }
     },
-    [userId, isActive, fetchStrengthPage, fetchRunWalkPage]
+    [
+      userId,
+      isActive,
+      filter,
+      fetchStrengthPage,
+      fetchSessionsPage,
+      fetchOutdoorPage,
+      resetPagination,
+    ]
   );
 
+  // Fetch when active + user changes
   useEffect(() => {
     if (isActive) fetchNext(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isActive]);
+  }, [isActive, userId, fetchNext]);
 
+  // External refresh trigger
   useEffect(() => {
     if (isActive) fetchNext(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshToken, isActive]);
+  }, [refreshToken, isActive, fetchNext]);
 
-  const renderCard = ({ item, index }: { item: UnifiedActivity; index: number }) => (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => {
-        if (item.kind === 'strength') {
-          router.push({
-            pathname: '/progress/strength/[id]',
-            params: { id: item.id },
-          });
-        } else {
+  // Filter change
+  useEffect(() => {
+    if (isActive) fetchNext(true);
+  }, [filter, isActive, fetchNext]);
+
+  const headerWithFilter = useMemo(() => {
+    return (
+      <View>
+        {header}
+
+        <View style={styles.filterRow}>
+          <FilterPill label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+          <FilterPill label="Strength" active={filter === 'strength'} onPress={() => setFilter('strength')} />
+          <FilterPill label="Run" active={filter === 'run'} onPress={() => setFilter('run')} />
+          <FilterPill label="Walk" active={filter === 'walk'} onPress={() => setFilter('walk')} />
+          <FilterPill label="Bike" active={filter === 'cycle'} onPress={() => setFilter('cycle')} />
+        </View>
+      </View>
+    );
+  }, [header, filter]);
+
+  const renderCard = ({ item, index }: { item: UnifiedActivity; index: number }) => {
+    const dateLabel = formatCardDate(item.startedAt);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          if (item.source === 'strength') {
+            router.push({ pathname: '/progress/strength/[id]', params: { id: item.id } });
+            return;
+          }
+          if (item.source === 'outdoor') {
+            router.push({
+              pathname: '/progress/outdoor/[id]',
+              params: { sessionId: item.id },
+            });
+            return;
+          }
           router.push({
             pathname: '/progress/run_walk/[sessionId]',
             params: { sessionId: item.id },
           });
-        }
-      }}
-      style={[
-        styles.card,
-        {
-          width: cardSize,
-          height: cardSize,
-          marginRight: index % 3 !== 2 ? gap : 0,
-          marginBottom: gap,
-        },
-      ]}
-    >
-      <View style={styles.badge}>
-        <Ionicons name={iconFor(item.kind)} size={12} color={TEXT} />
-      </View>
+        }}
+        style={[
+          styles.card,
+          {
+            width: cardSize,
+            height: cardSize,
+            marginRight: index % 3 !== 2 ? gap : 0,
+            marginBottom: gap,
+          },
+        ]}
+      >
+        <View style={styles.badge}>
+          <Ionicons name={iconFor(item.kind)} size={12} color={TEXT} />
+        </View>
 
-      <View style={styles.overlay}>
-        <Text style={styles.overlayText}>{formatDuration(item.durationS)}</Text>
+        <View style={styles.overlay}>
+          <Text style={styles.dateText}>{dateLabel}</Text>
 
-        {item.kind === 'strength' ? (
-          <Text style={styles.overlayText}>
-            {Math.round(item.totalVolume ?? 0).toLocaleString()} vol
-          </Text>
-        ) : (
-          <Text style={styles.overlayText}>
-            {formatDistance(item.distanceM, distanceUnit)} •{' '}
-            {formatPace(item.paceKm, item.paceMi, distanceUnit)}
-          </Text>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+          <Text style={styles.overlayText}>{formatDuration(item.durationS)}</Text>
 
-  if (loadingInitial) {
+          {item.kind === 'strength' ? (
+            <Text style={styles.overlayText}>
+              {Math.round(item.totalVolume ?? 0).toLocaleString()} vol
+            </Text>
+          ) : item.kind === 'cycle' ? (
+            <Text style={styles.overlayText}>
+              {formatDistance(item.distanceM, distanceUnit)} • {formatSpeed(item.speedMps, distanceUnit)}
+            </Text>
+          ) : (
+            <Text style={styles.overlayText}>
+              {formatDistance(item.distanceM, distanceUnit)} • {formatPace(item.paceKm, item.paceMi, distanceUnit)}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const EmptyState = useCallback(() => {
+    // header is rendered by FlatList ListHeaderComponent; this is only the body below it.
+    if (loadingInitial) {
+      return (
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator />
+          <Text style={styles.emptyText}>Loading activity…</Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>{error}</Text>
+        </View>
+      );
+    }
+
+    if (!userId) {
+      return (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyText}>Loading profile…</Text>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.loadingWrap}>
-        {header}
-        <View style={{ height: 14 }} />
-        <ActivityIndicator />
+      <View style={styles.emptyWrap}>
+        <Text style={styles.emptyText}>No activity yet.</Text>
       </View>
     );
-  }
+  }, [loadingInitial, error, userId]);
 
   return (
     <FlatList
       data={items}
       renderItem={renderCard}
-      keyExtractor={(i) => `${i.kind}:${i.id}`}
+      keyExtractor={(i) => `${i.source}:${i.id}`}
       numColumns={3}
-      ListHeaderComponent={header}
+      ListHeaderComponent={headerWithFilter}
+      ListEmptyComponent={EmptyState}
       contentContainerStyle={{
         paddingHorizontal: contentPaddingHorizontal,
         paddingTop: 12,
         paddingBottom: 24,
       }}
       showsVerticalScrollIndicator={false}
-      onEndReached={() => !loadingMore && fetchNext(false)}
+      onEndReached={() => {
+        if (!loadingMore && !loadingInitial) fetchNext(false);
+      }}
       onEndReachedThreshold={0.6}
       ListFooterComponent={
-        loadingMore ? <ActivityIndicator style={{ margin: 16 }} /> : error ? (
-          <View style={{ paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ color: MUTED, fontSize: 12 }}>{error}</Text>
-          </View>
+        loadingMore ? (
+          <ActivityIndicator style={{ margin: 16 }} />
         ) : null
       }
     />
@@ -461,9 +647,50 @@ export default function ActivityGrid({
 }
 
 const styles = StyleSheet.create({
-  loadingWrap: {
-    flex: 1,
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  pillActive: {
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  pillText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pillTextActive: {
+    color: TEXT,
+  },
+
+  emptyWrap: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  emptyText: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+
   card: {
     backgroundColor: CARD,
     borderRadius: 6,
@@ -483,6 +710,12 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 6,
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  dateText: {
+    color: MUTED,
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 2,
   },
   overlayText: {
     color: TEXT,

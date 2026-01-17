@@ -6,8 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Platform,
-  ScrollView, // ✅ add
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,18 +24,12 @@ const TEXT_MUTED = Colors.dark.textMuted;
 
 type Params = { authUserId?: string };
 
-// Match your DB enums if you already have them.
-// If you already defined Postgres enums:
-// - user.app_usage_reason[]
-// - user.fitness_journey_stage
-// then make these strings match exactly.
 type AppUsageReason =
   | 'track_fitness_health'
   | 'compete_with_friends'
   | 'train_for_personal_goal'
   | 'connect_with_friends'
   | 'other';
-
 
 const USAGE_OPTIONS: Array<{
   key: AppUsageReason;
@@ -76,25 +69,41 @@ const USAGE_OPTIONS: Array<{
   },
 ];
 
+function sanitizeUsername(raw: string) {
+  let u = (raw ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
+function buildFallbackUsername(email: string | null | undefined, userId: string) {
+  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
+  let u = sanitizeUsername(baseRaw);
+  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
 
 export default function UserInfo3() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
   const authUserId = Array.isArray(params.authUserId) ? params.authUserId[0] : params.authUserId;
 
-  // Q1 multi-select
   const [usage, setUsage] = useState<AppUsageReason[]>([]);
 
-  // Prefill (optional)
   useEffect(() => {
     const load = async () => {
       if (!authUserId) return;
 
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('app_usage_reasons')
-        .eq('auth_user_id', authUserId)
+        .eq('id', authUserId)
         .maybeSingle();
 
       if (error || !data) return;
@@ -138,51 +147,67 @@ export default function UserInfo3() {
   const [saving, setSaving] = useState(false);
 
   const handleNext = async () => {
-  setSaving(true);
-  try {
-    // Always trust the actual session user for RLS policies
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser();
+    setSaving(true);
+    try {
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
 
-    if (userErr || !user) {
-      showAlert('Auth error', 'You are not signed in. Please sign in again.');
-      return;
+      if (userErr || !user) {
+        showAlert('Auth error', 'You are not signed in. Please sign in again.');
+        return;
+      }
+
+      // Ensure profile exists with required fields (username + display_name)
+      const metaUsername =
+        (user.user_metadata as any)?.username?.trim?.() ||
+        (user.user_metadata as any)?.Username?.trim?.() ||
+        '';
+
+      const username = (() => {
+        const s = sanitizeUsername(metaUsername);
+        if (s.length >= 3) return s;
+        return buildFallbackUsername(user.email, user.id);
+      })();
+
+      const metaDisplayName =
+        (user.user_metadata as any)?.display_name?.trim?.() ||
+        (user.user_metadata as any)?.displayName?.trim?.() ||
+        '';
+
+      const displayName = (metaDisplayName || username).trim();
+
+      const { error: ensureErr } = await supabase
+        .schema('public')
+        .from('profiles')
+        .upsert(
+          { id: user.id, username, display_name: displayName },
+          { onConflict: 'id' },
+        );
+
+      if (ensureErr) {
+        showAlert('Error', ensureErr.message);
+        return;
+      }
+
+      const { error } = await supabase
+        .schema('public')
+        .from('profiles')
+        .update({ app_usage_reasons: usage })
+        .eq('id', user.id);
+
+      if (error) {
+        console.log('[UserInfo3] save error', error);
+        showAlert('Error', error.message);
+        return;
+      }
+
+      router.replace({ pathname: './UserInfo4', params: { authUserId: user.id } });
+    } finally {
+      setSaving(false);
     }
-
-    const metaUsername =
-      (user.user_metadata as any)?.username?.trim?.() ||
-      (user.user_metadata as any)?.Username?.trim?.();
-
-    const fallbackUsername = `${(user.email?.split('@')[0] ?? 'user')}_${user.id.slice(0, 6)}`;
-
-    const payload = {
-      auth_user_id: user.id,
-      username: metaUsername || fallbackUsername, // ✅ prevents NOT NULL insert failure
-      app_usage_reasons: usage,
-    };
-
-    const { error } = await supabase
-      .schema('user')
-      .from('profiles')
-      .upsert(payload, { onConflict: 'auth_user_id' });
-
-
-    if (error) {
-      console.log('[UserInfo3] save error', error);
-      showAlert('Error', error.message); // <-- show the real reason
-      return;
-    }
-
-    router.replace({ pathname: './UserInfo4', params: { authUserId: user.id } });
-  } finally {
-    setSaving(false);
-  }
-};
-
-
-  const handleBack = () => router.back();
+  };
 
   const OptionCard = ({
     title,
@@ -294,15 +319,6 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   scrollContent: {
     paddingBottom: 22,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   topTextBlock: { flex: 1, paddingLeft: 12 },
   topTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '800', letterSpacing: 1.4 },

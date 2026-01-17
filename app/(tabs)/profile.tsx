@@ -16,12 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
-import { supabase } from '@/lib/supabase';
 
 import GoalCalendar from './profile/components/GoalCalendar';
-import ProfileHeaderSection from './profile/components/ProfileHeaderSection';
-import LifetimeStatsCard from './profile/components/LifetimeStatsCard';
+import ProfileHeaderSection, { type ProfileStats } from './profile/components/ProfileHeaderSection';
+import LifetimeStatsTable from './profile/components/LifetimeStatsTable';
 import ActivityGrid from './profile/components/ActivityGrid';
+
+import { getMyProfile, getBestDisplayName, type Profile } from '@/lib/profile';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -30,40 +31,31 @@ const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.dark.highlight1;
 
-type ProfileRow = {
-  id: string;
-  auth_user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  username: string;
-  bio: string | null;
-  profile_image_url: string | null;
-};
+type DetailTab = 'stats' | 'lifetime' | 'calendar';
 
-type ProfileStats = {
-  posts: number;
-  followers: number;
-  following: number;
-};
-
-// Removed "grid" tab
-type DetailTab = 'stats' | 'calendar';
+function formatSupabaseErr(err: any) {
+  if (!err) return 'Unknown error';
+  const msg = typeof err?.message === 'string' ? err.message : '';
+  const code = err?.code ? `(${err.code})` : '';
+  const details = err?.details ? ` ${err.details}` : '';
+  const hint = err?.hint ? ` Hint: ${err.hint}` : '';
+  const out = `${msg?.trim?.() || 'Request failed'} ${code}${details}${hint}`.trim();
+  return out.length ? out : 'Request failed';
+}
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  // Default to Activity (since Posts removed)
   const [detailTab, setDetailTab] = useState<DetailTab>('stats');
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  // No social/following yet: keep these at 0 so UI renders without backend dependencies
   const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
+
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const username = useMemo(() => profile?.username ?? 'user', [profile]);
-  const fullName = useMemo(() => {
-    if (!profile) return '';
-    return [profile.first_name, profile.last_name].filter(Boolean).join(' ');
-  }, [profile]);
+  const fullName = useMemo(() => (profile ? getBestDisplayName(profile) : ''), [profile]);
 
   const goToSettings = () => router.push('/profile/settings');
 
@@ -72,29 +64,14 @@ export default function ProfileScreen() {
       setLoading(true);
       setErrorText(null);
 
-      const { data: userRes, error: userErr } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      if (!userRes?.user) throw new Error('Not signed in');
+      const row = await getMyProfile();
+      setProfile(row);
 
-      const user = userRes.user;
-
-      const { data, error } = await supabase
-        .schema('user')
-        .from('profiles')
-        .select('id, auth_user_id, first_name, last_name, username, bio, profile_image_url')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (!data) throw new Error('Profile not found for current user.');
-
-      setProfile(data as ProfileRow);
-
-      // You can wire these later (posts/followers/following)
-      // setStats(...)
+      // No followers/following yet
+      setStats({ posts: 0, followers: 0, following: 0 });
     } catch (err: any) {
       console.error('[Profile] loadProfile failed', err);
-      setErrorText(err?.message ?? 'Failed to load profile');
+      setErrorText(formatSupabaseErr(err));
       setProfile(null);
     } finally {
       setLoading(false);
@@ -120,6 +97,12 @@ export default function ProfileScreen() {
         onPress={() => setDetailTab('stats')}
       />
       <TabButton
+        label="Lifetime"
+        icon="trophy-outline"
+        active={detailTab === 'lifetime'}
+        onPress={() => setDetailTab('lifetime')}
+      />
+      <TabButton
         label="Calendar"
         icon="calendar-outline"
         active={detailTab === 'calendar'}
@@ -128,11 +111,6 @@ export default function ProfileScreen() {
     </View>
   );
 
-  /**
-   * This header block is used both by:
-   * - ScrollView (Calendar)
-   * - ActivityGrid FlatList (Activity tab)
-   */
   const renderHeaderBlock = () => (
     <>
       {profile && (
@@ -143,68 +121,74 @@ export default function ProfileScreen() {
           profileImageUrl={profile.profile_image_url}
           stats={stats}
           isOwnProfile={true}
-          onEditProfile={() => router.push('/profile/edit')}
+          onEditProfile={() => router.push('/profile/components/edit')}
         />
       )}
 
-      <LifetimeStatsCard />
-
       {renderDetailTabs()}
 
-      {/* subtle separator like IG (optional) */}
       <View style={styles.headerDivider} />
     </>
   );
+
+  const userId = profile?.id ?? '';
 
   return (
     <LinearGradient
       colors={['#3a3a3bff', '#1e1e1eff', BG]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={styles.container}
     >
+      {/* Critical fix: SafeAreaView with flex:1 so FlatList/ScrollView has height */}
       <SafeAreaView style={styles.safeArea}>
-        <LogoHeader />
+        <View style={styles.headerTop}>
+          <LogoHeader />
 
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <Text style={styles.topBarUsername}>@{username}</Text>
-          <View style={styles.topBarIcons}>
+          <View style={styles.topBarIcons} pointerEvents="box-none">
             <TouchableOpacity onPress={goToSettings} style={styles.iconButton}>
               <Ionicons name="settings-outline" size={22} color={TEXT_PRIMARY} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {loading ? (
-          <View style={styles.stateWrap}>
-            <ActivityIndicator size="small" color={ACCENT} />
-            <Text style={styles.stateText}>Loading profile…</Text>
-          </View>
-        ) : errorText ? (
-          <View style={styles.stateWrap}>
-            <Text style={styles.errorText}>{errorText}</Text>
-          </View>
-        ) : (
-          <>
-            {/* Default/Primary: Activity */}
-            {detailTab === 'stats' ? (
-              <ActivityGrid
-                userId={profile?.auth_user_id ?? ''}
-                header={renderHeaderBlock()}
-              />
-            ) : (
-              <ScrollView
-                style={styles.container}
-                contentContainerStyle={styles.scrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {renderHeaderBlock()}
-                <GoalCalendar />
-              </ScrollView>
-            )}
-          </>
-        )}
+        {/* Critical fix: body wrapper has flex:1 */}
+        <View style={styles.body}>
+          {loading ? (
+            <View style={styles.stateWrap}>
+              <ActivityIndicator size="small" color={ACCENT} />
+              <Text style={styles.stateText}>Loading profile…</Text>
+            </View>
+          ) : errorText ? (
+            <View style={styles.stateWrap}>
+              <Text style={styles.errorText}>{errorText}</Text>
+            </View>
+          ) : !userId ? (
+            <View style={styles.stateWrap}>
+              <Text style={styles.stateText}>Profile loaded without user id.</Text>
+            </View>
+          ) : detailTab === 'stats' ? (
+            <ActivityGrid userId={userId} header={renderHeaderBlock()} />
+          ) : detailTab === 'lifetime' ? (
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {renderHeaderBlock()}
+              <LifetimeStatsTable userId={userId} />
+            </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {renderHeaderBlock()}
+              <GoalCalendar />
+            </ScrollView>
+          )}
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -232,31 +216,31 @@ function TabButton({
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
+  flex: { flex: 1 },
 
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 6,
+  headerTop: {
+    // Keep a stable top area so absolute icons don't affect layout
     paddingBottom: 4,
   },
-  topBarUsername: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '700',
-  },
+
+  // Put the settings icon in the same place you had it, but inside a flexed container
   topBarIcons: {
     flexDirection: 'row',
     alignItems: 'center',
+    position: 'absolute',
+    right: 20,
+    top: 10,
   },
   iconButton: {
     padding: 6,
     borderRadius: 20,
+  },
+
+  body: { flex: 1 },
+
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
   },
 
   stateWrap: {
@@ -277,7 +261,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // Adjusted styling for 2-tab layout
   detailTabs: {
     flexDirection: 'row',
     marginTop: 16,
@@ -293,7 +276,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8, // slightly larger since only 2 tabs
+    paddingVertical: 8,
     borderRadius: 10,
     gap: 6,
   },

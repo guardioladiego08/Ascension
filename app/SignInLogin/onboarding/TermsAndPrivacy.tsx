@@ -59,6 +59,25 @@ function isScrolledToBottom(e: NativeSyntheticEvent<NativeScrollEvent>, threshol
   return layoutMeasurement.height + contentOffset.y >= contentSize.height - thresholdPx;
 }
 
+function sanitizeUsername(raw: string) {
+  let u = (raw ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
+function buildFallbackUsername(email: string | null | undefined, userId: string) {
+  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
+  let u = sanitizeUsername(baseRaw);
+  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
 export default function TermsAndPrivacy() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -102,19 +121,31 @@ export default function TermsAndPrivacy() {
           return;
         }
 
-        // Ensure profile exists (username NOT NULL safe)
+        // Ensure profile exists (username + display_name NOT NULL safe)
         const metaUsername =
           (user.user_metadata as any)?.username?.trim?.() ||
-          (user.user_metadata as any)?.Username?.trim?.();
+          (user.user_metadata as any)?.Username?.trim?.() ||
+          '';
 
-        const fallbackUsername = `${(user.email?.split('@')[0] ?? 'user')}_${user.id.slice(0, 6)}`;
+        const username = (() => {
+          const s = sanitizeUsername(metaUsername);
+          if (s.length >= 3) return s;
+          return buildFallbackUsername(user.email, user.id);
+        })();
+
+        const metaDisplayName =
+          (user.user_metadata as any)?.display_name?.trim?.() ||
+          (user.user_metadata as any)?.displayName?.trim?.() ||
+          '';
+
+        const displayName = (metaDisplayName || username).trim();
 
         const { error: ensureErr } = await supabase
-          .schema('user')
+          .schema('public')
           .from('profiles')
           .upsert(
-            { auth_user_id: user.id, username: metaUsername || fallbackUsername },
-            { onConflict: 'auth_user_id' },
+            { id: user.id, username, display_name: displayName },
+            { onConflict: 'id' },
           );
 
         if (ensureErr) {
@@ -123,10 +154,10 @@ export default function TermsAndPrivacy() {
         }
 
         const { data, error } = await supabase
-          .schema('user')
+          .schema('public')
           .from('profiles')
           .select('has_accepted_privacy_policy')
-          .eq('auth_user_id', user.id)
+          .eq('id', user.id)
           .maybeSingle();
 
         if (error) {
@@ -150,9 +181,7 @@ export default function TermsAndPrivacy() {
   }, []);
 
   const canToggleAgree = useMemo(() => {
-    // If already accepted, we lock it (cannot uncheck).
-    if (accepted) return false;
-    // Must have read Terms to end before enabling agree.
+    if (accepted) return false; // one-way lock
     return termsReadToEnd;
   }, [accepted, termsReadToEnd]);
 
@@ -184,13 +213,13 @@ export default function TermsAndPrivacy() {
       }
 
       const { error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .update({
           has_accepted_privacy_policy: true,
           privacy_accepted_at: new Date().toISOString(),
         })
-        .eq('auth_user_id', user.id);
+        .eq('id', user.id);
 
       if (error) {
         showAlert('Error', error.message);
@@ -267,14 +296,12 @@ export default function TermsAndPrivacy() {
                   scrollEventThrottle={16}
                 >
                   <Text style={styles.docText}>{TERMS_TEXT}</Text>
-
-                  {/* a small footer spacer so "bottom reached" is reliably triggered */}
                   <View style={{ height: 24 }} />
                 </ScrollView>
               )}
             </View>
 
-            {/* Acceptance (locked until Terms scrolled to bottom; one-way once checked) */}
+            {/* Acceptance */}
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={handleAcceptPress}

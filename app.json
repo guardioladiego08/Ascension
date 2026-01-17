@@ -15,7 +15,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.alterastudio.ascension"
+      "bundleIdentifier": "com.alterastudio.ascension",
+      "backgroundModes": [
+        "location"
+      ],
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Tensr uses your location to record outdoor runs and walks.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Tensr uses your location in the background to continue recording outdoor sessions.",
+        "NSLocationAlwaysUsageDescription": "Tensr uses your location in the background to continue recording outdoor sessions.",
+        "NSMotionUsageDescription": "Tensr uses motion data to improve the accuracy of outdoor session tracking.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -30,7 +40,7 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-"plugins": [
+    "plugins": [
       [
         "expo-location",
         {

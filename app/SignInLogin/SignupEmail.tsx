@@ -20,6 +20,17 @@ const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
 
+function sanitizeUsername(raw: string) {
+  let u = (raw ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
 export default function SignupEmail() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -54,32 +65,54 @@ export default function SignupEmail() {
   };
 
   const checkUsernameAvailability = async () => {
-    if (!username.trim()) return;
+    const desired = sanitizeUsername(username);
+    if (!desired) return;
+
     setCheckingUsername(true);
     setUsernameAvailable(null);
 
+    // Preferred: your RPC (update it server-side to check public.profiles)
     const { data, error } = await supabase.rpc('is_username_available', {
-      desired_username: username.trim(),
+      desired_username: desired,
     });
+
+    if (!error) {
+      setCheckingUsername(false);
+      setUsernameAvailable(data === true);
+      return;
+    }
+
+    // Fallback: direct query against public.profiles
+    const { data: existing, error: qErr } = await supabase
+      .schema('public')
+      .from('profiles')
+      .select('id')
+      .eq('username', desired)
+      .maybeSingle();
 
     setCheckingUsername(false);
 
-    if (error) {
-      console.log('username rpc error', error);
+    if (qErr) {
+      console.log('username check error', qErr);
       showAlert('Error', 'Could not check username right now.');
       return;
     }
 
-    setUsernameAvailable(data === true);
+    setUsernameAvailable(!existing);
   };
 
   const handleEmailSignup = async () => {
     const emailTrim = email.trim();
     const passwordTrim = password.trim();
-    const usernameTrim = username.trim();
+    const usernameTrim = sanitizeUsername(username);
 
     if (!emailTrim || !passwordTrim || !usernameTrim) {
       showAlert('Missing info', 'Please enter email, username, and password.');
+      return;
+    }
+
+    if (usernameTrim.length < 3) {
+      showAlert('Invalid username', 'Username must be at least 3 characters.');
       return;
     }
 
@@ -94,7 +127,10 @@ export default function SignupEmail() {
       email: emailTrim,
       password: passwordTrim,
       options: {
-        data: { username: usernameTrim },
+        data: {
+          username: usernameTrim,
+          display_name: usernameTrim,
+        },
       },
     });
 
@@ -115,11 +151,15 @@ export default function SignupEmail() {
     // If email confirmations are ON, there may not be a session yet (RLS can block this).
     // It’s OK: we will ensure profile exists after login.
     const { error: profileError } = await supabase
-      .schema('user')
+      .schema('public')
       .from('profiles')
       .upsert(
-        { auth_user_id: userId, username: usernameTrim },
-        { onConflict: 'auth_user_id' },
+        {
+          id: userId,
+          username: usernameTrim,
+          display_name: usernameTrim, // required NOT NULL
+        },
+        { onConflict: 'id' },
       );
 
     setLoadingEmail(false);

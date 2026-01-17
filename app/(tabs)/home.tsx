@@ -307,17 +307,22 @@ export default function BlankHome() {
 
           if (type === 'indoor_run' || type === 'indoor_walk') {
             router.push({
-              pathname: '/add/Cardio/IndoorSession',
+              pathname: '/add/Cardio/indoor/IndoorSession',
               params: { mode: type },
             });
             return;
           }
 
-          // Outdoor run/walk => Strava-like recorder
-          router.push({
-            pathname: '/progress/outdoor/record',
-            params: { mode: type },
-          });
+          if (type === 'outdoor_run' || type === 'outdoor_walk') {
+            router.push({
+              pathname: '/add/Cardio/outdoor/OutdoorSession',
+              params: {
+                title: 'Walking Session',
+                activityType: 'walk',
+              },
+            });
+            return;
+          }
         }}
       />
     </LinearGradient>

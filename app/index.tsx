@@ -25,10 +25,10 @@ export default function Index() {
       setCheckingProfile(true);
 
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('onboarding_completed')
-        .eq('auth_user_id', session.user.id)
+        .eq('id', session.user.id)
         .maybeSingle();
 
       if (cancelled) return;

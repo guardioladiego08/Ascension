@@ -14,29 +14,21 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-// 👇 use legacy import so readAsStringAsync works
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode as base64Decode } from 'base64-arraybuffer';
 
-import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
+import {
+  getMyProfile,
+  updateMyProfile,
+  uploadMyProfilePhotoFromUri,
+  type Profile,
+} from '@/lib/profile';
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
+const TEXT_PRIMARY = Colors.dark.text
 const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.primary ?? '#6366F1';
-
-type ProfileRow = {
-  id: string;
-  auth_user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  username: string;
-  bio: string | null;
-  profile_image_url: string | null;
-};
+const ACCENT = Colors.dark.highlight1
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -45,7 +37,8 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
@@ -57,51 +50,30 @@ export default function EditProfileScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    const loadProfile = async () => {
+    const load = async () => {
       try {
         setLoading(true);
         setErrorText(null);
 
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) throw userError;
-        if (!user) throw new Error('Not signed in');
-
-        const { data, error } = await supabase
-          .schema('user')
-          .from('profiles')
-          .select(
-            'id, auth_user_id, first_name, last_name, username, bio, profile_image_url'
-          )
-          .eq('auth_user_id', user.id)
-          .maybeSingle();
-
-        if (error) throw error;
-        if (!data) throw new Error('Profile not found');
+        const p = await getMyProfile(); // always public.profiles
 
         if (!isMounted) return;
+        setProfile(p);
 
-        const p = data as ProfileRow;
-        setProfileId(p.id);
         setFirstName(p.first_name ?? '');
         setLastName(p.last_name ?? '');
-        setUsername(p.username);
+        setUsername(p.username ?? '');
         setBio(p.bio ?? '');
         setProfileImageUrl(p.profile_image_url ?? null);
       } catch (err: any) {
         console.error('[EditProfile] loadProfile failed', err);
-        if (isMounted) {
-          setErrorText(err?.message ?? 'Failed to load profile');
-        }
+        if (isMounted) setErrorText(err?.message ?? 'Failed to load profile');
       } finally {
         if (isMounted) setLoading(false);
       }
     };
 
-    loadProfile();
+    load();
     return () => {
       isMounted = false;
     };
@@ -109,13 +81,9 @@ export default function EditProfileScreen() {
 
   // ---------------- IMAGE PICKERS ----------------
   const pickFromLibrary = async () => {
-    const { status } =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        'We need access to your photos to set a profile picture.'
-      );
+      Alert.alert('Permission needed', 'We need access to your photos to set a profile picture.');
       return;
     }
 
@@ -132,17 +100,11 @@ export default function EditProfileScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        'We need access to your camera to take a profile picture.'
-      );
+      Alert.alert('Permission needed', 'We need access to your camera to take a profile picture.');
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
-
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (!result.canceled && result.assets.length > 0) {
       setLocalImageUri(result.assets[0].uri);
     }
@@ -151,7 +113,7 @@ export default function EditProfileScreen() {
   // ---------------- SAVE PROFILE ----------------
   const handleSave = async () => {
     try {
-      if (!profileId) return;
+      if (!profile) return;
 
       if (!username.trim()) {
         Alert.alert('Username required', 'Please enter a username.');
@@ -161,81 +123,37 @@ export default function EditProfileScreen() {
       setSaving(true);
       setErrorText(null);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) throw new Error('Not signed in');
-
       let newProfileImageUrl = profileImageUrl;
 
-      // If user picked a new local image, upload it to Supabase Storage
       if (localImageUri) {
-        const fileExt = localImageUri.split('.').pop()?.split('?')[0] || 'jpg';
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const filePath = `${user.id}/${fileName}`;
-
-        // Read file as base64 string using legacy API
-        const base64 = await FileSystem.readAsStringAsync(localImageUri, {
-          encoding: 'base64',
-        });
-
-        // Convert base64 -> ArrayBuffer (no Blob / atob in RN)
-        const arrayBuffer = base64Decode(base64);
-
-        const { error: uploadError } = await supabase.storage
-          .from('profile-photos')
-          .upload(filePath, arrayBuffer, {
-            upsert: true,
-            contentType: 'image/jpeg',
-          });
-
-        if (uploadError) {
-          console.error('[EditProfile] upload error', uploadError);
-          throw uploadError;
-        }
-
-        const { data: publicUrlData } = supabase.storage
-          .from('profile-photos')
-          .getPublicUrl(filePath);
-
-        newProfileImageUrl = publicUrlData.publicUrl;
+        newProfileImageUrl = await uploadMyProfilePhotoFromUri(localImageUri);
       }
 
-      const { error: updateError } = await supabase
-        .schema('user')
-        .from('profiles')
-        .update({
-          first_name: firstName.trim() || null,
-          last_name: lastName.trim() || null,
-          username: username.trim(),
-          bio: bio.trim() || null,
-          profile_image_url: newProfileImageUrl,
-        })
-        .eq('id', profileId)
-        .eq('auth_user_id', user.id);
+      const updated = await updateMyProfile({
+        first_name: firstName.trim() || null,
+        last_name: lastName.trim() || null,
+        username: username.trim(),
+        bio: bio.trim() || null,
+        profile_image_url: newProfileImageUrl ?? null,
+      });
 
-      if (updateError) {
-        console.error('[EditProfile] update error', updateError);
-        if (
-          updateError.message &&
-          updateError.message.includes('user_profiles_username_key')
-        ) {
-          throw new Error('That username is already taken.');
-        }
-        throw updateError;
-      }
+      setProfile(updated);
+      setProfileImageUrl(updated.profile_image_url ?? null);
+      setLocalImageUri(null);
 
       Alert.alert('Profile updated', 'Your profile has been saved.', [
-        {
-          text: 'OK',
-          onPress: () => router.back(),
-        },
+        { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err: any) {
       console.error('[EditProfile] handleSave failed', err);
-      setErrorText(err?.message ?? 'Failed to save profile');
+
+      // If you still get a unique constraint message, surface a friendly error.
+      const msg = err?.message ?? 'Failed to save profile';
+      if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
+        setErrorText('That username is already taken.');
+      } else {
+        setErrorText(msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -277,10 +195,7 @@ export default function EditProfileScreen() {
           )}
 
           <View style={styles.avatarButtonsRow}>
-            <TouchableOpacity
-              style={styles.smallButton}
-              onPress={pickFromLibrary}
-            >
+            <TouchableOpacity style={styles.smallButton} onPress={pickFromLibrary}>
               <Text style={styles.smallButtonText}>Choose from library</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.smallButton} onPress={takePhoto}>
@@ -343,18 +258,10 @@ export default function EditProfileScreen() {
           onPress={handleSave}
           disabled={saving}
         >
-          {saving ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
-          )}
+          {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Save</Text>}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-          disabled={saving}
-        >
+        <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} disabled={saving}>
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -363,52 +270,17 @@ export default function EditProfileScreen() {
 }
 
 // ---------------- STYLES ----------------
-
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
-  },
-  centerWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BG,
-  },
-  subtleText: {
-    color: TEXT_MUTED,
-    marginTop: 8,
-    fontSize: 13,
-  },
-  title: {
-    color: TEXT_PRIMARY,
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
+  safeArea: { flex: 1, backgroundColor: BG },
+  container: { flex: 1, backgroundColor: BG },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
+  centerWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
+  subtleText: { color: TEXT_MUTED, marginTop: 8, fontSize: 13 },
+  title: { color: TEXT_PRIMARY, fontSize: 20, fontWeight: '700', marginBottom: 16 },
+  errorText: { color: '#FCA5A5', fontSize: 13, marginBottom: 12 },
+
+  avatarSection: { alignItems: 'center', marginBottom: 20 },
+  avatar: { width: 96, height: 96, borderRadius: 48 },
   avatarPlaceholder: {
     width: 96,
     height: 96,
@@ -418,15 +290,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarPlaceholderText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-  },
-  avatarButtonsRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
-  },
+  avatarPlaceholderText: { color: TEXT_MUTED, fontSize: 12 },
+  avatarButtonsRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
+
   smallButton: {
     flex: 1,
     backgroundColor: CARD,
@@ -437,19 +303,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER,
   },
-  smallButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  fieldGroup: {
-    marginBottom: 14,
-  },
-  label: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginBottom: 4,
-  },
+  smallButtonText: { color: TEXT_PRIMARY, fontSize: 12, fontWeight: '500' },
+
+  fieldGroup: { marginBottom: 14 },
+  label: { color: TEXT_MUTED, fontSize: 12, marginBottom: 4 },
   input: {
     backgroundColor: CARD,
     borderRadius: 10,
@@ -460,28 +317,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
   },
-  inputMultiline: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    backgroundColor: ACCENT,
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  cancelButton: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-  },
+  inputMultiline: { height: 100, textAlignVertical: 'top' },
+
+  saveButton: { backgroundColor: ACCENT, borderRadius: 999, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
+  saveButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 15 },
+
+  cancelButton: { marginTop: 10, alignItems: 'center' },
+  cancelButtonText: { color: TEXT_MUTED, fontSize: 13 },
 });

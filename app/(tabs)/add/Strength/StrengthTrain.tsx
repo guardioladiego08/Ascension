@@ -43,12 +43,12 @@ export type SetDraft = {
   est_1rm?: number | null;
   superset_group?: number | null;
   done?: boolean;
-  notes?: string | null;   // 👈 ADD THIS
+  notes?: string | null;
 };
 
 export type ExerciseDraft = {
-  instanceId: string;      // UI-only ID for this card instance
-  exercise_id: string;     // FK → exercises.id
+  instanceId: string; // UI-only ID for this card instance
+  exercise_id: string; // FK → exercises.id
   exercise_name: string;
   sets: SetDraft[];
 };
@@ -56,64 +56,83 @@ export type ExerciseDraft = {
 const toKg = (w: number | null | undefined, unit: UnitMass) =>
   w == null ? 0 : unit === 'kg' ? w : w * 0.45359237;
 
+/**
+ * Ensures we have a valid JWT (common failure: token expires while user is training).
+ * Returns the current authenticated user id (auth.uid()).
+ */
+async function ensureAuthedUserId(): Promise<string> {
+  // Refresh session first (handles long-running sessions / app backgrounding)
+  const { error: refreshErr } = await supabase.auth.refreshSession();
+  if (refreshErr) {
+    // Not fatal by itself; we'll still try getSession below
+    console.warn('[StrengthTrain] refreshSession failed', refreshErr);
+  }
+
+  const { data, error: sessErr } = await supabase.auth.getSession();
+  if (sessErr) throw sessErr;
+
+  const uid = data.session?.user?.id;
+  if (!uid) {
+    throw new Error('Session expired. Please sign in again.');
+  }
+  return uid;
+}
+
 export default function StrengthTrain() {
   const [workoutId, setWorkoutId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null); // convenience / UI state
   const [loading, setLoading] = useState(true);
+
   const [exercises, setExercises] = useState<ExerciseDraft[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+
   const [paused, setPaused] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [timerResetKey, setTimerResetKey] = useState(0);
+
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [exerciseRequiredOpen, setExerciseRequiredOpen] = useState(false);
 
-
   useEffect(() => {
     const id = setInterval(() => {
-      if (!paused) {
-        setSeconds(s => s + 1);
-      }
+      if (!paused) setSeconds(s => s + 1);
     }, 1000);
     return () => clearInterval(id);
   }, [paused]);
+
   // Start workout row on mount
   useEffect(() => {
     let mounted = true;
+
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        const uid = await ensureAuthedUserId();
+        if (!mounted) return;
+        setUserId(uid);
 
-      if (!session?.user) {
-        Alert.alert('Authentication required');
-        router.replace('/SignInLogin');
-        return;
-      }
-      const uid = session?.user?.id ?? null;
-      if (!uid) {
-        Alert.alert('Not signed in', 'You must be signed in to start a workout.');
-        router.back();
-        return;
-      }
-      if (!mounted) return;
-      setUserId(uid);
+        const { data, error } = await supabase
+          .schema('strength')
+          .from('strength_workouts')
+          .insert({ user_id: uid })
+          .select('id')
+          .single();
 
-      const { data, error } = await supabase
-        .schema('strength')
-        .from('strength_workouts')
-        .insert({ user_id: uid })
-        .select('id')
-        .single();
+        if (error) throw error;
+        if (!mounted) return;
 
-      if (error) {
-        Alert.alert('Error', error.message);
-        router.back();
-        return;
+        setWorkoutId(data.id);
+        setLoading(false);
+      } catch (err: any) {
+        console.error('[StrengthTrain] start workout failed', err);
+        Alert.alert(
+          'Error starting workout',
+          err?.message ?? 'Failed to start workout. Please sign in again.'
+        );
+        router.replace('/(tabs)/home');
       }
-      if (!mounted) return;
-      setWorkoutId(data.id);
-      setLoading(false);
     })();
+
     return () => {
       mounted = false;
     };
@@ -137,6 +156,7 @@ export default function StrengthTrain() {
             rpe: undefined,
             est_1rm: undefined,
             done: false,
+            notes: null,
           },
         ],
       },
@@ -147,7 +167,10 @@ export default function StrengthTrain() {
     setExercises(prev => prev.filter(e => e.instanceId !== instanceId));
   };
 
-  const updateExercise = (instanceId: string, updater: (draft: ExerciseDraft) => ExerciseDraft) => {
+  const updateExercise = (
+    instanceId: string,
+    updater: (draft: ExerciseDraft) => ExerciseDraft
+  ) => {
     setExercises(prev => prev.map(e => (e.instanceId === instanceId ? updater(e) : e)));
   };
 
@@ -166,26 +189,40 @@ export default function StrengthTrain() {
     setCancelModalOpen(true);
   };
 
-
   const handleFinish = async () => {
-    if (!workoutId || !userId) return;
+    if (!workoutId) return;
+
     if (exercises.length === 0) {
-      setFinishModalOpen(false);      // 👈 close finish modal first
-      setTimeout(() => {
-        setExerciseRequiredOpen(true); // 👈 open required modal AFTER
-      }, 10);
+      setFinishModalOpen(false);
+      setTimeout(() => setExerciseRequiredOpen(true), 10);
       return;
     }
 
-
     setLoading(true);
     try {
+      // IMPORTANT: get a fresh uid right before any inserts (prevents RLS failures)
+      const uid = await ensureAuthedUserId();
+      if (uid !== userId) setUserId(uid);
+
+      // Ownership sanity check (optional but very helpful)
+      const { data: wRow, error: wCheckErr } = await supabase
+        .schema('strength')
+        .from('strength_workouts')
+        .select('id,user_id')
+        .eq('id', workoutId)
+        .single();
+
+      if (wCheckErr) throw wCheckErr;
+      if (!wRow?.user_id || wRow.user_id !== uid) {
+        throw new Error('Workout ownership mismatch. Please sign in again.');
+      }
+
       // 1) Insert sets
       const setPayload = exercises.flatMap(ex =>
         ex.sets.map(s => ({
           exercise_id: ex.exercise_id,
           strength_workout_id: workoutId,
-          set_index: s.set_index,           // backend indexing stays full sequence
+          set_index: s.set_index,
           set_type: s.set_type,
           superset_group: s.superset_group ?? null,
           weight: s.weight ?? null,
@@ -193,12 +230,16 @@ export default function StrengthTrain() {
           reps: s.reps ?? null,
           rpe: s.rpe ?? null,
           est_1rm: s.est_1rm ?? null,
-          notes: null,
-        })),
+          notes: s.notes ?? null,
+        }))
       );
 
       if (setPayload.length > 0) {
-        const { error: setsErr } = await supabase.schema('strength').from('strength_sets').insert(setPayload);
+        const { error: setsErr } = await supabase
+          .schema('strength')
+          .from('strength_sets')
+          .insert(setPayload);
+
         if (setsErr) throw setsErr;
       }
 
@@ -214,12 +255,16 @@ export default function StrengthTrain() {
       const summaries: SummaryRow[] = exercises.map(ex => {
         const weightsKg = ex.sets.map(s => toKg(s.weight, s.weight_unit_csv));
         const reps = ex.sets.map(s => s.reps ?? 0);
+
         const vols = ex.sets.map((_, i) => weightsKg[i] * reps[i]);
         const vol = vols.reduce((a, b) => a + b, 0);
+
         const strongest = weightsKg.reduce((a, b) => (b > a ? b : a), 0);
         const best1rm = ex.sets.reduce((a, s) => Math.max(a, s.est_1rm ?? 0), 0);
+
         const weightMean =
           weightsKg.length > 0 ? weightsKg.reduce((a, b) => a + b, 0) / weightsKg.length : 0;
+
         return {
           exercise_id: ex.exercise_id,
           vol: +vol.toFixed(2),
@@ -230,7 +275,7 @@ export default function StrengthTrain() {
       });
 
       const summaryPayload = summaries.map(sm => ({
-        user_id: userId,
+        user_id: uid, // use fresh uid
         exercise_id: sm.exercise_id,
         strength_workout_id: workoutId,
         vol: sm.vol,
@@ -240,7 +285,11 @@ export default function StrengthTrain() {
       }));
 
       if (summaryPayload.length > 0) {
-        const { error: sumErr } = await supabase.schema('strength').from('exercise_summary').insert(summaryPayload);
+        const { error: sumErr } = await supabase
+          .schema('strength')
+          .from('exercise_summary')
+          .insert(summaryPayload);
+
         if (sumErr) throw sumErr;
       }
 
@@ -253,6 +302,7 @@ export default function StrengthTrain() {
         .from('strength_workouts')
         .update({ ended_at: endedAt.toISOString(), total_vol: totalVol })
         .eq('id', workoutId);
+
       if (wErr) throw wErr;
 
       // 4) Update weekly + lifetime stats (atomic via one RPC)
@@ -264,9 +314,19 @@ export default function StrengthTrain() {
 
       console.log('✅ workout saved + stats updated', { workoutId });
       router.replace(`/(tabs)/add/Strength/${workoutId}`);
-
     } catch (err: any) {
-      console.error(err);
+      console.error('[StrengthTrain] finish failed', err);
+
+      // More helpful RLS message
+      const code = err?.code;
+      if (code === '42501') {
+        Alert.alert(
+          'Save failed',
+          'Permissions error while saving sets. Your session may have expired. Please sign in again and retry.'
+        );
+        return;
+      }
+
       Alert.alert('Save failed', err?.message ?? 'Unknown error');
     } finally {
       setLoading(false);
@@ -287,26 +347,27 @@ export default function StrengthTrain() {
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
       style={{ flex: 1 }}
-    > 
+    >
       <View style={[GlobalStyles.container, { flex: 1 }]}>
-        <LogoHeader showBackButton></LogoHeader>
+        <LogoHeader showBackButton />
+
         <SessionHeader
-          key={workoutId}               // keep if you're using unique workout per session
+          key={workoutId}
           title="Strength Training Session"
           paused={paused}
-          timerResetKey={timerResetKey}   // 👈 NEW
+          timerResetKey={timerResetKey}
           onPauseToggle={() => setPaused(p => !p)}
           onCancel={handleCancel}
         />
-        <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>EXERCISES</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
-              <Ionicons name="add" size={18} color={PRIMARY}/>
-            </TouchableOpacity>
-          </View>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-          
 
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>EXERCISES</Text>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)}>
+            <Ionicons name="add" size={18} color={PRIMARY} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
           {exercises.map(ex => (
             <ExerciseCard
               key={ex.instanceId}
@@ -323,8 +384,12 @@ export default function StrengthTrain() {
           )}
         </ScrollView>
 
-        <TouchableOpacity style={styles.finishBtn} onPress={() => setFinishModalOpen(true)}>
-          <Text style={styles.finishText}>Finish Workout</Text>
+        <TouchableOpacity
+          style={[styles.finishBtn, loading ? { opacity: 0.7 } : null]}
+          disabled={loading}
+          onPress={() => setFinishModalOpen(true)}
+        >
+          <Text style={styles.finishText}>{loading ? 'Saving…' : 'Finish Workout'}</Text>
         </TouchableOpacity>
 
         <ExercisePickerModal
@@ -335,6 +400,7 @@ export default function StrengthTrain() {
             setPickerOpen(false);
           }}
         />
+
         <CancelConfirmModal
           visible={cancelModalOpen}
           onKeep={() => {
@@ -342,41 +408,52 @@ export default function StrengthTrain() {
             setCancelModalOpen(false);
           }}
           onDiscard={async () => {
-            // 1) delete workout row (keep this exactly as you had it)
-            if (workoutId) {
-              await supabase.schema('strength').from('strength_workouts').delete().eq('id', workoutId);
+            try {
+              // Ensure session (delete is also protected by RLS)
+              await ensureAuthedUserId();
+
+              if (workoutId) {
+                await supabase
+                  .schema('strength')
+                  .from('strength_workouts')
+                  .delete()
+                  .eq('id', workoutId);
+              }
+            } catch (e) {
+              console.warn('[StrengthTrain] discard delete failed', e);
+              // still proceed with local cleanup + navigation
             }
 
-            // 2) clear local workout state so nothing persists
-            setExercises([]);          // 👈 clear all exercises from this session
-            setSeconds(0);             // optional: reset StrengthTrain’s seconds state
-            setPaused(false);          // optional: make sure timer is unpaused
-            setTimerResetKey(k => k + 1);  // still reset SessionHeader timer
+            setExercises([]);
+            setSeconds(0);
+            setPaused(false);
+            setTimerResetKey(k => k + 1);
 
-            // 3) close modal + navigate away
             setCancelModalOpen(false);
             router.back();
           }}
         />
+
         <ExerciseRequiredModal
           visible={exerciseRequiredOpen}
           onClose={() => setExerciseRequiredOpen(false)}
         />
+
         <FinishConfirmModal
           visible={finishModalOpen}
           onCancel={() => setFinishModalOpen(false)}
           onConfirm={async () => {
             setFinishModalOpen(false);
-            await handleFinish();  // triggers your actual save logic
+            await handleFinish();
           }}
         />
       </View>
-    </LinearGradient>   
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1},
+  container: { flex: 1 },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',

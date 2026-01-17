@@ -22,6 +22,40 @@ const TEXT_MUTED = Colors.dark.textMuted;
 
 type Params = { email?: string };
 
+function sanitizeUsername(raw: string) {
+  let u = (raw ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return u;
+}
+
+function buildFallbackUsername(email: string | null | undefined, userId: string) {
+  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
+  let u = sanitizeUsername(baseRaw);
+  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
+  if (u.length > 30) u = u.slice(0, 30);
+  return u;
+}
+
+function getMetaUsername(user: any) {
+  return (
+    (user?.user_metadata as any)?.username?.trim?.() ||
+    (user?.user_metadata as any)?.Username?.trim?.() ||
+    ''
+  );
+}
+
+function getMetaDisplayName(user: any) {
+  return (
+    (user?.user_metadata as any)?.display_name?.trim?.() ||
+    (user?.user_metadata as any)?.displayName?.trim?.() ||
+    ''
+  );
+}
+
 export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -43,18 +77,23 @@ export default function Login() {
       return { ok: false as const, message: 'You are not signed in. Please sign in again.' };
     }
 
-    const metaUsername =
-      (user.user_metadata as any)?.username?.trim?.() ||
-      (user.user_metadata as any)?.Username?.trim?.();
+    const metaUsername = sanitizeUsername(getMetaUsername(user));
+    const fallbackUsername = buildFallbackUsername(user.email, userId);
+    const username = metaUsername.length >= 3 ? metaUsername.slice(0, 30) : fallbackUsername;
 
-    const fallbackUsername = `${(user.email?.split('@')[0] ?? 'user')}_${user.id.slice(0, 6)}`;
+    const metaDisplayName = getMetaDisplayName(user);
+    const displayName = (metaDisplayName || username).trim();
 
     const { error: ensureErr } = await supabase
-      .schema('user')
+      .schema('public')
       .from('profiles')
       .upsert(
-        { auth_user_id: userId, username: metaUsername || fallbackUsername },
-        { onConflict: 'auth_user_id' },
+        {
+          id: userId,
+          username,
+          display_name: displayName,
+        },
+        { onConflict: 'id' },
       );
 
     if (ensureErr) {
@@ -69,7 +108,7 @@ export default function Login() {
     routingRef.current = true;
 
     try {
-      // Ensure profile exists (avoids NOT NULL username insert failures later)
+      // Ensure profile exists (and satisfies NOT NULL username/display_name)
       const ensure = await ensureProfileRow(userId);
       if (!ensure.ok) {
         Alert.alert('Error', ensure.message);
@@ -79,10 +118,10 @@ export default function Login() {
 
       // Fetch gating flags
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('onboarding_completed, has_accepted_privacy_policy')
-        .eq('auth_user_id', userId)
+        .eq('id', userId)
         .maybeSingle();
 
       if (error) {
@@ -100,7 +139,6 @@ export default function Login() {
        * 2) Only AFTER onboarding is complete do we enforce Terms/Privacy gate.
        * 3) Then go home.
        */
-
       if (!onboardingCompleted) {
         router.replace({
           pathname: '/SignInLogin/onboarding/UserInfo1',
@@ -110,10 +148,9 @@ export default function Login() {
       }
 
       if (!hasAcceptedPrivacy) {
-        // Onboarding is done; now require terms acceptance before app access
         router.replace({
           pathname: '/SignInLogin/onboarding/TermsAndPrivacy',
-          params: { nextPath: './(tabs)/home' },
+          params: { nextPath: '/(tabs)/home' },
         });
         return;
       }

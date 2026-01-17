@@ -8,11 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 
-import { fetchOutdoorSession, fetchOutdoorSamples } from '@/lib/outdoor/supabase';
-import { formatDistance, formatDuration, formatPace } from '@/lib/outdoor/compute';
+import { fetchOutdoorSession, fetchOutdoorSamples } from '@/lib/OutdoorSession/supabase';
+import { formatDistance, formatDuration, formatPace } from '@/lib/OutdoorSession/compute';
+
 
 import LogoHeader from '@/components/my components/logoHeader';
-import SplitsList from '../../add/Cardio/outdoor/SplitsList';
 import MetricChartOutdoor, { type SamplePoint } from '@/components/charts/MetricLineChartOutdoor';
 import RouteMapCard from './RouteMapCard';
 
@@ -213,7 +213,6 @@ export default function OutdoorSummaryScreen() {
 
           </View>
 
-          <SplitsList splits={session?.splits ?? []} />
         </ScrollView>
       </View>
     </LinearGradient>

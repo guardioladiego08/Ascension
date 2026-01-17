@@ -22,7 +22,7 @@ import {
 } from '@/lib/runWalkDraftStore';
 
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
-import DeleteDraftConfirmModal from './run_walk/DeleteDraftConfirmModal';
+import DeleteDraftConfirmModal from './indoor/DeleteDraftConfirmModal';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -208,7 +208,7 @@ export default function IndoorSessionSummary() {
         .from('sessions')
         .insert({
           exercise_type: draft.exercise_type,
-          status: 'finished',
+          status: 'completed',
           ended_at: draft.ended_at,
           total_time_s: draft.total_time_s,
           total_distance_m: draft.total_distance_m,

@@ -16,8 +16,8 @@ import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import FinishConfirmModal from './run_walk/FinishConfirmModal';
-import RunWalkCancelConfirmModal from './run_walk/RunWalkCancelConfirmModal';
+import FinishConfirmModal from './indoor/FinishConfirmModal';
+import RunWalkCancelConfirmModal from './indoor/RunWalkCancelConfirmModal';
 
 import {
   upsertDraft,
@@ -376,7 +376,7 @@ export default function IndoorSession() {
       resetSessionState(false);
 
       router.replace({
-        pathname: '/add/Cardio/IndoorSessionSummary',
+        pathname: './IndoorSessionSummary',
         params: { draftId },
       });
     } catch (e) {

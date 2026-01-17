@@ -104,10 +104,10 @@ export default function UserInfo1() {
       if (!authUserId) return;
 
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('first_name,last_name,country,state,city')
-        .eq('auth_user_id', authUserId)
+        .eq('id', authUserId)
         .maybeSingle();
 
       if (error) return;
@@ -220,19 +220,22 @@ export default function UserInfo1() {
 
     setLoading(true);
 
+    const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
     const payload = {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      display_name: displayName, // keep display_name in sync once real name exists
       country,
       state: stateRegion,
       city,
     };
 
     const { error } = await supabase
-      .schema('user')
+      .schema('public')
       .from('profiles')
       .update(payload)
-      .eq('auth_user_id', authUserId);
+      .eq('id', authUserId);
 
     setLoading(false);
 

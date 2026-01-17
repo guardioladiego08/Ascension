@@ -14,9 +14,7 @@ export default function FinishConfirmModal({ visible, onConfirm, onCancel }: Pro
       <View style={styles.overlay}>
         <View style={styles.box}>
           <Text style={styles.title}>Finish Workout?</Text>
-          <Text style={styles.subtitle}>
-            Are you sure you want to finish this workout?
-          </Text>
+          <Text style={styles.subtitle}>Are you sure you want to finish this workout?</Text>
 
           <View style={styles.row}>
             <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={onCancel}>

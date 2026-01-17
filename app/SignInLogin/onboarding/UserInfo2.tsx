@@ -49,7 +49,6 @@ export default function UserInfo2() {
 
   const [activePanel, setActivePanel] = useState<ActivePanel>('dob');
 
-  // Panel animate-in (rail stays fixed)
   const panelAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -115,10 +114,10 @@ export default function UserInfo2() {
       if (!authUserId) return;
 
       const { data, error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .select('date_of_birth,height_cm,weight_kg,gender')
-        .eq('auth_user_id', authUserId)
+        .eq('id', authUserId)
         .maybeSingle();
 
       if (error || !data) return;
@@ -204,14 +203,14 @@ export default function UserInfo2() {
     if (gender === 'female') return 'Female';
     if (gender === 'male') return 'Male';
     if (gender === 'non_binary') return 'Non-binary';
-    return 'Prefer not';
+    return 'prefer_not_to_say';
   }, [gender]);
 
   const mapGenderToDb = (g: GenderUI): string => {
     if (g === 'female') return 'female';
     if (g === 'male') return 'male';
     if (g === 'non_binary') return 'non_binary';
-    return 'prefer_not_to_choose';
+    return 'prefer_not_to_say';
   };
 
   const computeCmKg = () => {
@@ -256,10 +255,10 @@ export default function UserInfo2() {
       };
 
       const { error } = await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .update(payload)
-        .eq('auth_user_id', authUserId);
+        .eq('id', authUserId);
 
       if (error) {
         showAlert('Error', 'Could not save your info. Please try again.');
@@ -271,8 +270,6 @@ export default function UserInfo2() {
       setSaving(false);
     }
   };
-
-  const handleBack = () => router.back();
 
   const RailButton = ({
     title,
@@ -344,18 +341,14 @@ export default function UserInfo2() {
         <LogoHeader />
 
         <View style={styles.topRow}>
-
           <View style={styles.topTextBlock}>
             <Text style={styles.topTitle}>{panelTitle.toUpperCase()}</Text>
             <Text style={styles.topStep}>STEP 2/5</Text>
           </View>
-
           <View style={{ width: 44 }} />
         </View>
 
-        {/* MAIN AREA: fixed rail + changing panel */}
         <View style={styles.mainArea}>
-          {/* Fixed left rail */}
           <View style={styles.rail}>
             <RailButton
               title="BIRTHDAY"
@@ -387,7 +380,6 @@ export default function UserInfo2() {
             />
           </View>
 
-          {/* Bottom panel (animated) */}
           <View style={styles.panelArea}>
             <Text style={styles.centerPrompt}>
               {activePanel === 'dob' ? panelPrompt.toUpperCase() : panelPrompt}
@@ -408,7 +400,6 @@ export default function UserInfo2() {
                 </View>
               )}
 
-              {/* CHANGED: DOB columns use month/day/year-specific widths */}
               {activePanel === 'dob' && (
                 <View style={styles.wheelRow}>
                   <View style={styles.wheelMonth}>
@@ -578,20 +569,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 6 },
 
   topRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   topTextBlock: { flex: 1, paddingLeft: 12 },
   topTitle: { color: TEXT_PRIMARY, fontSize: 18, fontWeight: '700', letterSpacing: 1.2 },
   topStep: { marginTop: 2, color: TEXT_MUTED, fontSize: 12, fontWeight: '600', letterSpacing: 1.1 },
 
-  // Main rail + panel
   mainArea: {
     flex: 1,
     flexDirection: 'column',
@@ -599,9 +580,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  // Fixed rail (single column)
   rail: {
-    width: 332, // fixed location/width
+    width: 332,
     gap: 10,
   },
   railBtn: {
@@ -625,7 +605,6 @@ const styles = StyleSheet.create({
   railValue: { color: TEXT_PRIMARY, fontSize: 13, fontWeight: '800' },
   railValueSelected: { color: '#0b0f18' },
 
-  // Right side panel
   panelArea: { flex: 1 },
 
   centerPrompt: {
@@ -647,7 +626,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(147, 147, 147, 0.4)',
   },
 
-  // Wheels
   wheelRow: {
     width: '100%',
     flexDirection: 'row',
@@ -655,7 +633,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 32,  
+    paddingHorizontal: 32,
     position: 'relative',
   },
   wheelColumn: {
@@ -674,8 +652,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
-
-  // CHANGED: DOB-specific column widths
   wheelMonth: {
     flex: 1,
     minWidth: 140,
@@ -716,7 +692,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
 
-  // Unit toggle
   unitToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -739,19 +714,7 @@ const styles = StyleSheet.create({
   unitKnob: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#fff', transform: [{ translateX: 0 }] },
   unitKnobRight: { transform: [{ translateX: 30 }] },
 
-  helperText: {
-    marginTop: 14,
-    color: TEXT_MUTED,
-    fontSize: 12,
-    textAlign: 'center',
-    paddingHorizontal: 14,
-    lineHeight: 16,
-  },
-
-  // Gender
   genderBlock: { width: '100%', gap: 12, marginTop: 6 },
-
-  // CHANGED: smaller height + font size 14
   genderButton: {
     width: '100%',
     borderRadius: 12,
@@ -766,7 +729,6 @@ const styles = StyleSheet.create({
   genderTextSelected: { color: '#0b0f18' },
   genderTextUnselected: { color: TEXT_PRIMARY },
 
-  // Bottom next
   nextButton: {
     marginBottom: 26,
     borderWidth: 2,

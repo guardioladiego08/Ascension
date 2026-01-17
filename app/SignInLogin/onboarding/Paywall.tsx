@@ -40,12 +40,11 @@ export default function Paywall() {
       const fallbackId = authData.user.id;
 
       await supabase
-        .schema('user')
+        .schema('public')
         .from('profiles')
         .update({ onboarding_completed: true })
-        .eq('auth_user_id', fallbackId);
+        .eq('id', fallbackId);
 
-      // ⬇️ redirect to Login screen
       router.replace('/SignInLogin/Login');
       return;
     }
@@ -53,10 +52,10 @@ export default function Paywall() {
     setFinishing(true);
 
     const { error } = await supabase
-      .schema('user')
+      .schema('public')
       .from('profiles')
       .update({ onboarding_completed: true })
-      .eq('auth_user_id', authUserId);
+      .eq('id', authUserId);
 
     setFinishing(false);
 
@@ -66,10 +65,8 @@ export default function Paywall() {
       return;
     }
 
-    // ⬇️ redirect to Login screen
     router.replace('/SignInLogin/Login');
   };
-
 
   const handleSkip = async () => {
     await finishOnboarding();
@@ -77,7 +74,6 @@ export default function Paywall() {
 
   const handleSubscribe = async () => {
     // TODO: hook into your subscription / IAP flow later.
-    // For now, just treat it like finish + go home.
     await finishOnboarding();
   };
 
