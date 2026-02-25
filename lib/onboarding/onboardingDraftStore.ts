@@ -29,7 +29,7 @@ export type OnboardingDraft = {
   state: string | null;
   city: string | null;
 
-  DOB: string | null; // ISO date string: YYYY-MM-DD
+  DOB: string | null; // ISO date string: YYYY-MM-DDx
   height_cm: number | null;
   weight_kg: number | null;
   gender: DbGender | null;
