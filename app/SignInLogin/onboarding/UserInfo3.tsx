@@ -1,5 +1,5 @@
 // app/SignInLogin/onboarding/UserInfo3.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,29 +7,22 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import AppAlert from '../components/AppAlert';
+
+import { useOnboardingDraftStore, type AppUsageReason } from '@/lib/onboarding/onboardingDraftStore';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
-
-type Params = { authUserId?: string };
-
-type AppUsageReason =
-  | 'track_fitness_health'
-  | 'compete_with_friends'
-  | 'train_for_personal_goal'
-  | 'connect_with_friends'
-  | 'other';
 
 const USAGE_OPTIONS: Array<{
   key: AppUsageReason;
@@ -69,52 +62,13 @@ const USAGE_OPTIONS: Array<{
   },
 ];
 
-function sanitizeUsername(raw: string) {
-  let u = (raw ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
-function buildFallbackUsername(email: string | null | undefined, userId: string) {
-  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
-  let u = sanitizeUsername(baseRaw);
-  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
 export default function UserInfo3() {
   const router = useRouter();
-  const params = useLocalSearchParams<Params>();
-  const authUserId = Array.isArray(params.authUserId) ? params.authUserId[0] : params.authUserId;
+  const { draft, setUsageReasons } = useOnboardingDraftStore();
 
-  const [usage, setUsage] = useState<AppUsageReason[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      if (!authUserId) return;
-
-      const { data, error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .select('app_usage_reasons')
-        .eq('id', authUserId)
-        .maybeSingle();
-
-      if (error || !data) return;
-
-      if (Array.isArray(data.app_usage_reasons)) {
-        setUsage(data.app_usage_reasons as AppUsageReason[]);
-      }
-    };
-
-    load();
-  }, [authUserId]);
+  const [usage, setUsage] = useState<AppUsageReason[]>(
+    Array.isArray(draft.app_usage_reasons) ? draft.app_usage_reasons : []
+  );
 
   // Alerts
   const [alertVisible, setAlertVisible] = useState(false);
@@ -146,64 +100,18 @@ export default function UserInfo3() {
 
   const [saving, setSaving] = useState(false);
 
+  const handleBack = () => router.replace('./UserInfo2');
+
   const handleNext = async () => {
+    if (!canContinue) {
+      showAlert('Select at least one', 'Pick one or more options to continue.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const {
-        data: { user },
-        error: userErr,
-      } = await supabase.auth.getUser();
-
-      if (userErr || !user) {
-        showAlert('Auth error', 'You are not signed in. Please sign in again.');
-        return;
-      }
-
-      // Ensure profile exists with required fields (username + display_name)
-      const metaUsername =
-        (user.user_metadata as any)?.username?.trim?.() ||
-        (user.user_metadata as any)?.Username?.trim?.() ||
-        '';
-
-      const username = (() => {
-        const s = sanitizeUsername(metaUsername);
-        if (s.length >= 3) return s;
-        return buildFallbackUsername(user.email, user.id);
-      })();
-
-      const metaDisplayName =
-        (user.user_metadata as any)?.display_name?.trim?.() ||
-        (user.user_metadata as any)?.displayName?.trim?.() ||
-        '';
-
-      const displayName = (metaDisplayName || username).trim();
-
-      const { error: ensureErr } = await supabase
-        .schema('public')
-        .from('profiles')
-        .upsert(
-          { id: user.id, username, display_name: displayName },
-          { onConflict: 'id' },
-        );
-
-      if (ensureErr) {
-        showAlert('Error', ensureErr.message);
-        return;
-      }
-
-      const { error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .update({ app_usage_reasons: usage })
-        .eq('id', user.id);
-
-      if (error) {
-        console.log('[UserInfo3] save error', error);
-        showAlert('Error', error.message);
-        return;
-      }
-
-      router.replace({ pathname: './UserInfo4', params: { authUserId: user.id } });
+      setUsageReasons(usage);
+      router.replace('./UserInfo4');
     } finally {
       setSaving(false);
     }
@@ -261,131 +169,105 @@ export default function UserInfo3() {
     >
       <View style={styles.container}>
         <LogoHeader />
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.topRow}>
-            <View style={styles.topTextBlock}>
-              <Text style={styles.topTitle}>GOALS</Text>
-              <Text style={styles.topStep}>STEP 3/5</Text>
-            </View>
 
-            <View style={{ width: 44 }} />
-          </View>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Why Tensr?</Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-          <View style={styles.headerBlock}>
-            <Text style={styles.h1}>What will you use TENSR for?</Text>
-            <Text style={styles.h2}>Select all that apply.</Text>
-          </View>
+        <Text style={styles.stepText}>Step 3/4</Text>
 
-          <View style={{ gap: 12 }}>
-            {USAGE_OPTIONS.map((o) => (
+        <ScrollView contentContainerStyle={{ paddingBottom: 22 }}>
+          <Text style={styles.title}>What brings you here?</Text>
+          <Text style={styles.subtitle}>Select one or more. This helps tailor your experience.</Text>
+
+          <View style={{ marginTop: 12, gap: 12 }}>
+            {USAGE_OPTIONS.map((opt) => (
               <OptionCard
-                key={o.key}
-                title={o.title}
-                subtitle={o.subtitle}
-                icon={o.icon}
-                selected={usage.includes(o.key)}
-                onPress={() => toggleUsage(o.key)}
+                key={opt.key}
+                title={opt.title}
+                subtitle={opt.subtitle}
+                icon={opt.icon}
+                selected={usage.includes(opt.key)}
+                onPress={() => toggleUsage(opt.key)}
               />
             ))}
           </View>
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, !canContinue ? { opacity: 0.6 } : null]}
+            activeOpacity={0.9}
+            onPress={handleNext}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator />
+            ) : (
+              <>
+                <Text style={styles.primaryBtnText}>Continue</Text>
+                <Ionicons name="arrow-forward" size={18} color="#0b0f18" />
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
 
-        <TouchableOpacity
-          style={[
-            styles.nextButton,
-            !canContinue ? { opacity: 0.35 } : null,
-            saving ? { opacity: 0.7 } : null,
-          ]}
-          activeOpacity={0.9}
-          onPress={handleNext}
-          disabled={!canContinue || saving}
-        >
-          {saving ? <ActivityIndicator /> : <Text style={styles.nextText}>NEXT</Text>}
-        </TouchableOpacity>
-
-        <AppAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={handleCloseAlert} />
+        <AppAlert
+          visible={alertVisible}
+          title={alertTitle}
+          message={alertMessage}
+          onClose={handleCloseAlert}
+        />
       </View>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 6 },
+  container: { flex: 1, paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 54 : 38 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
+  headerTitle: { color: TEXT_PRIMARY, fontSize: 26, fontWeight: '700' },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  stepText: { color: TEXT_MUTED, marginTop: 8, marginBottom: 12 },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  scrollContent: {
-    paddingBottom: 22,
-  },
-  topTextBlock: { flex: 1, paddingLeft: 12 },
-  topTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '800', letterSpacing: 1.4 },
-  topStep: { marginTop: 2, color: TEXT_MUTED, fontSize: 12, fontWeight: '600', letterSpacing: 1.1 },
+  title: { color: TEXT_PRIMARY, fontSize: 18, fontWeight: '900' },
+  subtitle: { color: TEXT_MUTED, marginTop: 6 },
 
-  headerBlock: { marginTop: 14, marginBottom: 12 },
-  h1: { color: TEXT_PRIMARY, fontSize: 24, fontWeight: '700' },
-  h2: { marginTop: 8, color: TEXT_MUTED, fontSize: 14, fontWeight: '500' },
+  cardBtn: { borderRadius: 18, padding: 14 },
+  cardBtnSelected: { backgroundColor: PRIMARY },
+  cardBtnUnselected: { backgroundColor: 'rgba(255,255,255,0.06)' },
 
-  cardBtn: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-  },
-  cardBtnSelected: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  cardBtnUnselected: {
-    backgroundColor: 'rgba(176,176,176,0.12)',
-    borderColor: 'rgba(123,123,123,0.55)',
-  },
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.10)',
-  },
-
-  cardTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '900', letterSpacing: 1.4 },
-  cardSubtitle: { marginTop: 4, color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '500' },
-  cardTitleSelected: { color: TEXT_PRIMARY },
-  cardSubtitleSelected: { color: 'rgba(255,255,255,0.72)' },
-
-  trailing: { width: 34, alignItems: 'flex-end', justifyContent: 'center' },
-  unchecked: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  checkPill: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  nextButton: {
-    marginTop: 18,
-    marginBottom: 26,
-    borderWidth: 2,
-    borderColor: PRIMARY,
+    width: 44,
+    height: 44,
     borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nextText: { color: PRIMARY, fontSize: 18, fontWeight: '900', letterSpacing: 2 },
+
+  cardTitle: { color: TEXT_PRIMARY, fontWeight: '900', fontSize: 13 },
+  cardTitleSelected: { color: '#0b0f18' },
+  cardSubtitle: { color: TEXT_MUTED, marginTop: 4, fontSize: 12 },
+  cardSubtitleSelected: { color: 'rgba(0,0,0,0.7)' },
+
+  trailing: { paddingLeft: 10 },
+  checkPill: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#0b0f18', alignItems: 'center', justifyContent: 'center' },
+  unchecked: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
+
+  primaryBtn: {
+    marginTop: 16,
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  primaryBtnText: { color: '#0b0f18', fontWeight: '800', fontSize: 15 },
 });

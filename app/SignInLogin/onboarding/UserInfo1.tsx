@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Modal,
   Pressable,
   Platform,
@@ -14,21 +13,20 @@ import {
   FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import AppAlert from '../components/AppAlert';
+
+import { useOnboardingDraftStore } from '@/lib/onboarding/onboardingDraftStore';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
 const CARD = Colors.dark.popUpCard;
-
-type Params = { authUserId?: string };
 
 // ---- Mapbox types ----
 type MapboxFeature = {
@@ -42,41 +40,31 @@ type MapboxFeature = {
 const MAPBOX_TOKEN =
   process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN ||
   process.env.EXPO_PUBLIC_MAPBOX_TOKEN ||
-  process.env.MAPBOX_ACCESS_TOKEN ||
-  '';
+  process.env.MAPBOX_ACCESS_TOKEN;
+
+function safeString(v: any) {
+  return typeof v === 'string' ? v : '';
+}
 
 export default function UserInfo1() {
   const router = useRouter();
-  const params = useLocalSearchParams<Params>();
-  const authUserId = Array.isArray(params.authUserId)
-    ? params.authUserId[0]
-    : params.authUserId;
+  const { draft, setDraft } = useOnboardingDraftStore();
 
-  // Form
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [firstName, setFirstName] = useState(draft.first_name ?? '');
+  const [lastName, setLastName] = useState(draft.last_name ?? '');
 
-  // Location
-  const [country, setCountry] = useState<string | null>(null);
-  const [stateRegion, setStateRegion] = useState<string | null>(null);
-  const [city, setCity] = useState<string | null>(null);
+  // location picker (optional)
+  const [country, setCountry] = useState(draft.country ?? '');
+  const [stateRegion, setStateRegion] = useState(draft.state ?? '');
+  const [city, setCity] = useState(draft.city ?? '');
 
-  const formattedLocation = useMemo(() => {
-    const parts = [city, stateRegion, country].filter(Boolean);
-    return parts.length ? parts.join(', ') : null;
-  }, [city, stateRegion, country]);
-
-  // Location modal state
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
   const [locationResults, setLocationResults] = useState<MapboxFeature[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
-  const locationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locationDebounceRef = useRef<any>(null);
 
-  // Loading
-  const [loading, setLoading] = useState(false);
-
-  // Alert
+  // Alerts
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
@@ -98,154 +86,93 @@ export default function UserInfo1() {
     }
   };
 
-  // ---- Load profile (prefill) ----
-  useEffect(() => {
-    const loadProfile = async () => {
-      if (!authUserId) return;
+  const locationLabel = useMemo(() => {
+    const parts = [safeString(city), safeString(stateRegion), safeString(country)].filter(Boolean);
+    return parts.length ? parts.join(', ') : 'Select (optional)';
+  }, [city, stateRegion, country]);
 
-      const { data, error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .select('first_name,last_name,country,state,city')
-        .eq('id', authUserId)
-        .maybeSingle();
-
-      if (error) return;
-
-      if (data?.first_name) setFirstName(data.first_name);
-      if (data?.last_name) setLastName(data.last_name);
-
-      if (data?.country) setCountry(data.country);
-      if (data?.state) setStateRegion(data.state);
-      if (data?.city) setCity(data.city);
-    };
-
-    loadProfile();
-  }, [authUserId]);
-
-  // ---- Mapbox autocomplete (debounced) ----
   useEffect(() => {
     if (!locationModalVisible) return;
+    if (!MAPBOX_TOKEN) return;
 
     if (locationDebounceRef.current) clearTimeout(locationDebounceRef.current);
-
-    const q = locationQuery.trim();
-    if (q.length < 2) {
-      setLocationResults([]);
-      setLocationLoading(false);
-      return;
-    }
-
     locationDebounceRef.current = setTimeout(async () => {
-      if (!MAPBOX_TOKEN) {
-        showAlert(
-          'Missing Mapbox token',
-          'Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN or EXPO_PUBLIC_MAPBOX_TOKEN in your environment to enable location autocomplete.',
-        );
+      const q = locationQuery.trim();
+      if (!q) {
+        setLocationResults([]);
         return;
       }
 
       setLocationLoading(true);
       try {
-        const url =
-          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json` +
-          `?autocomplete=true&types=place,locality,region,country&limit=8&access_token=${MAPBOX_TOKEN}`;
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
+          q
+        )}.json?access_token=${MAPBOX_TOKEN}&autocomplete=true&types=place,locality,region,country&limit=8`;
 
         const res = await fetch(url);
-        if (!res.ok) {
-          setLocationResults([]);
-          return;
-        }
-
         const json = await res.json();
-        const features: MapboxFeature[] = Array.isArray(json?.features) ? json.features : [];
-        setLocationResults(features);
-      } catch {
+
+        const feats = Array.isArray(json?.features) ? (json.features as MapboxFeature[]) : [];
+        setLocationResults(feats);
+      } catch (e) {
         setLocationResults([]);
       } finally {
         setLocationLoading(false);
       }
-    }, 300);
+    }, 350);
 
     return () => {
       if (locationDebounceRef.current) clearTimeout(locationDebounceRef.current);
     };
   }, [locationQuery, locationModalVisible]);
 
-  const extractFromContext = (feature: MapboxFeature) => {
+  const parseContext = (feature: MapboxFeature) => {
     const ctx = feature.context ?? [];
-    const countryText = ctx.find((c) => c.id.startsWith('country.'))?.text ?? null;
-    const regionText = ctx.find((c) => c.id.startsWith('region.'))?.text ?? null;
-    return { countryText, regionText };
+    const countryCtx = ctx.find((c) => c.id?.startsWith('country'))?.text ?? '';
+    const regionCtx = ctx.find((c) => c.id?.startsWith('region'))?.text ?? '';
+    const placeType = feature.place_type ?? [];
+
+    // If feature is a country, it won't have countryCtx; use feature.text
+    const isCountry = placeType.includes('country');
+    const isRegion = placeType.includes('region');
+    const isPlace = placeType.includes('place') || placeType.includes('locality');
+
+    const nextCountry = isCountry ? feature.text : countryCtx;
+    const nextState = isRegion ? feature.text : regionCtx;
+    const nextCity = isPlace ? feature.text : '';
+
+    return {
+      country: nextCountry || '',
+      state: nextState || '',
+      city: nextCity || '',
+    };
   };
 
-  const applyLocationSelection = (feature: MapboxFeature) => {
-    const types = feature.place_type ?? [];
-    const { countryText, regionText } = extractFromContext(feature);
-
-    if (types.includes('country')) {
-      setCountry(feature.text || feature.place_name);
-      setStateRegion(null);
-      setCity(null);
-    } else if (types.includes('region')) {
-      setCountry(countryText);
-      setStateRegion(feature.text || null);
-      setCity(null);
-    } else if (types.includes('place') || types.includes('locality')) {
-      setCountry(countryText);
-      setStateRegion(regionText);
-      setCity(feature.text || null);
-    } else {
-      setCountry(countryText);
-      setStateRegion(regionText);
-      setCity(feature.text || null);
-    }
-
+  const handleSelectLocation = (feat: MapboxFeature) => {
+    const parsed = parseContext(feat);
+    setCountry(parsed.country);
+    setStateRegion(parsed.state);
+    setCity(parsed.city);
     setLocationModalVisible(false);
     setLocationQuery('');
     setLocationResults([]);
   };
 
-  // ---- Continue ----
-  const handleContinue = async () => {
-    if (!authUserId) {
-      showAlert('Error', 'Missing auth user id.');
-      return;
-    }
-
+  const handleNext = () => {
     if (!firstName.trim() || !lastName.trim()) {
       showAlert('Missing info', 'Please enter first name and last name.');
       return;
     }
 
-    setLoading(true);
-
-    const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
-
-    const payload = {
+    setDraft({
       first_name: firstName.trim(),
       last_name: lastName.trim(),
-      display_name: displayName, // keep display_name in sync once real name exists
-      country,
-      state: stateRegion,
-      city,
-    };
+      country: country.trim() || null,
+      state: stateRegion.trim() || null,
+      city: city.trim() || null,
+    });
 
-    const { error } = await supabase
-      .schema('public')
-      .from('profiles')
-      .update(payload)
-      .eq('id', authUserId);
-
-    setLoading(false);
-
-    if (error) {
-      console.log('[Profile Update] error:', error);
-      showAlert('Error', 'Could not save your profile info. Please try again.');
-      return;
-    }
-
-    router.replace({ pathname: './UserInfo2', params: { authUserId } });
+    router.replace('./UserInfo2');
   };
 
   return (
@@ -263,7 +190,7 @@ export default function UserInfo1() {
           <View style={{ width: 24 }} />
         </View>
 
-        <Text style={styles.stepText}>Step 1/5</Text>
+        <Text style={styles.stepText}>Step 1/4</Text>
 
         <View style={styles.card}>
           <Text style={styles.label}>First name</Text>
@@ -293,105 +220,81 @@ export default function UserInfo1() {
               setLocationModalVisible(true);
             }}
           >
-            <Text style={styles.selectFieldText}>
-              {formattedLocation ?? 'Search city, state, or country'}
+            <Text style={styles.selectText} numberOfLines={1}>
+              {locationLabel}
             </Text>
-            <Ionicons name="search" size={18} color={TEXT_MUTED} />
+            <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
           </TouchableOpacity>
 
-          {(country || stateRegion || city) && (
-            <TouchableOpacity
-              style={styles.clearLocation}
-              onPress={() => {
-                setCountry(null);
-                setStateRegion(null);
-                setCity(null);
-              }}
-            >
-              <Text style={styles.clearLocationText}>Clear location</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.primaryButton, loading && { opacity: 0.7 }]}
-            onPress={handleContinue}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#020817" />
-            ) : (
-              <Text style={styles.primaryText}>Continue</Text>
-            )}
+          <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.9} onPress={handleNext}>
+            <Text style={styles.primaryBtnText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color="#0b0f18" />
           </TouchableOpacity>
         </View>
 
-        {/* Location Search Modal */}
+        {/* Location Modal */}
         <Modal
           visible={locationModalVisible}
+          animationType="slide"
           transparent
-          animationType="fade"
           onRequestClose={() => setLocationModalVisible(false)}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setLocationModalVisible(false)}>
-            <Pressable style={styles.locationModalCard} onPress={() => {}}>
-              <View style={styles.locationHeaderRow}>
-                <Text style={styles.modalTitle}>Search location</Text>
-                <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
-                  <Ionicons name="close" size={22} color={TEXT_MUTED} />
-                </TouchableOpacity>
-              </View>
+          <Pressable style={styles.modalBackdrop} onPress={() => setLocationModalVisible(false)} />
 
-              <View style={styles.searchRow}>
-                <Ionicons name="search" size={18} color={TEXT_MUTED} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Search location</Text>
+              <TouchableOpacity onPress={() => setLocationModalVisible(false)}>
+                <Ionicons name="close" size={22} color={TEXT_PRIMARY} />
+              </TouchableOpacity>
+            </View>
+
+            {!MAPBOX_TOKEN ? (
+              <Text style={styles.modalHint}>
+                Missing Mapbox token. Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN to enable location search.
+              </Text>
+            ) : (
+              <>
                 <TextInput
                   value={locationQuery}
                   onChangeText={setLocationQuery}
-                  placeholder="Type a city, state, or country..."
+                  placeholder="City, state, or country"
                   placeholderTextColor={TEXT_MUTED}
+                  style={styles.modalInput}
                   autoFocus
-                  style={styles.searchInput}
                 />
-                {locationQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setLocationQuery('');
-                      setLocationResults([]);
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={18} color={TEXT_MUTED} />
-                  </TouchableOpacity>
-                )}
-              </View>
 
-              {locationLoading ? (
-                <View style={{ paddingVertical: 14 }}>
-                  <ActivityIndicator />
-                </View>
-              ) : (
-                <FlatList
-                  data={locationResults}
-                  keyExtractor={(item) => item.id}
-                  keyboardShouldPersistTaps="handled"
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.resultRow}
-                      onPress={() => applyLocationSelection(item)}
-                    >
-                      <Text style={styles.resultTitle}>{item.text}</Text>
-                      <Text style={styles.resultSub}>{item.place_name}</Text>
-                    </TouchableOpacity>
-                  )}
-                  ListEmptyComponent={
-                    locationQuery.trim().length >= 2 ? (
-                      <Text style={styles.emptyText}>No results.</Text>
-                    ) : (
-                      <Text style={styles.emptyText}>Type at least 2 characters.</Text>
-                    )
-                  }
-                />
-              )}
-            </Pressable>
-          </Pressable>
+                {locationLoading ? (
+                  <Text style={styles.modalHint}>Searching…</Text>
+                ) : (
+                  <FlatList
+                    data={locationResults}
+                    keyExtractor={(item) => item.id}
+                    keyboardShouldPersistTaps="handled"
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.resultRow}
+                        onPress={() => handleSelectLocation(item)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.resultTitle}>{item.text}</Text>
+                        <Text style={styles.resultSub} numberOfLines={2}>
+                          {item.place_name}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      locationQuery.trim() ? (
+                        <Text style={styles.modalHint}>No results</Text>
+                      ) : (
+                        <Text style={styles.modalHint}>Type to search</Text>
+                      )
+                    }
+                  />
+                )}
+              </>
+            )}
+          </View>
         </Modal>
 
         <AppAlert
@@ -406,130 +309,65 @@ export default function UserInfo1() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20 },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 24,
-    color: TEXT_PRIMARY,
-    fontWeight: '600',
-  },
-  stepText: {
-    textAlign: 'center',
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginTop: -6,
-  },
-
-  card: { borderRadius: 18, padding: 18, marginTop: 16 },
-
-  label: { fontSize: 13, color: TEXT_PRIMARY, marginTop: 10, marginBottom: 4 },
-
+  container: { flex: 1, paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 54 : 38 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
+  headerTitle: { color: TEXT_PRIMARY, fontSize: 26, fontWeight: '700' },
+  stepText: { color: TEXT_MUTED, marginTop: 8, marginBottom: 12 },
+  card: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 18, padding: 16 },
+  label: { color: TEXT_MUTED, fontSize: 13, marginTop: 10, marginBottom: 6 },
   input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#7b7b7bff',
-    backgroundColor: '#b0b0b050',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-  },
-
-  primaryButton: {
-    marginTop: 16,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-    borderRadius: 10,
     paddingVertical: 12,
-    alignItems: 'center',
+    color: TEXT_PRIMARY,
   },
-  primaryText: { color: PRIMARY, fontWeight: '600', fontSize: 15 },
-
   selectField: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#7b7b7bff',
-    backgroundColor: '#b0b0b050',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  selectFieldText: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    flexShrink: 1,
-    paddingRight: 10,
-  },
-  clearLocation: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  clearLocationText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    textDecorationLine: 'underline',
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  selectText: { color: TEXT_PRIMARY, flex: 1, marginRight: 10 },
+  primaryBtn: {
+    marginTop: 16,
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-
-  locationModalCard: {
-    borderRadius: 18,
-    padding: 18,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    maxHeight: '75%',
-  },
-  locationHeaderRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  modalTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#7b7b7bff',
-    backgroundColor: '#b0b0b050',
-    paddingHorizontal: 10,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
     gap: 8,
+  },
+  primaryBtnText: { color: '#0b0f18', fontWeight: '800', fontSize: 15 },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
+  modalCard: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    top: Platform.OS === 'ios' ? 90 : 60,
+    maxHeight: '72%',
+    backgroundColor: CARD,
+    borderRadius: 18,
+    padding: 14,
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  modalTitle: { color: TEXT_PRIMARY, fontSize: 16, fontWeight: '800' },
+  modalHint: { color: TEXT_MUTED, marginTop: 12, textAlign: 'center' },
+  modalInput: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: TEXT_PRIMARY,
     marginBottom: 10,
   },
-  searchInput: {
-    flex: 1,
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    paddingVertical: 0,
-  },
-  resultRow: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
-  },
-  resultTitle: { color: TEXT_PRIMARY, fontSize: 15, fontWeight: '600' },
-  resultSub: { color: TEXT_MUTED, fontSize: 12, marginTop: 2 },
-  emptyText: { color: TEXT_MUTED, fontSize: 12, paddingVertical: 10 },
+  resultRow: { paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)' },
+  resultTitle: { color: TEXT_PRIMARY, fontWeight: '700' },
+  resultSub: { color: TEXT_MUTED, marginTop: 2, fontSize: 12 },
 });

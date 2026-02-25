@@ -1,5 +1,5 @@
 // app/SignInLogin/onboarding/UserInfo4.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,29 +7,23 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import AppAlert from '../components/AppAlert';
+
+import { useOnboardingDraftStore, type JourneyStage } from '@/lib/onboarding/onboardingDraftStore';
+import { submitOnboardingDraftToUserUsers } from '@/lib/onboarding/auth_onboarding_submit';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
-
-type Params = { authUserId?: string };
-
-type JourneyStage =
-  | 'beginner'
-  | 'intermediate'
-  | 'advanced'
-  | 'returning_from_break'
-  | 'elite';
 
 const JOURNEY_OPTIONS: Array<{
   key: JourneyStage;
@@ -38,37 +32,17 @@ const JOURNEY_OPTIONS: Array<{
   icon: keyof typeof Ionicons.glyphMap;
 }> = [
   { key: 'beginner', title: 'BEGINNER', subtitle: 'New to structured training.', icon: 'leaf-outline' },
-  { key: 'returning_from_break', title: 'GETTING BACK INTO IT', subtitle: 'Restarting after time off.', icon: 'refresh-outline' },
-  { key: 'intermediate', title: 'INTERMEDIATE', subtitle: 'Consistent, building performance.', icon: 'trending-up-outline' },
-  { key: 'advanced', title: 'ADVANCED', subtitle: 'Highly consistent, structured training.', icon: 'flash-outline' },
-  { key: 'elite', title: 'ELITE', subtitle: 'Performance-driven, competing at a high level.', icon: 'trophy-outline' },
+  { key: 'returning_from_break', title: 'GETTING BACK INTO IT', subtitle: 'Returning after time off.', icon: 'refresh-outline' },
+  { key: 'intermediate', title: 'INTERMEDIATE', subtitle: 'Consistent training, building momentum.', icon: 'trending-up-outline' },
+  { key: 'advanced', title: 'ADVANCED', subtitle: 'Strong routine and performance focus.', icon: 'rocket-outline' },
+  { key: 'elite', title: 'ELITE', subtitle: 'High-performing, highly structured training.', icon: 'flash-outline' },
 ];
-
-function sanitizeUsername(raw: string) {
-  let u = (raw ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
-function buildFallbackUsername(email: string | null | undefined, userId: string) {
-  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
-  let u = sanitizeUsername(baseRaw);
-  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
 
 export default function UserInfo4() {
   const router = useRouter();
-  const params = useLocalSearchParams<Params>();
-  const authUserId = Array.isArray(params.authUserId) ? params.authUserId[0] : params.authUserId;
+  const { draft, setDraft, resetDraft } = useOnboardingDraftStore();
 
-  const [journey, setJourney] = useState<JourneyStage | null>(null);
+  const [journey, setJourney] = useState<JourneyStage | null>(draft.fitness_journey_stage ?? null);
 
   // Alerts
   const [alertVisible, setAlertVisible] = useState(false);
@@ -92,106 +66,36 @@ export default function UserInfo4() {
     }
   };
 
-  // Prefill
-  useEffect(() => {
-    const load = async () => {
-      if (!authUserId) return;
+  const canFinish = useMemo(() => !!journey, [journey]);
 
-      const { data, error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .select('fitness_journey_stage')
-        .eq('id', authUserId)
-        .maybeSingle();
-
-      if (error || !data) return;
-
-      if (data.fitness_journey_stage) {
-        setJourney(String(data.fitness_journey_stage) as JourneyStage);
-      }
-    };
-
-    load();
-  }, [authUserId]);
-
-  const canContinue = useMemo(() => !!journey, [journey]);
   const [saving, setSaving] = useState(false);
 
-  const handleNext = async () => {
-    if (!authUserId) {
-      showAlert('Error', 'Missing auth user id.');
-      return;
-    }
+  const handleBack = () => router.replace('./UserInfo3');
+
+  const handleFinish = async () => {
     if (!journey) {
-      showAlert('Missing info', 'Please select where you are on your fitness journey.');
+      showAlert('Select one', 'Please choose your training stage to continue.');
       return;
     }
 
     setSaving(true);
     try {
-      const {
-        data: { user },
-        error: userErr,
-      } = await supabase.auth.getUser();
+      // persist final choice into local store
+      setDraft({ fitness_journey_stage: journey });
 
-      if (userErr || !user) {
-        showAlert('Auth error', 'You are not signed in. Please sign in again.');
-        return;
-      }
-
-      // Ensure profile exists with required fields
-      const metaUsername =
-        (user.user_metadata as any)?.username?.trim?.() ||
-        (user.user_metadata as any)?.Username?.trim?.() ||
-        '';
-
-      const username = (() => {
-        const s = sanitizeUsername(metaUsername);
-        if (s.length >= 3) return s;
-        return buildFallbackUsername(user.email, user.id);
-      })();
-
-      const metaDisplayName =
-        (user.user_metadata as any)?.display_name?.trim?.() ||
-        (user.user_metadata as any)?.displayName?.trim?.() ||
-        '';
-
-      const displayName = (metaDisplayName || username).trim();
-
-      const { error: ensureErr } = await supabase
-        .schema('public')
-        .from('profiles')
-        .upsert(
-          { id: user.id, username, display_name: displayName },
-          { onConflict: 'id' },
-        );
-
-      if (ensureErr) {
-        console.log('[UserInfo4] ensure profile error', ensureErr);
-        showAlert('Error', ensureErr.message);
-        return;
-      }
-
-      // Save stage + mark onboarding complete
-      const { error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .update({
-          fitness_journey_stage: journey,
-          onboarding_completed: true,
-        })
-        .eq('id', authUserId);
-
-      if (error) {
-        console.log('[UserInfo4] save error', error);
-        showAlert('Error', error.message);
-        return;
-      }
-
-      router.replace({
-        pathname: './TermsAndPrivacy',
-        params: { nextPath: '/(tabs)/home' },
+      // submit everything once
+      await submitOnboardingDraftToUserUsers({
+        ...draft,
+        fitness_journey_stage: journey,
       });
+
+      // clear local draft once saved
+      resetDraft();
+
+      // go to home
+      router.replace('/(tabs)/home');
+    } catch (e: any) {
+      showAlert('Error', e?.message ?? 'Could not complete onboarding. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -250,128 +154,104 @@ export default function UserInfo4() {
       <View style={styles.container}>
         <LogoHeader />
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.topRow}>
-            <View style={styles.topTextBlock}>
-              <Text style={styles.topTitle}>GOALS</Text>
-              <Text style={styles.topStep}>STEP 4/5</Text>
-            </View>
-            <View style={{ width: 44 }} />
-          </View>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Your Stage</Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-          <View style={styles.headerBlock}>
-            <Text style={styles.h1}>Where are you on your fitness journey?</Text>
-            <Text style={styles.h2}>Choose one option.</Text>
-          </View>
+        <Text style={styles.stepText}>Step 4/4</Text>
 
-          <View style={{ gap: 12 }}>
-            {JOURNEY_OPTIONS.map((o) => (
+        <ScrollView contentContainerStyle={{ paddingBottom: 22 }}>
+          <Text style={styles.title}>Where are you in your fitness journey?</Text>
+          <Text style={styles.subtitle}>This helps us tune defaults and suggestions.</Text>
+
+          <View style={{ marginTop: 12, gap: 12 }}>
+            {JOURNEY_OPTIONS.map((opt) => (
               <OptionCard
-                key={o.key}
-                title={o.title}
-                subtitle={o.subtitle}
-                icon={o.icon}
-                selected={journey === o.key}
-                onPress={() => setJourney(o.key)}
+                key={opt.key}
+                title={opt.title}
+                subtitle={opt.subtitle}
+                icon={opt.icon}
+                selected={journey === opt.key}
+                onPress={() => setJourney(opt.key)}
               />
             ))}
           </View>
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, !canFinish ? { opacity: 0.6 } : null]}
+            activeOpacity={0.9}
+            onPress={handleFinish}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator />
+            ) : (
+              <>
+                <Text style={styles.primaryBtnText}>Finish</Text>
+                <Ionicons name="checkmark-circle" size={18} color="#0b0f18" />
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
 
-        <TouchableOpacity
-          style={[
-            styles.nextButton,
-            !canContinue ? { opacity: 0.35 } : null,
-            saving ? { opacity: 0.7 } : null,
-          ]}
-          activeOpacity={0.9}
-          onPress={handleNext}
-          disabled={!canContinue || saving}
-        >
-          {saving ? <ActivityIndicator /> : <Text style={styles.nextText}>NEXT</Text>}
-        </TouchableOpacity>
-
-        <AppAlert visible={alertVisible} title={alertTitle} message={alertMessage} onClose={handleCloseAlert} />
+        <AppAlert
+          visible={alertVisible}
+          title={alertTitle}
+          message={alertMessage}
+          onClose={handleCloseAlert}
+        />
       </View>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20, paddingTop: 6 },
+  container: { flex: 1, paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 54 : 38 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
+  headerTitle: { color: TEXT_PRIMARY, fontSize: 26, fontWeight: '700' },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  stepText: { color: TEXT_MUTED, marginTop: 8, marginBottom: 12 },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  scrollContent: { paddingBottom: 22 },
-  topTextBlock: { flex: 1, paddingLeft: 12 },
-  topTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '800', letterSpacing: 1.4 },
-  topStep: { marginTop: 2, color: TEXT_MUTED, fontSize: 12, fontWeight: '600', letterSpacing: 1.1 },
+  title: { color: TEXT_PRIMARY, fontSize: 18, fontWeight: '900' },
+  subtitle: { color: TEXT_MUTED, marginTop: 6 },
 
-  headerBlock: { marginTop: 14, marginBottom: 12 },
-  h1: { color: TEXT_PRIMARY, fontSize: 24, fontWeight: '700' },
-  h2: { marginTop: 8, color: TEXT_MUTED, fontSize: 14, fontWeight: '500' },
+  cardBtn: { borderRadius: 18, padding: 14 },
+  cardBtnSelected: { backgroundColor: PRIMARY },
+  cardBtnUnselected: { backgroundColor: 'rgba(255,255,255,0.06)' },
 
-  cardBtn: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-  },
-  cardBtnSelected: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  cardBtnUnselected: {
-    backgroundColor: 'rgba(176,176,176,0.12)',
-    borderColor: 'rgba(123,123,123,0.55)',
-  },
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-
+  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.10)',
-  },
-
-  cardTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '900', letterSpacing: 1.4 },
-  cardSubtitle: { marginTop: 4, color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '500' },
-  cardTitleSelected: { color: TEXT_PRIMARY },
-  cardSubtitleSelected: { color: 'rgba(255,255,255,0.72)' },
-
-  trailing: { width: 34, alignItems: 'flex-end', justifyContent: 'center' },
-  unchecked: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  checkPill: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  nextButton: {
-    marginTop: 18,
-    marginBottom: 26,
-    borderWidth: 2,
-    borderColor: PRIMARY,
+    width: 44,
+    height: 44,
     borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nextText: { color: PRIMARY, fontSize: 18, fontWeight: '900', letterSpacing: 2 },
+
+  cardTitle: { color: TEXT_PRIMARY, fontWeight: '900', fontSize: 13 },
+  cardTitleSelected: { color: '#0b0f18' },
+  cardSubtitle: { color: TEXT_MUTED, marginTop: 4, fontSize: 12 },
+  cardSubtitleSelected: { color: 'rgba(0,0,0,0.7)' },
+
+  trailing: { paddingLeft: 10 },
+  checkPill: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#0b0f18', alignItems: 'center', justifyContent: 'center' },
+  unchecked: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
+
+  primaryBtn: {
+    marginTop: 16,
+    backgroundColor: PRIMARY,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  primaryBtnText: { color: '#0b0f18', fontWeight: '800', fontSize: 15 },
 });

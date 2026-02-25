@@ -29,6 +29,7 @@ function sanitizeUsername(raw: string) {
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
+  if (u.length > 30) u = u.slice(0, 30);
   return u;
 }
 
@@ -48,14 +49,6 @@ function getMetaUsername(user: any) {
   );
 }
 
-function getMetaDisplayName(user: any) {
-  return (
-    (user?.user_metadata as any)?.display_name?.trim?.() ||
-    (user?.user_metadata as any)?.displayName?.trim?.() ||
-    ''
-  );
-}
-
 export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -67,7 +60,12 @@ export default function Login() {
 
   const routingRef = useRef(false);
 
-  const ensureProfileRow = async (userId: string) => {
+  /**
+   * Ensures a row exists in user.users for this auth user.
+   * - Uses PK user_id
+   * - Does NOT reference public.profiles
+   */
+  const ensureUserUsersRow = async (userId: string) => {
     const {
       data: { user },
       error: userErr,
@@ -79,28 +77,60 @@ export default function Login() {
 
     const metaUsername = sanitizeUsername(getMetaUsername(user));
     const fallbackUsername = buildFallbackUsername(user.email, userId);
-    const username = metaUsername.length >= 3 ? metaUsername.slice(0, 30) : fallbackUsername;
+    const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
 
-    const metaDisplayName = getMetaDisplayName(user);
-    const displayName = (metaDisplayName || username).trim();
-
+    // Upsert into schema user, table users, PK user_id
+    // We keep it "non-destructive": only set username if it's currently null.
     const { error: ensureErr } = await supabase
-      .schema('public')
-      .from('profiles')
+      .schema('user')
+      .from('users')
       .upsert(
         {
-          id: userId,
-          username,
-          display_name: displayName,
+          user_id: userId,
+          username, // will be used on insert; on conflict we don't overwrite if already set (below)
+          onboarding_completed: false,
+          is_private: true,
+          app_usage_reasons: [], // matches your default type
         },
-        { onConflict: 'id' },
+        { onConflict: 'user_id' }
       );
 
     if (ensureErr) {
       return { ok: false as const, message: ensureErr.message };
     }
 
+    // Optional: prevent overwriting an existing username with fallback/meta
+    // If you want strict non-overwrite logic, do it with a SQL trigger.
     return { ok: true as const };
+  };
+
+  /**
+   * Optional: Ensure profiles_stub row exists (so your seed trigger can run off it).
+   * Your table has: user_id (unique), username (nullable).
+   */
+  const ensureProfilesStubRow = async (userId: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const metaUsername = sanitizeUsername(getMetaUsername(user));
+    const fallbackUsername = buildFallbackUsername(user?.email, userId);
+    const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
+
+    const { error } = await supabase
+      .from('profiles_stub') // public schema by default
+      .upsert(
+        {
+          user_id: userId,
+          username,
+        },
+        { onConflict: 'user_id' }
+      );
+
+    // If RLS blocks this (common), don’t fail login—your auth.users trigger should seed this anyway.
+    if (error) {
+      console.log('[ensureProfilesStubRow] non-fatal error', error);
+    }
   };
 
   const routeAfterLogin = async (userId: string) => {
@@ -108,20 +138,23 @@ export default function Login() {
     routingRef.current = true;
 
     try {
-      // Ensure profile exists (and satisfies NOT NULL username/display_name)
-      const ensure = await ensureProfileRow(userId);
+      // 1) Ensure canonical rows exist
+      const ensure = await ensureUserUsersRow(userId);
       if (!ensure.ok) {
         Alert.alert('Error', ensure.message);
         routingRef.current = false;
         return;
       }
 
-      // Fetch gating flags
+      // Optional: seed stub (non-fatal if blocked)
+      await ensureProfilesStubRow(userId);
+
+      // 2) Read onboarding flag from user.users (NOT public.profiles)
       const { data, error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .select('onboarding_completed, has_accepted_privacy_policy')
-        .eq('id', userId)
+        .schema('user')
+        .from('users')
+        .select('onboarding_completed')
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (error) {
@@ -131,33 +164,16 @@ export default function Login() {
       }
 
       const onboardingCompleted = data?.onboarding_completed === true;
-      const hasAcceptedPrivacy = data?.has_accepted_privacy_policy === true;
 
-      /**
-       * ✅ Corrected order:
-       * 1) If onboarding is NOT complete -> always start onboarding (UserInfo1).
-       * 2) Only AFTER onboarding is complete do we enforce Terms/Privacy gate.
-       * 3) Then go home.
-       */
+      // 3) Route
       if (!onboardingCompleted) {
-        router.replace({
-          pathname: '/SignInLogin/onboarding/UserInfo1',
-          params: { authUserId: userId },
-        });
-        return;
-      }
-
-      if (!hasAcceptedPrivacy) {
-        router.replace({
-          pathname: '/SignInLogin/onboarding/TermsAndPrivacy',
-          params: { nextPath: '/(tabs)/home' },
-        });
+        router.replace('/SignInLogin/onboarding/UserInfo1');
         return;
       }
 
       router.replace('/(tabs)/home');
     } finally {
-      // keep routingRef true to prevent double routing
+      // keep routingRef true to avoid double routing
     }
   };
 

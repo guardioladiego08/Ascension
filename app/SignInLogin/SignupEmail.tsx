@@ -1,5 +1,5 @@
 // app/SignInLogin/SignupEmail.tsx
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -31,10 +32,37 @@ function sanitizeUsername(raw: string) {
   return u;
 }
 
+/**
+ * Checks username availability against user.users.username.
+ *
+ * IMPORTANT requirements:
+ * 1) Supabase Dashboard → Project Settings → API → Schemas
+ *    - Make sure "user" schema is exposed.
+ *
+ * 2) RLS:
+ *    - If RLS is ON for user.users and you don't have a SELECT policy that allows this check,
+ *      the query may fail (42501) or always return null.
+ *    - Best practice: create a public view (e.g. public.username_registry) OR an RPC
+ *      (SECURITY DEFINER) that only checks existence.
+ */
+async function checkUsernameAgainstUserUsers(desired: string) {
+  // Query schema('user') table('users') column username
+  const { data, error } = await supabase
+    .schema('public')
+    .from('profiles_stub')
+    .select('user_id')
+    .eq('username', desired)
+    .limit(1)
+    .maybeSingle();
+
+  return { exists: !!data, error };
+}
+
 export default function SignupEmail() {
   const router = useRouter();
+
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
 
   const [loadingEmail, setLoadingEmail] = useState(false);
@@ -64,47 +92,75 @@ export default function SignupEmail() {
     }
   };
 
-  const checkUsernameAvailability = async () => {
-    const desired = sanitizeUsername(username);
+  const usernameSanitized = useMemo(() => sanitizeUsername(usernameInput), [usernameInput]);
+
+  const checkUsernameAvailability = useCallback(async () => {
+    Keyboard.dismiss();
+
+    const desired = usernameSanitized;
     if (!desired) return;
+
+    if (desired.length < 3) {
+      setUsernameAvailable(false);
+      showAlert('Invalid username', 'Username must be at least 3 characters.');
+      return;
+    }
 
     setCheckingUsername(true);
     setUsernameAvailable(null);
 
-    // Preferred: your RPC (update it server-side to check public.profiles)
-    const { data, error } = await supabase.rpc('is_username_available', {
+    // 1) If you have an RPC, use it (preferred).
+    // Update your RPC to check "user".users (NOT public.profiles).
+    // If RPC doesn't exist, this will error and we fall back to direct query.
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('is_username_available', {
       desired_username: desired,
     });
 
-    if (!error) {
+    if (!rpcErr) {
       setCheckingUsername(false);
-      setUsernameAvailable(data === true);
+      setUsernameAvailable(rpcData === true);
       return;
     }
 
-    // Fallback: direct query against public.profiles
-    const { data: existing, error: qErr } = await supabase
-      .schema('public')
-      .from('profiles')
-      .select('id')
-      .eq('username', desired)
-      .maybeSingle();
+    // 2) Fallback: direct query against user.users
+    const { exists, error: qErr } = await checkUsernameAgainstUserUsers(desired);
 
     setCheckingUsername(false);
 
     if (qErr) {
       console.log('username check error', qErr);
+
+      // Common failure: RLS blocks select (42501) or schema not exposed
+      const code = (qErr as any)?.code;
+      if (code === '42501') {
+        showAlert(
+          'Username check blocked',
+          'Your database RLS is preventing username checks. Create a public view (recommended) or an RPC (SECURITY DEFINER) that only checks username existence.'
+        );
+        return;
+      }
+
+      if (code === 'PGRST200' || code === 'PGRST205') {
+        showAlert(
+          'Schema/table not exposed',
+          'Make sure the "user" schema is exposed in Supabase API settings (Project Settings → API → Schemas).'
+        );
+        return;
+      }
+
       showAlert('Error', 'Could not check username right now.');
       return;
     }
 
-    setUsernameAvailable(!existing);
-  };
+    setUsernameAvailable(!exists);
+  }, [usernameSanitized]);
 
-  const handleEmailSignup = async () => {
+  const handleEmailSignup = useCallback(async () => {
+    Keyboard.dismiss();
+
     const emailTrim = email.trim();
     const passwordTrim = password.trim();
-    const usernameTrim = sanitizeUsername(username);
+    const usernameTrim = usernameSanitized;
 
     if (!emailTrim || !passwordTrim || !usernameTrim) {
       showAlert('Missing info', 'Please enter email, username, and password.');
@@ -114,6 +170,33 @@ export default function SignupEmail() {
     if (usernameTrim.length < 3) {
       showAlert('Invalid username', 'Username must be at least 3 characters.');
       return;
+    }
+
+    // If they never pressed "Check", do it here to prevent duplicates
+    if (usernameAvailable === null) {
+      setCheckingUsername(true);
+      try {
+        const { exists, error: qErr } = await checkUsernameAgainstUserUsers(usernameTrim);
+
+        if (qErr) {
+          console.log('username check error (during signup)', qErr);
+          showAlert(
+            'Could not verify username',
+            'Please press "Check" to verify your username, or ensure username checking is enabled server-side.'
+          );
+          return;
+        }
+
+        if (exists) {
+          setUsernameAvailable(false);
+          showAlert('Username taken', 'Please choose a different username.');
+          return;
+        }
+
+        setUsernameAvailable(true);
+      } finally {
+        setCheckingUsername(false);
+      }
     }
 
     if (usernameAvailable === false) {
@@ -127,6 +210,7 @@ export default function SignupEmail() {
       email: emailTrim,
       password: passwordTrim,
       options: {
+        // This metadata is optional; you can use it later after login to prefill onboarding.
         data: {
           username: usernameTrim,
           display_name: usernameTrim,
@@ -134,38 +218,22 @@ export default function SignupEmail() {
       },
     });
 
+    setLoadingEmail(false);
+
     if (error) {
-      setLoadingEmail(false);
       showAlert('Sign up failed', error.message);
       return;
     }
 
+    // IMPORTANT CHANGE:
+    // We do NOT upsert into public.profiles anymore.
+    // Your canonical table is "user".users and you said you want to submit onboarding ONLY at the end.
+    // After they confirm email and log in, your onboarding flow will upsert user.users in one shot.
+
     const userId = data.user?.id;
     if (!userId) {
-      setLoadingEmail(false);
       showAlert('Error', 'Account was created, but we did not receive an ID. Please try again.');
       return;
-    }
-
-    // Best-effort profile seed.
-    // If email confirmations are ON, there may not be a session yet (RLS can block this).
-    // It’s OK: we will ensure profile exists after login.
-    const { error: profileError } = await supabase
-      .schema('public')
-      .from('profiles')
-      .upsert(
-        {
-          id: userId,
-          username: usernameTrim,
-          display_name: usernameTrim, // required NOT NULL
-        },
-        { onConflict: 'id' },
-      );
-
-    setLoadingEmail(false);
-
-    if (profileError) {
-      console.log('profile upsert error (non-fatal)', profileError);
     }
 
     showAlert(
@@ -173,9 +241,9 @@ export default function SignupEmail() {
       'We sent you a confirmation link. After confirming your email, return and log in to continue onboarding.',
       () => {
         router.replace({ pathname: '/SignInLogin/Login', params: { email: emailTrim } });
-      },
+      }
     );
-  };
+  }, [email, password, usernameSanitized, usernameAvailable, router]);
 
   return (
     <LinearGradient
@@ -186,6 +254,7 @@ export default function SignupEmail() {
     >
       <View style={styles.container}>
         <LogoHeader showBackButton />
+
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Create an account</Text>
           <View style={{ width: 24 }} />
@@ -195,7 +264,7 @@ export default function SignupEmail() {
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(v) => setEmail(v)}
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="you@example.com"
@@ -206,9 +275,9 @@ export default function SignupEmail() {
           <Text style={styles.label}>Username</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <TextInput
-              value={username}
+              value={usernameInput}
               onChangeText={(v) => {
-                setUsername(v);
+                setUsernameInput(v);
                 setUsernameAvailable(null);
               }}
               autoCapitalize="none"
@@ -219,7 +288,7 @@ export default function SignupEmail() {
             <TouchableOpacity
               style={styles.smallButton}
               onPress={checkUsernameAvailability}
-              disabled={checkingUsername || !username.trim()}
+              disabled={checkingUsername || !usernameInput.trim()}
             >
               {checkingUsername ? (
                 <ActivityIndicator color="#020817" />
@@ -228,6 +297,12 @@ export default function SignupEmail() {
               )}
             </TouchableOpacity>
           </View>
+
+          {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() && (
+            <Text style={styles.helperText}>
+              Will be saved as: <Text style={{ fontWeight: '700' }}>{usernameSanitized}</Text>
+            </Text>
+          )}
 
           {usernameAvailable === true && (
             <Text style={[styles.helperText, { color: '#15C779' }]}>Username is available.</Text>
@@ -239,7 +314,7 @@ export default function SignupEmail() {
           <Text style={styles.label}>Password</Text>
           <TextInput
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(v) => setPassword(v)}
             secureTextEntry
             placeholder="Create a password"
             placeholderTextColor={TEXT_MUTED}
@@ -247,9 +322,12 @@ export default function SignupEmail() {
           />
 
           <TouchableOpacity
-            style={[styles.primaryButton, loadingEmail && { opacity: 0.7 }]}
+            style={[
+              styles.primaryButton,
+              (loadingEmail || checkingUsername) && { opacity: 0.7 },
+            ]}
             onPress={handleEmailSignup}
-            disabled={loadingEmail}
+            disabled={loadingEmail || checkingUsername}
           >
             {loadingEmail ? (
               <ActivityIndicator color="#020817" />
@@ -312,7 +390,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   smallButtonText: { color: PRIMARY, fontWeight: '600', fontSize: 13 },
-  helperText: { fontSize: 12, color: TEXT_MUTED, marginTop: 4 },
+  helperText: { fontSize: 12, color: TEXT_MUTED, marginTop: 6 },
   primaryButton: {
     marginTop: 16,
     borderWidth: 1.5,
