@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import { LinearGradient } from 'expo-linear-gradient';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import { useUnits } from '@/contexts/UnitsContext';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -24,7 +25,10 @@ const TEXT = Colors.dark.text;
 const DANGER = '#EF4444';
 
 const M_PER_MI = 1609.344;
+const M_PER_KM = 1000;
 const MPH_PER_MPS = 2.236936;
+const KMH_PER_MPS = 3.6;
+const FT_PER_M = 3.28084;
 
 
 
@@ -35,11 +39,21 @@ function formatClock(totalSeconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function formatPace(secondsPerMi: number | null) {
-  if (!secondsPerMi || secondsPerMi <= 0) return '— /mi';
-  const m = Math.floor(secondsPerMi / 60);
-  const s = Math.round(secondsPerMi % 60);
-  return `${m}:${String(s).padStart(2, '0')} /mi`;
+function formatPace(secondsPerUnit: number | null, suffix: '/mi' | '/km') {
+  if (!secondsPerUnit || secondsPerUnit <= 0) return `— ${suffix}`;
+  const m = Math.floor(secondsPerUnit / 60);
+  const s = Math.round(secondsPerUnit % 60);
+  return `${m}:${String(s).padStart(2, '0')} ${suffix}`;
+}
+
+function formatDistance(meters: number, unit: 'mi' | 'km') {
+  if (unit === 'km') return `${(meters / M_PER_KM).toFixed(2)} KM`;
+  return `${(meters / M_PER_MI).toFixed(2)} MI`;
+}
+
+function formatElevation(meters: number, unit: 'mi' | 'km') {
+  if (unit === 'mi') return `${Math.round(meters * FT_PER_M)} ft`;
+  return `${Math.round(meters)} m`;
 }
 
 type SessionRow = {
@@ -49,11 +63,13 @@ type SessionRow = {
   total_distance_m: number;
   total_elevation_m: number;
   avg_pace_s_per_mi: number | null;
+  avg_pace_s_per_km: number | null;
 };
 
 type SampleRow = {
   elapsed_s: number;
   pace_s_per_mi: number | null;
+  pace_s_per_km: number | null;
   speed_mps: number | null;
   elevation_m: number | null;
   incline_deg: number | null;
@@ -62,6 +78,7 @@ type SampleRow = {
 export default function RunWalkSessionSummary() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
+  const { distanceUnit } = useUnits();
 
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -80,7 +97,7 @@ export default function RunWalkSessionSummary() {
           .schema('run_walk')
           .from('sessions')
           .select(
-            'id, exercise_type, total_time_s, total_distance_m, total_elevation_m, avg_pace_s_per_mi'
+            'id, exercise_type, total_time_s, total_distance_m, total_elevation_m, avg_pace_s_per_mi, avg_pace_s_per_km'
           )
           .eq('id', sessionId)
           .single();
@@ -90,7 +107,7 @@ export default function RunWalkSessionSummary() {
         const { data: samp, error: sampErr } = await supabase
           .schema('run_walk')
           .from('samples')
-          .select('elapsed_s, pace_s_per_mi, speed_mps, elevation_m, incline_deg')
+          .select('elapsed_s, pace_s_per_mi, pace_s_per_km, speed_mps, elevation_m, incline_deg')
           .eq('session_id', sessionId)
           .order('elapsed_s');
 
@@ -122,25 +139,34 @@ export default function RunWalkSessionSummary() {
   const pacePoints: SamplePoint[] = useMemo(
     () =>
       samples
-        .filter((s) => s.pace_s_per_mi && s.pace_s_per_mi > 0)
-        .map((s) => ({ t: s.elapsed_s, v: s.pace_s_per_mi! })),
-    [samples]
+        .map((s) => ({
+          t: s.elapsed_s,
+          v: distanceUnit === 'mi' ? s.pace_s_per_mi : s.pace_s_per_km,
+        }))
+        .filter((s) => s.v != null && s.v > 0) as SamplePoint[],
+    [samples, distanceUnit]
   );
 
   const speedPoints: SamplePoint[] = useMemo(
     () =>
       samples
         .filter((s) => s.speed_mps != null)
-        .map((s) => ({ t: s.elapsed_s, v: s.speed_mps! * MPH_PER_MPS })),
-    [samples]
+        .map((s) => ({
+          t: s.elapsed_s,
+          v: s.speed_mps! * (distanceUnit === 'mi' ? MPH_PER_MPS : KMH_PER_MPS),
+        })),
+    [samples, distanceUnit]
   );
 
   const elevationPoints: SamplePoint[] = useMemo(
     () =>
       samples
         .filter((s) => s.elevation_m != null)
-        .map((s) => ({ t: s.elapsed_s, v: s.elevation_m! })),
-    [samples]
+        .map((s) => ({
+          t: s.elapsed_s,
+          v: distanceUnit === 'mi' ? s.elevation_m! * FT_PER_M : s.elevation_m!,
+        })),
+    [samples, distanceUnit]
   );
 
   const onDelete = () => {
@@ -182,7 +208,9 @@ export default function RunWalkSessionSummary() {
     );
   }
 
-  const miles = session.total_distance_m / M_PER_MI;
+  const avgPaceForUnit = distanceUnit === 'mi'
+    ? session.avg_pace_s_per_mi
+    : session.avg_pace_s_per_km;
 
   return (
     <LinearGradient
@@ -212,17 +240,20 @@ export default function RunWalkSessionSummary() {
         <ScrollView showsVerticalScrollIndicator={false}>
           <View style={styles.card}>
             <Row label="Total Time" value={formatClock(session.total_time_s)} />
-            <Row label="Distance" value={`${miles.toFixed(2)} MI`} />
+            <Row label="Distance" value={formatDistance(session.total_distance_m, distanceUnit)} />
             <Row
               label="Elevation Gain"
-              value={`${session.total_elevation_m.toFixed(0)} m`}
+              value={formatElevation(session.total_elevation_m, distanceUnit)}
             />
-            <Row label="Avg Pace" value={formatPace(session.avg_pace_s_per_mi)} />
+            <Row
+              label="Avg Pace"
+              value={formatPace(avgPaceForUnit, distanceUnit === 'mi' ? '/mi' : '/km')}
+            />
           </View>
 
           <View style={styles.chartsWrap}>
             <MetricChart
-              title="Pace Over Time (/mi)"
+              title={`Pace Over Time (${distanceUnit === 'mi' ? '/mi' : '/km'})`}
               color={Colors.dark.highlight1}
               points={pacePoints}
               cardBg={CARD}
@@ -231,7 +262,7 @@ export default function RunWalkSessionSummary() {
             />
 
             <MetricChart
-              title="Speed Over Time (mph)"
+              title={`Speed Over Time (${distanceUnit === 'mi' ? 'mph' : 'km/h'})`}
               color={Colors.dark.highlight4}
               points={speedPoints}
               cardBg={CARD}
@@ -240,7 +271,7 @@ export default function RunWalkSessionSummary() {
             />
 
             <MetricChart
-              title="Elevation Over Time (m)"
+              title={`Elevation Over Time (${distanceUnit === 'mi' ? 'ft' : 'm'})`}
               color={Colors.dark.highlight2}
               points={elevationPoints}
               cardBg={CARD}

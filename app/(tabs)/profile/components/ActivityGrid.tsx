@@ -50,6 +50,7 @@ type Props = {
 const CARD = Colors.dark.card;
 const TEXT = Colors.dark.text;
 const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
+const LB_PER_KG = 2.20462;
 
 const PAGE_SIZE = 24;
 
@@ -68,7 +69,7 @@ function formatDuration(seconds?: number | null) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function formatDistance(m?: number | null, unit: 'mi' | 'km') {
+function formatDistance(unit: 'mi' | 'km', m?: number | null) {
   const v = m == null ? null : Number(m);
   if (!v || v <= 0) return '-';
   return unit === 'mi'
@@ -76,7 +77,7 @@ function formatDistance(m?: number | null, unit: 'mi' | 'km') {
     : `${(v / 1000).toFixed(2)} km`;
 }
 
-function formatPace(km?: number | null, mi?: number | null, unit: 'mi' | 'km') {
+function formatPace(unit: 'mi' | 'km', km?: number | null, mi?: number | null) {
   const sec = unit === 'mi' ? mi : km;
   const s = sec == null ? null : Number(sec);
   if (!s || s <= 0) return '-';
@@ -90,11 +91,18 @@ function formatPace(km?: number | null, mi?: number | null, unit: 'mi' | 'km') {
   return `${mm}:${ss < 10 ? '0' : ''}${ss} /${unit}`;
 }
 
-function formatSpeed(mps?: number | null, unit: 'mi' | 'km') {
+function formatSpeed(unit: 'mi' | 'km', mps?: number | null) {
   const v0 = mps == null ? null : Number(mps);
   if (!v0 || v0 <= 0) return '-';
   const v = unit === 'mi' ? v0 * 2.236936 : v0 * 3.6;
   return unit === 'mi' ? `${v.toFixed(1)} mph` : `${v.toFixed(1)} kph`;
+}
+
+function formatVolume(valueKg: number | null | undefined, unit: 'kg' | 'lb') {
+  const v = valueKg == null ? 0 : Number(valueKg);
+  if (!Number.isFinite(v) || v <= 0) return '0';
+  const display = unit === 'kg' ? v : v * LB_PER_KG;
+  return Math.round(display).toLocaleString();
 }
 
 function formatCardDate(iso: string) {
@@ -126,7 +134,7 @@ function kindFromText(t: string): ActivityKind {
  * Attempt a select; if it fails with missing-column (42703), return null so caller can try next.
  */
 async function trySelectOrNull<T>(
-  query: Promise<{ data: T[] | null; error: any }>
+  query: any
 ): Promise<{ data: T[]; error: null } | { data: []; error: any } | null> {
   const res = await query;
   if (!res.error) return { data: (res.data ?? []) as T[], error: null };
@@ -164,8 +172,7 @@ export default function ActivityGrid({
 }: Props) {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { units } = useUnits();
-  const distanceUnit = (units?.distance ?? 'mi') as 'mi' | 'km';
+  const { distanceUnit, weightUnit } = useUnits();
 
   const [filter, setFilter] = useState<ActivityFilter>('all');
 
@@ -533,13 +540,15 @@ export default function ActivityGrid({
         activeOpacity={0.9}
         onPress={() => {
           if (item.source === 'strength') {
-            router.push({ pathname: '/progress/strength/[id]', params: { id: item.id } });
+            // Strength activity cards represent workout IDs.
+            // Open the workout summary screen (same destination as after finishing a workout).
+            router.push({ pathname: '/add/Strength/[id]', params: { id: item.id } });
             return;
           }
           if (item.source === 'outdoor') {
             router.push({
               pathname: '/progress/outdoor/[id]',
-              params: { sessionId: item.id },
+              params: { id: item.id },
             });
             return;
           }
@@ -568,16 +577,20 @@ export default function ActivityGrid({
           <Text style={styles.overlayText}>{formatDuration(item.durationS)}</Text>
 
           {item.kind === 'strength' ? (
-            <Text style={styles.overlayText}>
-              {Math.round(item.totalVolume ?? 0).toLocaleString()} vol
-            </Text>
+            <View style={styles.volumeRow}>
+              <Text style={styles.overlayText}>{formatVolume(item.totalVolume, weightUnit)}</Text>
+              <View style={styles.unitChip}>
+                <Ionicons name="barbell-outline" size={9} color={TEXT} />
+                <Text style={styles.unitChipText}>{weightUnit}</Text>
+              </View>
+            </View>
           ) : item.kind === 'cycle' ? (
             <Text style={styles.overlayText}>
-              {formatDistance(item.distanceM, distanceUnit)} • {formatSpeed(item.speedMps, distanceUnit)}
+              {formatDistance(distanceUnit, item.distanceM)} • {formatSpeed(distanceUnit, item.speedMps)}
             </Text>
           ) : (
             <Text style={styles.overlayText}>
-              {formatDistance(item.distanceM, distanceUnit)} • {formatPace(item.paceKm, item.paceMi, distanceUnit)}
+              {formatDistance(distanceUnit, item.distanceM)} • {formatPace(distanceUnit, item.paceKm, item.paceMi)}
             </Text>
           )}
         </View>
@@ -721,5 +734,27 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 10,
     fontWeight: '700',
+  },
+  volumeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  unitChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  unitChipText: {
+    color: TEXT,
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
 });

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/Colors';
 import { GlobalStyles } from '@/constants/GlobalStyles';
+import { useUnits } from '@/contexts/UnitsContext';
 
 import { fetchOutdoorSession, fetchOutdoorSamples } from '@/lib/OutdoorSession/supabase';
 import { formatDistance, formatDuration, formatPace } from '@/lib/OutdoorSession/compute';
@@ -23,31 +24,35 @@ const CARD = Colors.dark.card;
 const BORDER = Colors.dark.border ?? '#1F2937';
 
 const M_PER_MI = 1609.344;
+const M_PER_KM = 1000;
+const FT_PER_M = 3.28084;
 
 function isFiniteNumber(n: any): n is number {
   return typeof n === 'number' && Number.isFinite(n);
 }
 
-/** Convert speed (m/s) -> pace (minutes per mile). */
-function paceMinPerMileFromSpeed(speedMps: number): number | null {
+/** Convert speed (m/s) -> pace (minutes per configured distance unit). */
+function paceMinPerUnitFromSpeed(speedMps: number, unit: 'mi' | 'km'): number | null {
   if (!isFiniteNumber(speedMps) || speedMps <= 0) return null;
-  const secPerMile = M_PER_MI / speedMps;
-  const minPerMile = secPerMile / 60;
-  if (!Number.isFinite(minPerMile)) return null;
-  return minPerMile;
+  const metersPerUnit = unit === 'mi' ? M_PER_MI : M_PER_KM;
+  const secPerUnit = metersPerUnit / speedMps;
+  const minPerUnit = secPerUnit / 60;
+  if (!Number.isFinite(minPerUnit)) return null;
+  return minPerUnit;
 }
 
-function formatMmSsFromMinutes(mins: number): string {
+function formatMmSsFromMinutes(mins: number, suffix: '/mi' | '/km'): string {
   if (!Number.isFinite(mins) || mins <= 0) return '—';
   const totalSec = Math.round(mins * 60);
   const mm = Math.floor(totalSec / 60);
   const ss = totalSec % 60;
-  return `${mm}:${String(ss).padStart(2, '0')}/mi`;
+  return `${mm}:${String(ss).padStart(2, '0')}${suffix}`;
 }
 
-function formatElevationMeters(m: number): string {
-  if (!Number.isFinite(m)) return '—';
-  return `${Math.round(m)} m`;
+function formatElevation(meters: number, unit: 'mi' | 'km'): string {
+  if (!Number.isFinite(meters)) return '—';
+  if (unit === 'mi') return `${Math.round(meters * FT_PER_M)} ft`;
+  return `${Math.round(meters)} m`;
 }
 
 /** Robustly extract lat/lon from a sample row (supports multiple naming conventions). */
@@ -64,6 +69,7 @@ function extractRouteCoords(samples: any[]): { lat: number; lon: number }[] {
 export default function OutdoorSummaryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { distanceUnit } = useUnits();
 
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
@@ -106,14 +112,14 @@ export default function OutdoorSummaryScreen() {
         const speed = r?.speed_mps;
         if (!Number.isFinite(tMs) || !isFiniteNumber(speed)) return null;
 
-        const paceMin = paceMinPerMileFromSpeed(speed);
+        const paceMin = paceMinPerUnitFromSpeed(speed, distanceUnit);
         if (paceMin == null) return null;
 
         const tSec = Math.max(0, (tMs as number) - t0Ms) / 1000;
         return { t: tSec, v: paceMin };
       })
       .filter(Boolean) as SamplePoint[];
-  }, [samples, t0Ms]);
+  }, [samples, t0Ms, distanceUnit]);
 
   const elevationPoints: SamplePoint[] = useMemo(() => {
     if (!t0Ms) return [];
@@ -162,7 +168,7 @@ export default function OutdoorSummaryScreen() {
 
             <View style={styles.heroRow}>
               <View style={styles.heroBlock}>
-                <Text style={styles.heroValue}>{formatDistance(distanceM, 'mi')}</Text>
+                <Text style={styles.heroValue}>{formatDistance(distanceM, distanceUnit)}</Text>
                 <Text style={styles.heroLabel}>DISTANCE</Text>
               </View>
               <View style={styles.heroBlock}>
@@ -170,7 +176,7 @@ export default function OutdoorSummaryScreen() {
                 <Text style={styles.heroLabel}>TIME</Text>
               </View>
               <View style={styles.heroBlock}>
-                <Text style={styles.heroValue}>{formatPace(avgPace, 'mi')}</Text>
+                <Text style={styles.heroValue}>{formatPace(avgPace, distanceUnit)}</Text>
                 <Text style={styles.heroLabel}>AVG PACE</Text>
               </View>
             </View>
@@ -188,7 +194,7 @@ export default function OutdoorSummaryScreen() {
               textColor={Colors.dark.text}
               valueTransform={(v) => -v}
               valueInverseTransform={(v) => -v}
-              valueFormatter={formatMmSsFromMinutes}
+              valueFormatter={(v) => formatMmSsFromMinutes(v, distanceUnit === 'mi' ? '/mi' : '/km')}
               xLabelFormatter={(tSec) => `${Math.round(tSec / 60)}m`}
               yRangePadSeconds={0}
               targetXLabels={6}
@@ -205,7 +211,7 @@ export default function OutdoorSummaryScreen() {
               points={elevationPoints}
               cardBg={Colors.dark.card}
               textColor={Colors.dark.text}
-              valueFormatter={formatElevationMeters}
+              valueFormatter={(v) => formatElevation(v, distanceUnit)}
               xLabelFormatter={(tSec) => `${Math.round(tSec / 60)}m`}
               yMaxExtra={-1}
               targetXLabels={6}

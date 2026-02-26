@@ -23,6 +23,7 @@ import {
   type SocialActivityType,
   type SocialFeedPost,
 } from '@/lib/social/feed';
+import { useUnits } from '@/contexts/UnitsContext';
 
 import ActivityTab from './social/components/ActivityTab';
 
@@ -105,17 +106,18 @@ function formatDuration(totalSeconds: number): string {
   return `${m}:${String(sec).padStart(2, '0')}`;
 }
 
-function formatPace(secPerMile: number): string {
-  if (!Number.isFinite(secPerMile) || secPerMile <= 0) return '—';
-  const m = Math.floor(secPerMile / 60);
-  const s = Math.round(secPerMile % 60);
-  if (s === 60) return `${m + 1}:00 /mi`;
-  return `${m}:${String(s).padStart(2, '0')} /mi`;
+function formatPace(secPerUnit: number, unit: 'mi' | 'km'): string {
+  if (!Number.isFinite(secPerUnit) || secPerUnit <= 0) return '—';
+  const m = Math.floor(secPerUnit / 60);
+  const s = Math.round(secPerUnit % 60);
+  const suffix = unit === 'mi' ? '/mi' : '/km';
+  if (s === 60) return `${m + 1}:00 ${suffix}`;
+  return `${m}:${String(s).padStart(2, '0')} ${suffix}`;
 }
 
-function formatDistance(meters: number): string {
-  const miles = meters / 1609.344;
-  return `${miles.toFixed(miles >= 10 ? 1 : 2)} mi`;
+function formatDistance(meters: number, unit: 'mi' | 'km'): string {
+  const val = unit === 'mi' ? meters / 1609.344 : meters / 1000;
+  return `${val.toFixed(val >= 10 ? 1 : 2)} ${unit}`;
 }
 
 function formatRelativeTime(iso: string): string {
@@ -141,13 +143,17 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function buildMetrics(post: SocialFeedPost): Metric[] {
+function buildMetrics(
+  post: SocialFeedPost,
+  distanceUnit: 'mi' | 'km',
+  weightUnit: 'lb' | 'kg'
+): Metric[] {
   const m = post.metrics as Record<string, unknown>;
   const out: Metric[] = [];
 
   const distanceM = pickNumber(m, ['distance_m', 'total_distance_m']);
   if (distanceM != null && distanceM > 0) {
-    out.push({ label: 'Distance', value: formatDistance(distanceM) });
+    out.push({ label: 'Distance', value: formatDistance(distanceM, distanceUnit) });
   }
 
   const durationS = pickNumber(m, ['total_time_s', 'duration_s']);
@@ -157,15 +163,17 @@ function buildMetrics(post: SocialFeedPost): Metric[] {
 
   const paceMi = pickNumber(m, ['avg_pace_s_per_mi']);
   const paceKm = pickNumber(m, ['avg_pace_s_per_km']);
-  const resolvedPaceMi = paceMi ?? (paceKm != null && paceKm > 0 ? paceKm * 1.609344 : null);
-  if (resolvedPaceMi != null && resolvedPaceMi > 0) {
-    out.push({ label: 'Pace', value: formatPace(resolvedPaceMi) });
+  const paceForUnit = distanceUnit === 'mi'
+    ? (paceMi ?? (paceKm != null && paceKm > 0 ? paceKm * 1.609344 : null))
+    : (paceKm ?? (paceMi != null && paceMi > 0 ? paceMi / 1.609344 : null));
+  if (paceForUnit != null && paceForUnit > 0) {
+    out.push({ label: 'Pace', value: formatPace(paceForUnit, distanceUnit) });
   }
 
   const volumeKg = pickNumber(m, ['total_volume_kg']);
   if (volumeKg != null && volumeKg > 0) {
-    const pounds = volumeKg * 2.20462;
-    out.push({ label: 'Volume', value: `${Math.round(pounds).toLocaleString()} lb` });
+    const mass = weightUnit === 'kg' ? volumeKg : volumeKg * 2.20462;
+    out.push({ label: 'Volume', value: `${Math.round(mass).toLocaleString()} ${weightUnit}` });
   }
 
   const hr = pickNumber(m, ['avg_hr', 'heart_rate_avg']);
@@ -178,6 +186,7 @@ function buildMetrics(post: SocialFeedPost): Metric[] {
 
 export default function Social() {
   const router = useRouter();
+  const { distanceUnit, weightUnit } = useUnits();
 
   const [mode, setMode] = useState<Mode>('feed');
   const [activeFilter, setActiveFilter] = useState<ActivityFilter>('all');
@@ -348,6 +357,8 @@ export default function Social() {
                   renderItem={({ item }) => (
                     <PostCard
                       post={item}
+                      distanceUnit={distanceUnit}
+                      weightUnit={weightUnit}
                       onPressUser={() =>
                         router.push({ pathname: '/social/[userId]', params: { userId: item.userId } })
                       }
@@ -425,14 +436,18 @@ function FilterChip({
 
 function PostCard({
   post,
+  distanceUnit,
+  weightUnit,
   onPressUser,
   onToggleLike,
 }: {
   post: SocialFeedPost;
+  distanceUnit: 'mi' | 'km';
+  weightUnit: 'lb' | 'kg';
   onPressUser: () => void;
   onToggleLike: () => void;
 }) {
-  const metrics = buildMetrics(post);
+  const metrics = buildMetrics(post, distanceUnit, weightUnit);
   const typeLabel = TYPE_LABEL[post.activityType] ?? 'Post';
   const typeIcon = TYPE_ICON[post.activityType] ?? 'sparkles-outline';
   const createdAtLabel = formatRelativeTime(post.createdAt);

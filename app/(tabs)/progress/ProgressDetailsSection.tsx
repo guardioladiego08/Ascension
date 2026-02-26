@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { useUnits } from '@/contexts/UnitsContext';
 
 type StrengthWorkoutRow = {
   id: string;
@@ -35,6 +36,7 @@ const DETAIL_SEGMENTS = [
 ];
 
 const M_PER_MI = 1609.344;
+const M_PER_KM = 1000;
 
 function formatDurationFromSeconds(totalSeconds: number | null | undefined) {
   if (!totalSeconds || totalSeconds <= 0) return '';
@@ -42,10 +44,15 @@ function formatDurationFromSeconds(totalSeconds: number | null | undefined) {
   return min > 0 ? `${min} min` : '';
 }
 
-function formatDistanceMiFromMeters(meters: number | null | undefined) {
+function formatDistanceFromMeters(
+  meters: number | null | undefined,
+  unit: 'mi' | 'km'
+) {
   if (!meters || meters <= 0) return '';
-  const mi = meters / M_PER_MI;
-  return `${mi.toFixed(2)} mi`;
+  if (unit === 'km') {
+    return `${(meters / M_PER_KM).toFixed(2)} km`;
+  }
+  return `${(meters / M_PER_MI).toFixed(2)} mi`;
 }
 
 function formatActivityTypeLabel(activityType: string) {
@@ -56,6 +63,7 @@ function formatActivityTypeLabel(activityType: string) {
 }
 
 const ProgressDetailsSection: React.FC = () => {
+  const { distanceUnit } = useUnits();
   const [selectedDetailIndex, setSelectedDetailIndex] = useState(0);
   const detailAnim = useRef(new Animated.Value(0)).current;
   const [segmentWidth, setSegmentWidth] = useState(0);
@@ -279,7 +287,7 @@ const ProgressDetailsSection: React.FC = () => {
 
           const typeLabel = formatActivityTypeLabel(sesh.activity_type);
           const dur = formatDurationFromSeconds(sesh.duration_s);
-          const dist = formatDistanceMiFromMeters(sesh.distance_m);
+          const dist = formatDistanceFromMeters(sesh.distance_m, distanceUnit);
 
           const parts = [typeLabel];
           if (dur) parts.push(dur);

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
+import { useUnits } from '@/contexts/UnitsContext';
 
 type ExerciseRow = {
   id: string;
@@ -40,8 +41,16 @@ type WorkoutRow = {
   ended_at: string | null;
 };
 
+const LB_PER_KG = 2.20462;
+
+function formatMassFromKg(valueKg: number, unit: 'kg' | 'lb') {
+  if (unit === 'kg') return `${Math.round(valueKg)} kg`;
+  return `${Math.round(valueKg * LB_PER_KG).toLocaleString()} lb`;
+}
+
 const ExerciseDetailScreen: React.FC = () => {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
+  const { weightUnit } = useUnits();
 
   const [exercise, setExercise] = useState<ExerciseRow | null>(null);
   const [sets, setSets] = useState<StrengthSetRow[]>([]);
@@ -242,9 +251,9 @@ const ExerciseDetailScreen: React.FC = () => {
               </View>
               <Text style={styles.chartRowValue}>
                 {item.key === 'VOLUME'
-                  ? `${Math.round(item.value)} kg`
+                  ? formatMassFromKg(item.value, weightUnit)
                   : item.key === 'BEST 1RM'
-                  ? `${Math.round(item.value)} kg`
+                  ? formatMassFromKg(item.value, weightUnit)
                   : item.value}
               </Text>
             </View>
@@ -334,14 +343,14 @@ const ExerciseDetailScreen: React.FC = () => {
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>VOLUME</Text>
             <Text style={styles.metricValue}>
-              {metrics.totalVolume > 0 ? `${Math.round(metrics.totalVolume)} kg` : '—'}
+              {metrics.totalVolume > 0 ? formatMassFromKg(metrics.totalVolume, weightUnit) : '—'}
             </Text>
             <Text style={styles.metricSub}>all time</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>BEST 1RM</Text>
             <Text style={styles.metricValue}>
-              {metrics.bestOneRm > 0 ? `${Math.round(metrics.bestOneRm)} kg` : '—'}
+              {metrics.bestOneRm > 0 ? formatMassFromKg(metrics.bestOneRm, weightUnit) : '—'}
             </Text>
             <Text style={styles.metricSub}>estimated</Text>
           </View>

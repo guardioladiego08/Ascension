@@ -12,9 +12,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/Colors';
-import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useUnits } from '@/contexts/UnitsContext';
 
 import FinishConfirmModal from './indoor/FinishConfirmModal';
 import RunWalkCancelConfirmModal from './indoor/RunWalkCancelConfirmModal';
@@ -84,6 +84,7 @@ function makeId() {
 export default function IndoorSession() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
+  const { distanceUnit } = useUnits();
 
   const mode: Mode =
     (params.mode === 'indoor_walk' ? 'indoor_walk' : 'indoor_run') as Mode;
@@ -91,8 +92,6 @@ export default function IndoorSession() {
   const lockMode: RunWalkMode = mode; // same values for indoor
 
   const title = mode === 'indoor_walk' ? 'INDOOR WALK' : 'INDOOR RUN';
-
-  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('mi');
 
   // session state
   const [isRunning, setIsRunning] = useState(true);
@@ -197,54 +196,6 @@ export default function IndoorSession() {
       mounted = false;
     };
   }, [lockMode, router]);
-
-  // Fetch preferences (distance unit) — robust
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .schema('user')
-          .from('user_preferences')
-          .select('distance_unit')
-          .maybeSingle();
-
-        if (!mounted) return;
-
-        if (error && (error as any).code !== 'PGRST116') {
-          console.log('[IndoorSession] preferences error', error);
-        }
-
-        if (!data) {
-          const { error: insErr } = await supabase
-            .schema('user')
-            .from('user_preferences')
-            .insert({});
-          if (insErr) {
-            console.log('[IndoorSession] preferences insert error', insErr);
-            return;
-          }
-          const { data: data2 } = await supabase
-            .schema('user')
-            .from('user_preferences')
-            .select('distance_unit')
-            .maybeSingle();
-
-          const du2 = (data2?.distance_unit || 'mi').toLowerCase();
-          setDistanceUnit(du2 === 'km' ? 'km' : 'mi');
-          return;
-        }
-
-        const du = (data.distance_unit || 'mi').toLowerCase();
-        setDistanceUnit(du === 'km' ? 'km' : 'mi');
-      } catch (e) {
-        console.log('[IndoorSession] preferences unexpected error', e);
-      }
-    })();
-
-    return () => { mounted = false; };
-  }, []);
 
   // keep speed aligned with unit/mode defaults
   useEffect(() => {

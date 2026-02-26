@@ -243,12 +243,27 @@ export default function StrengthSummaryPage() {
               );
 
               if (decErr) {
-                console.error('Error decrementing weekly/lifetime stats:', decErr);
-                Alert.alert(
-                  'Error',
-                  'Could not update weekly/lifetime stats. Workout was not deleted.'
-                );
-                return;
+                const decMsg = String((decErr as any)?.message ?? '').toLowerCase();
+                const legacyStatsFnError =
+                  (decErr as any)?.code === '42703' &&
+                  (decMsg.includes('total_miles_biked') || decMsg.includes('lifetime_stats'));
+                const overloadedStatsFnError =
+                  (decErr as any)?.code === 'PGRST203' &&
+                  decMsg.includes('decrement_strength_workout_stats');
+
+                if (legacyStatsFnError || overloadedStatsFnError) {
+                  console.warn(
+                    '[StrengthSummary] decrement_strength_workout_stats unavailable due to legacy/overloaded function definition. Proceeding with delete; apply migration to restore stats decrement.',
+                    decErr
+                  );
+                } else {
+                  console.error('Error decrementing weekly/lifetime stats:', decErr);
+                  Alert.alert(
+                    'Error',
+                    'Could not update weekly/lifetime stats. Workout was not deleted.'
+                  );
+                  return;
+                }
               }
 
               // ---- 2) Delete sets ----

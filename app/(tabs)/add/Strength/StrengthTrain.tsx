@@ -25,6 +25,7 @@ import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
 import { updateWeeklyAndLifetimeFromStrengthWorkout } from './components/strengthStats';
+import { useUnits } from '@/contexts/UnitsContext';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
@@ -79,6 +80,7 @@ async function ensureAuthedUserId(): Promise<string> {
 }
 
 export default function StrengthTrain() {
+  const { weightUnit } = useUnits();
   const [workoutId, setWorkoutId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null); // convenience / UI state
   const [loading, setLoading] = useState(true);
@@ -150,7 +152,7 @@ export default function StrengthTrain() {
             tempId: uuidv4(),
             set_index: 1,
             set_type: 'normal',
-            weight_unit_csv: 'lb',
+            weight_unit_csv: weightUnit,
             weight: undefined,
             reps: undefined,
             rpe: undefined,

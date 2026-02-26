@@ -35,5 +35,35 @@ export async function updateWeeklyAndLifetimeFromStrengthWorkout(opts: {
     p_total_weight_lifted_kg: opts.totalWeightLiftedKg,
   });
 
-  if (error) throw error;
+  if (!error) return;
+
+  // Backward-compatibility guard:
+  // Some deployed DB functions still reference legacy columns (e.g. total_miles_biked).
+  // We do not block workout save in that case; instead we log a clear message so
+  // the migration can be applied server-side.
+  const msg = String(error?.message ?? '').toLowerCase();
+  const overloadError =
+    error?.code === 'PGRST203' &&
+    msg.includes('increment_strength_workout_stats');
+
+  if (overloadError) {
+    console.warn(
+      '[strengthStats] Skipping stats RPC due to overloaded DB function signature conflict (PGRST203). Apply migration to drop duplicate increment/decrement_strength_workout_stats overloads.',
+      error
+    );
+    return;
+  }
+
+  if (
+    error?.code === '42703' &&
+    (msg.includes('total_miles_biked') || msg.includes('lifetime_stats'))
+  ) {
+    console.warn(
+      '[strengthStats] Skipping stats RPC due to legacy DB function. Apply migration to refresh increment/decrement_strength_workout_stats.',
+      error
+    );
+    return;
+  }
+
+  throw error;
 }
