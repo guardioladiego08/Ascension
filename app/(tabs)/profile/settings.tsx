@@ -16,14 +16,14 @@ import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
 import DistanceUnitModal from './settings/DistanceUnitModal';
+import ProfileDetailsModal from './settings/ProfileDetailsModal';
 
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
+const TEXT_PRIMARY = Colors.dark?.text ?? '#EAF2FF';
 const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.primary ?? '#6366F1';
 const DANGER = '#F97373';
 
 export default function SettingsScreen() {
@@ -31,6 +31,7 @@ export default function SettingsScreen() {
   const { weightUnit, distanceUnit } = useUnits();
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showDistanceModal, setShowDistanceModal] = useState(false);
+  const [showProfileDetailsModal, setShowProfileDetailsModal] = useState(false);
 
   const handleComingSoon = (label: string) => {
     // placeholder until you wire actual popups
@@ -91,6 +92,18 @@ export default function SettingsScreen() {
               onPress={goToGoals}
             >
               <Text style={styles.rowLabel}>Goal settings</Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={TEXT_MUTED}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => setShowProfileDetailsModal(true)}
+            >
+              <Text style={styles.rowLabel}>Profile details</Text>
               <Ionicons
                 name="chevron-forward"
                 size={18}
@@ -318,6 +331,11 @@ export default function SettingsScreen() {
         <DistanceUnitModal
           visible={showDistanceModal}
           onClose={() => setShowDistanceModal(false)}
+        />
+
+        <ProfileDetailsModal
+          visible={showProfileDetailsModal}
+          onClose={() => setShowProfileDetailsModal(false)}
         />
 
       </ScrollView>
