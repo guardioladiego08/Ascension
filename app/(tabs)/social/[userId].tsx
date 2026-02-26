@@ -35,6 +35,7 @@ import {
   type PublicProfile,
   type FollowStatus,
 } from '@/lib/social/api';
+import { getSocialCounts } from '@/lib/social/feed';
 
 // ----- Constants -----
 const BG = Colors.dark.background;
@@ -91,6 +92,16 @@ export default function ViewProfileScreen() {
   }, [profile]);
 
   const goBack = () => router.back();
+  const goToConnections = useCallback(
+    (tab: 'followers' | 'following') => {
+      if (!profile?.id) return;
+      router.push({
+        pathname: '/social/connections',
+        params: { userId: profile.id, tab, username: profile.username },
+      });
+    },
+    [profile?.id, profile?.username, router]
+  );
 
   // 1) Load viewer id
   useEffect(() => {
@@ -114,7 +125,14 @@ export default function ViewProfileScreen() {
       }
 
       setProfile(p);
-      setStats({ posts: 0, followers: 0, following: 0 }); // stub for now
+
+      try {
+        const socialCounts = await getSocialCounts(p.id);
+        setStats(socialCounts);
+      } catch (countErr) {
+        console.warn('[ViewProfile] social counts unavailable', countErr);
+        setStats({ posts: 0, followers: 0, following: 0 });
+      }
     } catch (err: any) {
       console.error('[ViewProfile] loadProfile failed', err);
       setProfile(null);
@@ -174,6 +192,9 @@ export default function ViewProfileScreen() {
             setFollowBusy(true);
             await followOrRequest(meId, profile.id, profile.is_private);
             setFollowStatus(profile.is_private ? 'requested' : 'accepted');
+            setErrorText(null);
+          } catch (err: any) {
+            setErrorText(formatSupabaseErr(err));
           } finally {
             setFollowBusy(false);
           }
@@ -214,6 +235,9 @@ export default function ViewProfileScreen() {
             setFollowBusy(true);
             await unfollowOrCancel(meId, profile.id);
             setFollowStatus('none');
+            setErrorText(null);
+          } catch (err: any) {
+            setErrorText(formatSupabaseErr(err));
           } finally {
             setFollowBusy(false);
           }
@@ -231,6 +255,9 @@ export default function ViewProfileScreen() {
             setFollowBusy(true);
             await unfollowOrCancel(meId, profile.id);
             setFollowStatus('none');
+            setErrorText(null);
+          } catch (err: any) {
+            setErrorText(formatSupabaseErr(err));
           } finally {
             setFollowBusy(false);
           }
@@ -276,6 +303,8 @@ export default function ViewProfileScreen() {
           isOwnProfile={false} // NEVER allow edit/settings on other users from this screen
           primaryAction={primaryAction}
           secondaryAction={secondaryAction}
+          onPressFollowers={() => goToConnections('followers')}
+          onPressFollowing={() => goToConnections('following')}
         />
       ) : null}
 

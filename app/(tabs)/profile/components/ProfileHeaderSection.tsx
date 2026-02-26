@@ -40,13 +40,39 @@ type Props = {
   // For other-user profiles: Follow / Request / Following / Requested actions
   primaryAction?: ProfilePrimaryAction;
   secondaryAction?: ProfilePrimaryAction;
+
+  // Optional stat actions
+  onPressFollowers?: () => void;
+  onPressFollowing?: () => void;
 };
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.stat}>
+function Stat({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: number;
+  onPress?: () => void;
+}) {
+  const content = (
+    <>
       <Text style={styles.statValue}>{value ?? 0}</Text>
       <Text style={styles.statLabel}>{label}</Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.stat} onPress={onPress} activeOpacity={0.85}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <View style={styles.stat}>
+      {content}
     </View>
   );
 }
@@ -94,6 +120,8 @@ export default function ProfileHeaderSection({
   onEditProfile,
   primaryAction,
   secondaryAction,
+  onPressFollowers,
+  onPressFollowing,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -110,8 +138,8 @@ export default function ProfileHeaderSection({
 
         <View style={styles.statsRow}>
           <Stat label="Posts" value={stats.posts} />
-          <Stat label="Followers" value={stats.followers} />
-          <Stat label="Following" value={stats.following} />
+          <Stat label="Followers" value={stats.followers} onPress={onPressFollowers} />
+          <Stat label="Following" value={stats.following} onPress={onPressFollowing} />
         </View>
       </View>
 

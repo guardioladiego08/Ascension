@@ -51,6 +51,20 @@ type DiaryDay = {
   goal_hit: boolean;
 };
 
+type AppUserRow = {
+  user_id: string;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  profile_image_url: string | null;
+  is_private: boolean;
+  bio: string | null;
+  onboarding_completed: boolean;
+  country: string | null;
+  state: string | null;
+  city: string | null;
+};
+
 const formatNumber = (value: number) =>
   Number.isFinite(value) ? Math.round(value).toLocaleString() : '0';
 
@@ -59,6 +73,8 @@ export default function BlankHome() {
 
   const [todaySummary, setTodaySummary] = useState<DiaryDay | null>(null);
   const [loadingDiary, setLoadingDiary] = useState(false);
+  const [profile, setProfile] = useState<AppUserRow | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
 
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
 
@@ -113,6 +129,50 @@ export default function BlankHome() {
     }, [todayISO])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const fetchHomeProfile = async () => {
+        try {
+          setLoadingProfile(true);
+
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            console.error('Error fetching auth user for home profile:', userError);
+            return;
+          }
+
+          const user = userData?.user;
+          if (!user) return;
+
+          const { data, error } = await supabase
+            .schema('user')
+            .from('users')
+            .select(
+              'user_id,username,first_name,last_name,profile_image_url,is_private,bio,onboarding_completed,country,state,city'
+            )
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (error) {
+            if ((error as any).code !== 'PGRST116') {
+              console.error('Error fetching home profile row from user.users:', error);
+            }
+            setProfile(null);
+            return;
+          }
+
+          setProfile((data as AppUserRow) ?? null);
+        } catch (err) {
+          console.error('Unexpected error loading home profile:', err);
+        } finally {
+          setLoadingProfile(false);
+        }
+      };
+
+      fetchHomeProfile();
+    }, [])
+  );
+
   // Safely pull totals/targets from diary_days
   const caloriesEaten = todaySummary?.kcal_total != null ? Number(todaySummary.kcal_total) : 0;
 
@@ -126,6 +186,18 @@ export default function BlankHome() {
 
   const caloriePct =
     caloriesTarget > 0 ? Math.min(100, (caloriesEaten / caloriesTarget) * 100) : 0;
+
+  const displayName = useMemo(() => {
+    const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
+    if (name) return name;
+    if (profile?.username) return `@${profile.username}`;
+    return 'Athlete';
+  }, [profile]);
+
+  const locationText = useMemo(() => {
+    const location = [profile?.city, profile?.state, profile?.country].filter(Boolean).join(', ');
+    return location || null;
+  }, [profile]);
 
   const handleOpenDailySummary = () => {
     router.push({
@@ -144,6 +216,16 @@ export default function BlankHome() {
       <View style={GlobalStyles.safeArea}>
         <LogoHeader />
         <Text style={GlobalStyles.header}>HOME</Text>
+        <View style={styles.welcomeCard}>
+          <View>
+            <Text style={styles.welcomeLabel}>WELCOME BACK</Text>
+            <Text style={styles.welcomeName}>
+              {loadingProfile ? 'Loading...' : displayName}
+            </Text>
+            {locationText ? <Text style={styles.welcomeMeta}>{locationText}</Text> : null}
+          </View>
+          <Ionicons name={profile?.is_private ? 'lock-closed' : 'people'} size={18} color={PRIMARY} />
+        </View>
 
         <ScrollView
           contentContainerStyle={GlobalStyles.container}
@@ -261,7 +343,11 @@ export default function BlankHome() {
             </View>
             <View style={styles.listTextWrap}>
               <Text style={styles.listTitle}>Workout Feed</Text>
-              <Text style={styles.listSubtitle}>See what friends are doing</Text>
+              <Text style={styles.listSubtitle}>
+                {profile?.username
+                  ? `See what friends are doing, @${profile.username}`
+                  : 'See what friends are doing'}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
           </View>
@@ -330,6 +416,35 @@ export default function BlankHome() {
 }
 
 const styles = StyleSheet.create({
+  welcomeCard: {
+    backgroundColor: Colors.dark.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  welcomeLabel: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  welcomeName: {
+    color: TEXT_PRIMARY,
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  welcomeMeta: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
   // Tighten vertical rhythm + match onboarding label treatment
   sectionTitle: {
     color: TEXT_MUTED,

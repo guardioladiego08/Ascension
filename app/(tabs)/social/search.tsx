@@ -77,7 +77,7 @@ export default function PeopleSearchScreen() {
   }, [query, runSearch]);
 
   const headerHint = useMemo(() => {
-    if (!query.trim()) return 'Search by username or name';
+    if (!query.trim()) return 'Search by username';
     return loading ? 'Searching…' : `${rows.length} result(s)`;
   }, [query, rows.length, loading]);
 

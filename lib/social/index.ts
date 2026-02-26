@@ -12,10 +12,22 @@ export type DbProfile = {
 export type FollowRow = {
   follower_id: string;
   followee_id: string;
-  status: 'pending' | 'accepted';
+  status: 'requested' | 'pending' | 'accepted';
   created_at?: string;
   accepted_at?: string | null;
 };
+
+function isRpcUnavailableError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === 'PGRST204' ||
+    msg.includes('could not find the function') ||
+    msg.includes('schema cache')
+  );
+}
 
 export async function getAuthedUserId(): Promise<string> {
   const { data, error } = await supabase.auth.getUser();
@@ -65,6 +77,12 @@ export async function getFollowEdge(meId: string, targetId: string): Promise<Fol
 }
 
 export async function followOrRequest(meId: string, target: DbProfile): Promise<void> {
+  const rpcRes = await supabase.rpc('follow_user', {
+    p_followee_id: target.id,
+  });
+  if (!rpcRes.error) return;
+  if (!isRpcUnavailableError(rpcRes.error)) throw rpcRes.error;
+
   const desiredStatus: FollowRow['status'] = target.is_private ? 'pending' : 'accepted';
 
   const { error } = await supabase
@@ -84,6 +102,12 @@ export async function followOrRequest(meId: string, target: DbProfile): Promise<
 }
 
 export async function unfollowOrCancel(meId: string, targetId: string): Promise<void> {
+  const rpcRes = await supabase.rpc('unfollow_user', {
+    p_followee_id: targetId,
+  });
+  if (!rpcRes.error) return;
+  if (!isRpcUnavailableError(rpcRes.error)) throw rpcRes.error;
+
   const { error } = await supabase
     .schema('social')
     .from('follows')
@@ -95,25 +119,37 @@ export async function unfollowOrCancel(meId: string, targetId: string): Promise<
 }
 
 export async function acceptIncomingRequest(meId: string, followerId: string): Promise<void> {
+  const rpcRes = await supabase.rpc('accept_follow_request_user', {
+    p_follower_id: followerId,
+  });
+  if (!rpcRes.error) return;
+  if (!isRpcUnavailableError(rpcRes.error)) throw rpcRes.error;
+
   const { error } = await supabase
     .schema('social')
     .from('follows')
     .update({ status: 'accepted', accepted_at: new Date().toISOString() })
     .eq('follower_id', followerId)
     .eq('followee_id', meId)
-    .eq('status', 'pending');
+    .in('status', ['requested', 'pending']);
 
   if (error) throw error;
 }
 
 export async function declineIncomingRequest(meId: string, followerId: string): Promise<void> {
+  const rpcRes = await supabase.rpc('decline_follow_request_user', {
+    p_follower_id: followerId,
+  });
+  if (!rpcRes.error) return;
+  if (!isRpcUnavailableError(rpcRes.error)) throw rpcRes.error;
+
   const { error } = await supabase
     .schema('social')
     .from('follows')
     .delete()
     .eq('follower_id', followerId)
     .eq('followee_id', meId)
-    .eq('status', 'pending');
+    .in('status', ['requested', 'pending']);
 
   if (error) throw error;
 }

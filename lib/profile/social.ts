@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { formatSupabaseishError, normalizeThrown } from './errors';
 
 const SOCIAL_SCHEMA = 'social';
-const FOLLOWS_TABLE = 'follows'; // follower_id, following_id
+const FOLLOWS_TABLE = 'follows'; // follower_id, followee_id
 const POSTS_TABLE = 'posts';     // user_id
 
 function toCount(n: number | null | undefined) {
@@ -16,14 +16,16 @@ export async function getFollowCounts(userId: string): Promise<{ followers: numb
   const followersQ = supabase
     .schema(SOCIAL_SCHEMA)
     .from(FOLLOWS_TABLE)
-    .select('id', { head: true, count: 'exact' })
-    .eq('following_id', userId);
+    .select('*', { head: true, count: 'exact' })
+    .eq('followee_id', userId)
+    .eq('status', 'accepted');
 
   const followingQ = supabase
     .schema(SOCIAL_SCHEMA)
     .from(FOLLOWS_TABLE)
-    .select('id', { head: true, count: 'exact' })
-    .eq('follower_id', userId);
+    .select('*', { head: true, count: 'exact' })
+    .eq('follower_id', userId)
+    .eq('status', 'accepted');
 
   const [followersRes, followingRes] = await Promise.all([followersQ, followingQ]);
 
@@ -42,7 +44,7 @@ export async function tryGetPostCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .schema(SOCIAL_SCHEMA)
     .from(POSTS_TABLE)
-    .select('id', { head: true, count: 'exact' })
+    .select('*', { head: true, count: 'exact' })
     .eq('user_id', userId);
 
   if (error) throw normalizeThrown(error, formatSupabaseishError(error));

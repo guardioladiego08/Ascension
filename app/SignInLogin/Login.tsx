@@ -79,29 +79,62 @@ export default function Login() {
     const fallbackUsername = buildFallbackUsername(user.email, userId);
     const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
 
-    // Upsert into schema user, table users, PK user_id
-    // We keep it "non-destructive": only set username if it's currently null.
-    const { error: ensureErr } = await supabase
+    // Read existing profile first so we don't treat established users as "new".
+    const { data: existing, error: readErr } = await supabase
       .schema('user')
       .from('users')
-      .upsert(
-        {
-          user_id: userId,
-          username, // will be used on insert; on conflict we don't overwrite if already set (below)
-          onboarding_completed: false,
-          is_private: true,
-          app_usage_reasons: [], // matches your default type
-        },
-        { onConflict: 'user_id' }
-      );
+      .select('user_id,onboarding_completed,first_name,last_name,fitness_journey_stage,app_usage_reasons')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-    if (ensureErr) {
-      return { ok: false as const, message: ensureErr.message };
+    if (readErr && (readErr as any).code !== 'PGRST116') {
+      return { ok: false as const, message: readErr.message };
     }
 
-    // Optional: prevent overwriting an existing username with fallback/meta
-    // If you want strict non-overwrite logic, do it with a SQL trigger.
-    return { ok: true as const };
+    if (existing) {
+      const hasName = Boolean(existing.first_name && existing.last_name);
+      const hasJourney = Boolean(existing.fitness_journey_stage);
+      const hasUsageReasons =
+        Array.isArray(existing.app_usage_reasons) && existing.app_usage_reasons.length > 0;
+
+      const inferredCompleted =
+        existing.onboarding_completed === true || (hasName && hasJourney && hasUsageReasons);
+
+      if (inferredCompleted && existing.onboarding_completed !== true) {
+        const { error: repairErr } = await supabase
+          .schema('user')
+          .from('users')
+          .update({ onboarding_completed: true })
+          .eq('user_id', userId);
+
+        if (repairErr) {
+          return { ok: false as const, message: repairErr.message };
+        }
+      }
+
+      return { ok: true as const, onboardingCompleted: inferredCompleted };
+    }
+
+    // Insert only for true first-time users.
+    const { error: insertErr } = await supabase
+      .schema('user')
+      .from('users')
+      .insert({
+        user_id: userId,
+        username,
+        onboarding_completed: false,
+        is_private: true,
+        app_usage_reasons: [], // matches your default type
+      });
+
+    if (insertErr) {
+      // If this raced with another insert, continue as existing user.
+      if ((insertErr as any).code !== '23505') {
+        return { ok: false as const, message: insertErr.message };
+      }
+    }
+
+    return { ok: true as const, onboardingCompleted: false };
   };
 
   /**
@@ -149,21 +182,7 @@ export default function Login() {
       // Optional: seed stub (non-fatal if blocked)
       await ensureProfilesStubRow(userId);
 
-      // 2) Read onboarding flag from user.users (NOT public.profiles)
-      const { data, error } = await supabase
-        .schema('user')
-        .from('users')
-        .select('onboarding_completed')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (error) {
-        Alert.alert('Error', error.message);
-        routingRef.current = false;
-        return;
-      }
-
-      const onboardingCompleted = data?.onboarding_completed === true;
+      const onboardingCompleted = ensure.onboardingCompleted === true;
 
       // 3) Route
       if (!onboardingCompleted) {

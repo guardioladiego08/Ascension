@@ -40,10 +40,10 @@ export default function Paywall() {
       const fallbackId = authData.user.id;
 
       await supabase
-        .schema('public')
-        .from('profiles')
+        .schema('user')
+        .from('users')
         .update({ onboarding_completed: true })
-        .eq('id', fallbackId);
+        .eq('user_id', fallbackId);
 
       router.replace('/SignInLogin/Login');
       return;
@@ -52,10 +52,10 @@ export default function Paywall() {
     setFinishing(true);
 
     const { error } = await supabase
-      .schema('public')
-      .from('profiles')
+      .schema('user')
+      .from('users')
       .update({ onboarding_completed: true })
-      .eq('id', authUserId);
+      .eq('user_id', authUserId);
 
     setFinishing(false);
 

@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
+import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
 
 import {
   getDraft,
@@ -59,6 +60,7 @@ export default function IndoorSessionSummary() {
   const [draft, setDraft] = useState<RunWalkDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [shareToFeed, setShareToFeed] = useState(false);
 
   // ✅ Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -254,9 +256,34 @@ export default function IndoorSessionSummary() {
       }
 
       // 3) delete local draft
+      let shared = false;
+      if (shareToFeed) {
+        try {
+          await shareRunWalkSessionToFeed({
+            sessionId,
+            exerciseType: draft.exercise_type,
+            totalDistanceM: draft.total_distance_m,
+            totalTimeS: draft.total_time_s,
+            avgPaceSPerMi: draft.avg_pace_s_per_mi ?? null,
+            avgPaceSPerKm: draft.avg_pace_s_per_km ?? null,
+            visibility: 'followers',
+          });
+          shared = true;
+        } catch (shareErr) {
+          console.warn('[IndoorSessionSummary] share failed', shareErr);
+        }
+      }
+
+      // 4) delete local draft
       await deleteDraft(draftId);
 
-      Alert.alert('Saved', 'Your session has been saved.');
+      if (shareToFeed && shared) {
+        Alert.alert('Saved', 'Your session has been saved and shared to your feed.');
+      } else if (shareToFeed && !shared) {
+        Alert.alert('Saved', 'Your session was saved, but sharing to feed failed.');
+      } else {
+        Alert.alert('Saved', 'Your session has been saved.');
+      }
       router.back();
     } catch (e) {
       console.log('[IndoorSessionSummary] save unexpected error', e);
@@ -378,6 +405,25 @@ export default function IndoorSessionSummary() {
         </View>
 
         <View style={styles.actions}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.shareCard}
+            onPress={() => setShareToFeed((v) => !v)}
+            disabled={saving || deleting}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.shareTitle}>Share to social feed</Text>
+              <Text style={styles.shareSubtitle}>
+                {shareToFeed ? 'Followers will be able to see this session.' : 'Keep this session private.'}
+              </Text>
+            </View>
+            <Ionicons
+              name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
+              size={24}
+              color={shareToFeed ? Colors.dark.highlight1 : TEXT}
+            />
+          </TouchableOpacity>
+
           <TouchableOpacity
             activeOpacity={0.9}
             style={[styles.saveBtn, saving && { opacity: 0.6 }]}
@@ -515,6 +561,29 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingHorizontal: 16,
     gap: 10,
+  },
+  shareCard: {
+    borderRadius: 14,
+    backgroundColor: CARD,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareTitle: {
+    color: TEXT,
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  shareSubtitle: {
+    marginTop: 4,
+    color: TEXT,
+    opacity: 0.72,
+    fontSize: 12,
+    lineHeight: 16,
   },
   saveBtn: {
     height: 56,

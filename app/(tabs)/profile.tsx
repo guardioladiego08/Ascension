@@ -22,7 +22,8 @@ import ProfileHeaderSection, { type ProfileStats } from './profile/components/Pr
 import LifetimeStatsTable from './profile/components/LifetimeStatsTable';
 import ActivityGrid from './profile/components/ActivityGrid';
 
-import { getMyProfile, getBestDisplayName, type Profile } from '@/lib/profile';
+import { supabase } from '@/lib/supabase';
+import { getSocialCounts } from '@/lib/social/feed';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -32,6 +33,20 @@ const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.dark.highlight1;
 
 type DetailTab = 'stats' | 'lifetime' | 'calendar';
+
+type AppUserProfile = {
+  user_id: string;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  profile_image_url: string | null;
+  bio: string | null;
+  is_private: boolean;
+  onboarding_completed: boolean;
+  country: string | null;
+  state: string | null;
+  city: string | null;
+};
 
 function formatSupabaseErr(err: any) {
   if (!err) return 'Unknown error';
@@ -47,28 +62,70 @@ export default function ProfileScreen() {
   const router = useRouter();
 
   const [detailTab, setDetailTab] = useState<DetailTab>('stats');
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<AppUserProfile | null>(null);
 
-  // No social/following yet: keep these at 0 so UI renders without backend dependencies
   const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
 
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
 
-  const fullName = useMemo(() => (profile ? getBestDisplayName(profile) : ''), [profile]);
+  const fullName = useMemo(() => {
+    if (!profile) return '';
+    const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+    return name;
+  }, [profile]);
+
+  const usernameText = useMemo(() => {
+    if (!profile) return '';
+    if (profile.username && profile.username.trim().length > 0) return profile.username;
+    return `user_${profile.user_id.slice(0, 8)}`;
+  }, [profile]);
 
   const goToSettings = () => router.push('/profile/settings');
+  const goToConnections = useCallback(
+    (tab: 'followers' | 'following') => {
+      const uid = profile?.user_id;
+      if (!uid) return;
+      router.push({
+        pathname: '/social/connections',
+        params: { userId: uid, tab, username: usernameText },
+      });
+    },
+    [profile?.user_id, router, usernameText]
+  );
 
   const loadProfile = useCallback(async () => {
     try {
       setLoading(true);
       setErrorText(null);
 
-      const row = await getMyProfile();
-      setProfile(row);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
 
-      // No followers/following yet
-      setStats({ posts: 0, followers: 0, following: 0 });
+      const authUserId = authData?.user?.id;
+      if (!authUserId) throw new Error('Not signed in.');
+
+      const { data, error } = await supabase
+        .schema('user')
+        .from('users')
+        .select(
+          'user_id,username,first_name,last_name,profile_image_url,bio,is_private,onboarding_completed,country,state,city'
+        )
+        .eq('user_id', authUserId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) throw new Error('Profile not found for current user.');
+
+      setProfile(data as AppUserProfile);
+
+      try {
+        const socialCounts = await getSocialCounts(authUserId);
+        setStats(socialCounts);
+      } catch (countErr) {
+        console.warn('[Profile] social counts unavailable', countErr);
+        setStats({ posts: 0, followers: 0, following: 0 });
+      }
     } catch (err: any) {
       console.error('[Profile] loadProfile failed', err);
       setErrorText(formatSupabaseErr(err));
@@ -116,12 +173,14 @@ export default function ProfileScreen() {
       {profile && (
         <ProfileHeaderSection
           fullName={fullName}
-          username={profile.username}
+          username={usernameText}
           bio={profile.bio}
           profileImageUrl={profile.profile_image_url}
           stats={stats}
           isOwnProfile={true}
           onEditProfile={() => router.push('/profile/components/edit')}
+          onPressFollowers={() => goToConnections('followers')}
+          onPressFollowing={() => goToConnections('following')}
         />
       )}
 
@@ -131,7 +190,7 @@ export default function ProfileScreen() {
     </>
   );
 
-  const userId = profile?.id ?? '';
+  const userId = profile?.user_id ?? '';
 
   return (
     <LinearGradient
