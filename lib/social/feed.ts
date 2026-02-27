@@ -32,6 +32,35 @@ export type SocialFeedPost = {
   isLikedByMe: boolean;
 };
 
+export type SocialPostLike = {
+  userId: string;
+  username: string;
+  displayName: string;
+  profileImageUrl: string | null;
+  createdAt: string;
+};
+
+export type SocialPostComment = {
+  id: string;
+  postId: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  profileImageUrl: string | null;
+  parentCommentId: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  canDelete: boolean;
+};
+
+type SocialUserSummary = {
+  userId: string;
+  username: string;
+  displayName: string;
+  profileImageUrl: string | null;
+};
+
 function asInt(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value ?? 0);
   if (!Number.isFinite(n)) return 0;
@@ -362,26 +391,22 @@ async function fetchProfileCardMap(ownerIds: string[]): Promise<
   return out;
 }
 
-async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
-  if (postRows.length === 0) return [];
+async function resolveUserSummaryMap(ownerIds: string[]): Promise<Map<string, SocialUserSummary>> {
+  const out = new Map<string, SocialUserSummary>();
+  const uniqueIds = Array.from(new Set(ownerIds.map((v) => String(v ?? '').trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return out;
 
-  const ownerIds = Array.from(new Set(postRows.map((r) => String(r.user_id)).filter(Boolean)));
-  const postIds = postRows.map((r) => String(r.id));
-
-  const [profilesRes, usersRes, likesRes] = await Promise.all([
+  const [profilesRes, usersRes] = await Promise.all([
     supabase
       .schema('public')
       .from('profiles')
       .select('id, username, display_name, profile_image_url')
-      .in('id', ownerIds),
+      .in('id', uniqueIds),
     supabase
       .schema('user')
       .from('users')
       .select('user_id, username, first_name, last_name, profile_image_url')
-      .in('user_id', ownerIds),
-    supabase.rpc('get_liked_post_ids_user', {
-      p_post_ids: postIds,
-    }),
+      .in('user_id', uniqueIds),
   ]);
 
   const profileMap = new Map<
@@ -419,14 +444,7 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
     }
   }
 
-  const likedSet = new Set<string>();
-  if (!likesRes.error) {
-    for (const row of likesRes.data ?? []) {
-      likedSet.add(String((row as any).post_id));
-    }
-  }
-
-  const needsProfileCard = ownerIds.filter((ownerId) => {
+  const needsProfileCard = uniqueIds.filter((ownerId) => {
     const profile = profileMap.get(ownerId);
     const user = userMap.get(ownerId);
 
@@ -446,8 +464,7 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
 
   const rpcProfileMap = await fetchProfileCardMap(needsProfileCard);
 
-  return postRows.map((row) => {
-    const ownerId = String(row.user_id);
+  for (const ownerId of uniqueIds) {
     const profile = profileMap.get(ownerId);
     const user = userMap.get(ownerId);
     const rpcProfile = rpcProfileMap.get(ownerId);
@@ -457,8 +474,6 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       .join(' ')
       .trim();
 
-    // Prefer canonical username from user.users over public.profiles and avoid generic placeholders
-    // like "user" when a better value exists.
     const candidateUsernames = [
       cleanUsername(rpcProfile?.username),
       cleanUsername(user?.username),
@@ -468,14 +483,52 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       candidateUsernames.find((v) => !isGenericIdentityLabel(v)) ?? candidateUsernames[0] ?? null;
     const username = preferredUsername ?? fallbackUsername(ownerId);
 
-    const profileDisplayName = cleanIdentityText(rpcProfile?.display_name) ?? cleanIdentityText(profile?.display_name);
+    const profileDisplayName =
+      cleanIdentityText(rpcProfile?.display_name) ?? cleanIdentityText(profile?.display_name);
     const preferredDisplayName =
       firstLast ||
       (profileDisplayName && !isGenericIdentityLabel(profileDisplayName) ? profileDisplayName : null) ||
       profileDisplayName ||
       username;
-    const displayName = preferredDisplayName;
-    const profileImageUrl = profile?.profile_image_url ?? user?.profile_image_url ?? rpcProfile?.profile_image_url ?? null;
+
+    out.set(ownerId, {
+      userId: ownerId,
+      username,
+      displayName: preferredDisplayName,
+      profileImageUrl:
+        profile?.profile_image_url ?? user?.profile_image_url ?? rpcProfile?.profile_image_url ?? null,
+    });
+  }
+
+  return out;
+}
+
+async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
+  if (postRows.length === 0) return [];
+
+  const ownerIds = Array.from(new Set(postRows.map((r) => String(r.user_id)).filter(Boolean)));
+  const postIds = postRows.map((r) => String(r.id));
+
+  const [userSummaryMap, likesRes] = await Promise.all([
+    resolveUserSummaryMap(ownerIds),
+    supabase.rpc('get_liked_post_ids_user', {
+      p_post_ids: postIds,
+    }),
+  ]);
+
+  const likedSet = new Set<string>();
+  if (!likesRes.error) {
+    for (const row of likesRes.data ?? []) {
+      likedSet.add(String((row as any).post_id));
+    }
+  }
+
+  return postRows.map((row) => {
+    const ownerId = String(row.user_id);
+    const userSummary = userSummaryMap.get(ownerId);
+    const username = userSummary?.username ?? fallbackUsername(ownerId);
+    const displayName = userSummary?.displayName ?? username;
+    const profileImageUrl = userSummary?.profileImageUrl ?? null;
 
     return {
       id: String(row.id),
@@ -499,6 +552,125 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       isLikedByMe: likedSet.has(String(row.id)),
     } satisfies SocialFeedPost;
   });
+}
+
+export async function getPostLikes(postId: string, limit = 20): Promise<SocialPostLike[]> {
+  const trimmedPostId = String(postId ?? '').trim();
+  if (!trimmedPostId) return [];
+
+  const likesRes = await supabase.rpc('list_post_likes_user', {
+    p_post_id: trimmedPostId,
+    p_limit: Math.max(1, Math.min(100, Math.trunc(limit))),
+  });
+
+  if (isMissingDbObject(likesRes.error)) return [];
+  if (likesRes.error) throw likesRes.error;
+
+  const rows = (likesRes.data ?? []) as any[];
+  if (rows.length === 0) return [];
+
+  const userMap = await resolveUserSummaryMap(rows.map((row) => String(row.user_id)));
+  return rows.map((row) => {
+    const userId = String(row.user_id);
+    const user = userMap.get(userId);
+    return {
+      userId,
+      username: user?.username ?? fallbackUsername(userId),
+      displayName: user?.displayName ?? user?.username ?? fallbackUsername(userId),
+      profileImageUrl: user?.profileImageUrl ?? null,
+      createdAt: String(row.created_at),
+    } satisfies SocialPostLike;
+  });
+}
+
+export async function getPostComments(args: {
+  postId: string;
+  limit?: number;
+  offset?: number;
+}): Promise<SocialPostComment[]> {
+  const trimmedPostId = String(args.postId ?? '').trim();
+  if (!trimmedPostId) return [];
+
+  const commentsRes = await supabase.rpc('list_post_comments_user', {
+    p_post_id: trimmedPostId,
+    p_limit: Math.max(1, Math.min(200, Math.trunc(args.limit ?? 50))),
+    p_offset: Math.max(0, Math.trunc(args.offset ?? 0)),
+  });
+
+  if (isMissingDbObject(commentsRes.error)) return [];
+  if (commentsRes.error) throw commentsRes.error;
+
+  const rows = (commentsRes.data ?? []) as any[];
+  if (rows.length === 0) return [];
+
+  const userMap = await resolveUserSummaryMap(rows.map((row) => String(row.user_id)));
+  return rows.map((row) => {
+    const userId = String(row.user_id);
+    const user = userMap.get(userId);
+    return {
+      id: String(row.id),
+      postId: String(row.post_id),
+      userId,
+      username: user?.username ?? fallbackUsername(userId),
+      displayName: user?.displayName ?? user?.username ?? fallbackUsername(userId),
+      profileImageUrl: user?.profileImageUrl ?? null,
+      parentCommentId: row.parent_comment_id == null ? null : String(row.parent_comment_id),
+      body: String(row.body ?? ''),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at ?? row.created_at),
+      canDelete: Boolean(row.can_delete),
+    } satisfies SocialPostComment;
+  });
+}
+
+export async function createPostComment(args: {
+  postId: string;
+  body: string;
+  parentCommentId?: string | null;
+}): Promise<SocialPostComment | null> {
+  const trimmedPostId = String(args.postId ?? '').trim();
+  const trimmedBody = String(args.body ?? '').trim();
+  if (!trimmedPostId || !trimmedBody) return null;
+
+  const createRes = await supabase.rpc('create_post_comment_user', {
+    p_post_id: trimmedPostId,
+    p_body: trimmedBody,
+    p_parent_comment_id: args.parentCommentId ?? null,
+  });
+
+  if (isMissingDbObject(createRes.error)) return null;
+  if (createRes.error) throw createRes.error;
+
+  const row = Array.isArray(createRes.data) ? createRes.data[0] : createRes.data;
+  if (!row) return null;
+  const userId = String((row as any).user_id);
+  const userMap = await resolveUserSummaryMap([userId]);
+  const user = userMap.get(userId);
+
+  return {
+    id: String((row as any).id),
+    postId: String((row as any).post_id),
+    userId,
+    username: user?.username ?? fallbackUsername(userId),
+    displayName: user?.displayName ?? user?.username ?? fallbackUsername(userId),
+    profileImageUrl: user?.profileImageUrl ?? null,
+    parentCommentId: (row as any).parent_comment_id == null ? null : String((row as any).parent_comment_id),
+    body: String((row as any).body ?? trimmedBody),
+    createdAt: String((row as any).created_at),
+    updatedAt: String((row as any).updated_at ?? (row as any).created_at),
+    canDelete: Boolean((row as any).can_delete ?? true),
+  } satisfies SocialPostComment;
+}
+
+export async function deletePostComment(commentId: string): Promise<void> {
+  const trimmedCommentId = String(commentId ?? '').trim();
+  if (!trimmedCommentId) return;
+
+  const deleteRes = await supabase.rpc('delete_post_comment_user', {
+    p_comment_id: trimmedCommentId,
+  });
+
+  if (deleteRes.error && !isMissingDbObject(deleteRes.error)) throw deleteRes.error;
 }
 
 async function mergePostSourceMetadata(postRows: any[]): Promise<any[]> {

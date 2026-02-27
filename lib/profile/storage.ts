@@ -8,6 +8,25 @@ import { formatSupabaseishError, normalizeThrown } from './errors';
 
 const BUCKET = 'profile-photos';
 
+function getImageContentType(fileExt: string) {
+  switch (fileExt.toLowerCase()) {
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    case 'jpg':
+    case 'jpeg':
+    default:
+      return 'image/jpeg';
+  }
+}
+
 export async function uploadMyProfilePhotoFromUri(localUri: string): Promise<string> {
   const userId = await requireAuthedUserId();
 
@@ -22,7 +41,7 @@ export async function uploadMyProfilePhotoFromUri(localUri: string): Promise<str
     .from(BUCKET)
     .upload(filePath, arrayBuffer, {
       upsert: true,
-      contentType: 'image/jpeg',
+      contentType: getImageContentType(fileExt),
     });
 
   if (uploadError) throw normalizeThrown(uploadError, formatSupabaseishError(uploadError));

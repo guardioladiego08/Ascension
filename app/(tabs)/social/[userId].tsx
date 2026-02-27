@@ -321,6 +321,29 @@ export default function ViewProfileScreen() {
     setPostExpandedIds((prev) => ({ ...prev, [postId]: !prev[postId] }));
   }, []);
 
+  const onAdjustPostCommentCount = useCallback((postId: string, delta: number) => {
+    if (!delta) return;
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              commentCount: Math.max(0, p.commentCount + delta),
+            }
+          : p
+      )
+    );
+  }, []);
+
+  const onOpenProfile = useCallback(
+    (userId: string) => {
+      if (!userId) return;
+      router.push({ pathname: '/social/[userId]', params: { userId } });
+    },
+    [router]
+  );
+
   const onOpenSession = useCallback(
     (post: SocialFeedPost) => {
       if (!post.sessionId) return;
@@ -577,6 +600,9 @@ export default function ViewProfileScreen() {
               expanded={!!postExpandedIds[item.id]}
               onToggleExpand={() => onTogglePostExpand(item.id)}
               onToggleLike={() => onTogglePostLike(item)}
+              onAdjustCommentCount={(delta) => onAdjustPostCommentCount(item.id, delta)}
+              onPressUser={() => onOpenProfile(item.userId)}
+              onPressProfile={onOpenProfile}
               onPressSession={onOpenSession}
             />
           )}

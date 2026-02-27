@@ -33,6 +33,7 @@ type FollowEdge = {
   follower_id: string;
   followee_id: string;
   status: 'requested' | 'pending' | 'accepted';
+  created_at: string;
 };
 
 type ActivityRow = (FollowEdge & { user: MiniProfile } & { kind: 'incoming' | 'outgoing' | 'following' });
@@ -138,16 +139,19 @@ export default function ActivityTab() {
         follower_id: String(r.follower_id),
         followee_id: uid,
         status: 'pending' as const,
+        created_at: String(r.created_at),
       }));
       const outgoingEdges = ((outgoingReqRes.data ?? []) as any[]).map((r) => ({
         follower_id: uid,
         followee_id: String(r.followee_id),
         status: 'pending' as const,
+        created_at: String(r.created_at),
       }));
       const followingEdges = ((followingIdsRes.data ?? []) as any[]).map((r) => ({
         follower_id: uid,
         followee_id: String(r.followee_id),
         status: 'accepted' as const,
+        created_at: String(r.created_at),
       }));
       const notifRows = (notifRes.data ?? []) as Array<{
         id: string;
@@ -174,15 +178,17 @@ export default function ActivityTab() {
       setOutgoing(outgoingEdges.map((e) => ({ ...e, user: pMap.get(e.followee_id)! })).filter((x) => !!x.user));
       setFollowing(followingEdges.map((e) => ({ ...e, user: pMap.get(e.followee_id)! })).filter((x) => !!x.user));
       setNotifications(
-        notifRows.map((n) => ({
-          id: n.id,
-          actor_id: n.actor_id,
-          kind: n.kind,
-          message: n.message,
-          is_read: Boolean(n.is_read),
-          created_at: n.created_at,
-          user: n.actor_id ? (pMap.get(n.actor_id) ?? null) : null,
-        }))
+        notifRows
+          .map((n) => ({
+            id: n.id,
+            actor_id: n.actor_id,
+            kind: n.kind,
+            message: n.message,
+            is_read: Boolean(n.is_read),
+            created_at: n.created_at,
+            user: n.actor_id ? (pMap.get(n.actor_id) ?? null) : null,
+          }))
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       );
     } catch (e) {
       console.error('[ActivityTab] load failed', e);
@@ -200,11 +206,13 @@ export default function ActivityTab() {
     return [
       ...incoming.map((x) => ({ kind: 'incoming' as const, ...x })),
       ...outgoing.map((x) => ({ kind: 'outgoing' as const, ...x })),
-    ];
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [incoming, outgoing]);
 
   const followingRows = useMemo<ActivityRow[]>(() => {
-    return following.map((x) => ({ kind: 'following' as const, ...x }));
+    return following
+      .map((x) => ({ kind: 'following' as const, ...x }))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [following]);
 
   const onGoProfile = useCallback(
@@ -289,6 +297,7 @@ export default function ActivityTab() {
                 kind={item.kind}
                 user={item.user}
                 busy={busyUserId === item.user.id}
+                createdAt={item.created_at}
                 onPressProfile={() => onGoProfile(item.user.id)}
                 onAccept={item.kind === 'incoming' ? () => onAccept(item.user.id) : undefined}
                 onDecline={item.kind === 'incoming' ? () => onDecline(item.user.id) : undefined}
@@ -397,6 +406,7 @@ function RowCard({
   kind,
   user,
   busy,
+  createdAt,
   onPressProfile,
   onAccept,
   onDecline,
@@ -405,6 +415,7 @@ function RowCard({
   kind: 'incoming' | 'outgoing' | 'following';
   user: MiniProfile;
   busy: boolean;
+  createdAt: string;
   onPressProfile: () => void;
   onAccept?: () => void;
   onDecline?: () => void;
@@ -431,6 +442,8 @@ function RowCard({
         <Text style={styles.username}>@{user.username}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
       </View>
+
+      <Text style={styles.timeText}>{timeAgo(createdAt)}</Text>
 
       {kind === 'incoming' ? (
         <View style={styles.actionsInline}>
