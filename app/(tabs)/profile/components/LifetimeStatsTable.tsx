@@ -24,6 +24,8 @@ type LifetimeStatsRow = {
   total_hours: number;
   total_elev_gain_m: number;
   total_distance_ran_m: number;
+  total_distance_walked_m: number;
+  total_distance_run_walk_m: number;
   total_distance_biked_m: number;
   updated_at?: string;
 };
@@ -117,14 +119,34 @@ export default function LifetimeStatsTable({
       setLoading(true);
       setErrorText(null);
 
-      const { data, error } = await supabase
-        .schema('user')
-        .from('lifetime_stats')
-        .select(
-          'user_id, workouts_count, total_hours, total_elev_gain_m, total_distance_ran_m, total_distance_biked_m, updated_at'
-        )
-        .eq('user_id', userId)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+
+      {
+        const res = await supabase
+          .schema('user')
+          .from('lifetime_stats')
+          .select(
+            'user_id, workouts_count, total_hours, total_elev_gain_m, total_distance_ran_m, total_distance_walked_m, total_distance_run_walk_m, total_distance_biked_m, updated_at'
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+        data = res.data;
+        error = res.error;
+      }
+
+      if (error?.code === '42703') {
+        const fallbackRes = await supabase
+          .schema('user')
+          .from('lifetime_stats')
+          .select(
+            'user_id, workouts_count, total_hours, total_elev_gain_m, total_distance_ran_m, total_distance_biked_m, updated_at'
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
 
       if (error) throw error;
 
@@ -135,6 +157,8 @@ export default function LifetimeStatsTable({
           total_hours: 0,
           total_elev_gain_m: 0,
           total_distance_ran_m: 0,
+          total_distance_walked_m: 0,
+          total_distance_run_walk_m: 0,
           total_distance_biked_m: 0,
         });
         return;
@@ -146,6 +170,8 @@ export default function LifetimeStatsTable({
         total_hours: safeNum((data as any).total_hours),
         total_elev_gain_m: safeNum((data as any).total_elev_gain_m),
         total_distance_ran_m: safeNum((data as any).total_distance_ran_m),
+        total_distance_walked_m: safeNum((data as any).total_distance_walked_m),
+        total_distance_run_walk_m: safeNum((data as any).total_distance_run_walk_m),
         total_distance_biked_m: safeNum((data as any).total_distance_biked_m),
         updated_at: (data as any).updated_at ?? undefined,
       });
@@ -166,8 +192,11 @@ export default function LifetimeStatsTable({
   const distLabel = distanceUnit === 'mi' ? 'mi' : 'km';
 
   const runDist = safeNum(row?.total_distance_ran_m) / distDiv;
+  const walkDist = safeNum(row?.total_distance_walked_m) / distDiv;
+  const runWalkDistFromCol = safeNum(row?.total_distance_run_walk_m) / distDiv;
+  const runWalkDist = runWalkDistFromCol > 0 ? runWalkDistFromCol : runDist + walkDist;
   const bikeDist = safeNum(row?.total_distance_biked_m) / distDiv;
-  const totalDist = (safeNum(row?.total_distance_ran_m) + safeNum(row?.total_distance_biked_m)) / distDiv;
+  const totalDist = runWalkDist + bikeDist;
 
   const elevM = safeNum(row?.total_elev_gain_m);
   const elevVal = distanceUnit === 'mi' ? elevM * FT_PER_M : elevM;
@@ -178,6 +207,11 @@ export default function LifetimeStatsTable({
 
   const totalDistText = useMemo(() => `${format1(totalDist)} ${distLabel}`, [totalDist, distLabel]);
   const runDistText = useMemo(() => `${format1(runDist)} ${distLabel}`, [runDist, distLabel]);
+  const walkDistText = useMemo(() => `${format1(walkDist)} ${distLabel}`, [walkDist, distLabel]);
+  const runWalkDistText = useMemo(
+    () => `${format1(runWalkDist)} ${distLabel}`,
+    [runWalkDist, distLabel]
+  );
   const bikeDistText = useMemo(() => `${format1(bikeDist)} ${distLabel}`, [bikeDist, distLabel]);
 
   const elevText = useMemo(
@@ -247,7 +281,14 @@ export default function LifetimeStatsTable({
             icon="trail-sign-outline"
             label="Total distance"
             value={loading ? '—' : totalDistText}
-            subValue={`Run ${runDistText} • Bike ${bikeDistText}`}
+            subValue={`Run ${runDistText} • Walk ${walkDistText} • Bike ${bikeDistText}`}
+          />
+
+          <TableRow
+            icon="walk-outline"
+            label="Run + walk distance"
+            value={loading ? '—' : runWalkDistText}
+            subValue="Combined indoor + outdoor run/walk"
           />
 
           <TableRow

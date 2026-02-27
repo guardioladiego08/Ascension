@@ -125,8 +125,8 @@ function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
 
 function kindFromText(t: string): ActivityKind {
   const v = (t ?? '').toLowerCase();
-  if (v === 'walk') return 'walk';
-  if (v === 'bike' || v === 'cycle' || v === 'ride') return 'cycle';
+  if (v.includes('walk')) return 'walk';
+  if (v.includes('bike') || v.includes('cycle') || v.includes('ride')) return 'cycle';
   return 'run';
 }
 
@@ -303,15 +303,11 @@ export default function ActivityGrid({
         .order('started_at', { ascending: false })
         .range(from, to);
 
-      if (activeFilter === 'run') q = q.eq('exercise_type', 'run');
-      if (activeFilter === 'walk') q = q.eq('exercise_type', 'walk');
-      if (activeFilter === 'cycle') q = q.in('exercise_type', ['bike', 'cycle', 'ride']);
-
       const res = await q;
       if (res.error) throw res.error;
 
-      return (res.data ?? []).map((r: any) => {
-        const kind = kindFromText(String(r.exercise_type));
+      const page = (res.data ?? []).map((r: any) => {
+        const kind = kindFromText(String(r.exercise_type ?? ''));
 
         const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
         const paceMi =
@@ -333,6 +329,12 @@ export default function ActivityGrid({
           speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
         } as UnifiedActivity;
       });
+
+      if (activeFilter === 'all') return page;
+      return page.filter((item) => {
+        if (activeFilter === 'strength') return false;
+        return item.kind === activeFilter;
+      });
     },
     [userId]
   );
@@ -349,25 +351,16 @@ export default function ActivityGrid({
           'id, activity_type, started_at, ended_at, duration_s, distance_m, avg_pace_s_per_km, avg_speed_mps'
         )
         .eq('user_id', userId)
+        .eq('status', 'completed')
         .not('ended_at', 'is', null)
         .order('started_at', { ascending: false })
         .range(from, to);
 
-        if (activeFilter === 'run') {
-          // run could be outdoor_run or indoor_run
-          q = q.in('exercise_type', ['outdoor_run', 'indoor_run']);
-        }
-        if (activeFilter === 'walk') {
-          q = q.in('exercise_type', ['outdoor_walk', 'indoor_walk']);
-        }
-        // If you have cycling types, list them here; otherwise remove cycle support.
-
-
       const res = await q;
       if (res.error) throw res.error;
 
-      return (res.data ?? []).map((r: any) => {
-        const kind = kindFromText(String(r.activity_type));
+      const page = (res.data ?? []).map((r: any) => {
+        const kind = kindFromText(String(r.activity_type ?? ''));
 
         const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
         const paceMi = paceKm == null ? null : paceKm * 1.609344;
@@ -383,6 +376,12 @@ export default function ActivityGrid({
           paceMi,
           speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
         } as UnifiedActivity;
+      });
+
+      if (activeFilter === 'all') return page;
+      return page.filter((item) => {
+        if (activeFilter === 'strength') return false;
+        return item.kind === activeFilter;
       });
     },
     [userId]

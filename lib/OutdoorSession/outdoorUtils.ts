@@ -1,4 +1,8 @@
 export type LatLng = { lat: number; lng: number };
+export type DistanceUnit = 'mi' | 'km';
+
+const M_PER_MI = 1609.344;
+const M_PER_KM = 1000;
 
 export function haversineMeters(a: LatLng, b: LatLng): number {
   const R = 6371000;
@@ -32,6 +36,15 @@ export function formatKm(distanceMeters: number): string {
   return km.toFixed(2);
 }
 
+export function formatDistance(
+  distanceMeters: number,
+  unit: DistanceUnit = 'km'
+): string {
+  const safe = Math.max(0, distanceMeters);
+  const value = unit === 'mi' ? safe / M_PER_MI : safe / M_PER_KM;
+  return `${value.toFixed(2)} ${unit}`;
+}
+
 // pace = seconds per km
 export function paceSecPerKm(distanceMeters: number, elapsedSeconds: number): number | null {
   if (distanceMeters < 10 || elapsedSeconds < 5) return null;
@@ -45,4 +58,25 @@ export function formatPace(secPerKm: number | null): string {
   const mm = Math.floor(secPerKm / 60);
   const ss = Math.round(secPerKm % 60);
   return `${mm}:${String(ss).padStart(2, '0')}/km`;
+}
+
+export function paceSecPerUnit(
+  distanceMeters: number,
+  elapsedSeconds: number,
+  unit: DistanceUnit = 'km'
+): number | null {
+  const secPerKm = paceSecPerKm(distanceMeters, elapsedSeconds);
+  if (!secPerKm || !Number.isFinite(secPerKm)) return null;
+  return unit === 'mi' ? secPerKm * 1.609344 : secPerKm;
+}
+
+export function formatPaceForUnit(
+  secPerKm: number | null,
+  unit: DistanceUnit = 'km'
+): string {
+  if (!secPerKm || !Number.isFinite(secPerKm)) return `--:--/${unit}`;
+  const secPerUnit = unit === 'mi' ? secPerKm * 1.609344 : secPerKm;
+  const mm = Math.floor(secPerUnit / 60);
+  const ss = Math.round(secPerUnit % 60);
+  return `${mm}:${String(ss).padStart(2, '0')}/${unit}`;
 }

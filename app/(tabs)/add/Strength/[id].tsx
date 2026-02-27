@@ -20,24 +20,6 @@ const PRIMARY = Colors.dark.highlight1;
 
 const LB_PER_KG = 2.20462;
 
-function pad2(n: number) {
-  return String(n).padStart(2, '0');
-}
-
-// Local date avoids UTC day-shift bugs
-function toLocalISODate(d: Date) {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function getDeviceTimezone(): string | null {
-  try {
-    return Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone ?? null;
-  } catch {
-    return null;
-  }
-}
-
-
 // Format a value that is stored in KG (volumes, 1RM, etc.)
 function formatFromKg(
   value: number | null | undefined,
@@ -210,63 +192,8 @@ export default function StrengthSummaryPage() {
           style: 'destructive',
           onPress: async () => {
             try {
-              // ---- 0) Compute deltas from the loaded workout BEFORE deleting ----
-              // total_vol is stored in KG in your schema
-              const totalVolKg = Number(workout?.total_vol ?? 0);
-
-              const startedAt = workout?.started_at ? new Date(workout.started_at) : null;
-              const endedAt = workout?.ended_at ? new Date(workout.ended_at) : null;
-
-              // If there's no ended_at, fall back to started_at; if neither, use "now"
-              const effectiveDate = endedAt ?? startedAt ?? new Date();
-
-              // durationHours based on started/ended, otherwise 0
-              let durationHours = 0;
-              if (startedAt && endedAt) {
-                const ms = endedAt.getTime() - startedAt.getTime();
-                durationHours = Math.max(0, ms) / 3600000;
-              }
-
-              const tz = getDeviceTimezone();
-              const p_date = toLocalISODate(effectiveDate);
-
-              // ---- 1) Decrement weekly + lifetime stats FIRST ----
-              // If this fails, we abort deletion to prevent stat drift.
-              const { error: decErr } = await supabase.schema('user').rpc(
-                'decrement_strength_workout_stats',
-                {
-                  p_date,
-                  p_timezone_str: tz,
-                  p_duration_hours: durationHours,
-                  p_total_weight_lifted_kg: totalVolKg,
-                }
-              );
-
-              if (decErr) {
-                const decMsg = String((decErr as any)?.message ?? '').toLowerCase();
-                const legacyStatsFnError =
-                  (decErr as any)?.code === '42703' &&
-                  (decMsg.includes('total_miles_biked') || decMsg.includes('lifetime_stats'));
-                const overloadedStatsFnError =
-                  (decErr as any)?.code === 'PGRST203' &&
-                  decMsg.includes('decrement_strength_workout_stats');
-
-                if (legacyStatsFnError || overloadedStatsFnError) {
-                  console.warn(
-                    '[StrengthSummary] decrement_strength_workout_stats unavailable due to legacy/overloaded function definition. Proceeding with delete; apply migration to restore stats decrement.',
-                    decErr
-                  );
-                } else {
-                  console.error('Error decrementing weekly/lifetime stats:', decErr);
-                  Alert.alert(
-                    'Error',
-                    'Could not update weekly/lifetime stats. Workout was not deleted.'
-                  );
-                  return;
-                }
-              }
-
-              // ---- 2) Delete sets ----
+              // Stats are now maintained by DB triggers on strength.strength_workouts.
+              // ---- 1) Delete sets ----
               const { data: deletedSets, error: setsError } = await supabase
                 .schema('strength')
                 .from('strength_sets')
@@ -277,7 +204,7 @@ export default function StrengthSummaryPage() {
 
               console.log('Deleted strength_sets rows:', deletedSets?.length ?? 0);
 
-              // ---- 3) Delete exercise summaries ----
+              // ---- 2) Delete exercise summaries ----
               const { data: deletedSummaries, error: summaryError } = await supabase
                 .schema('strength')
                 .from('exercise_summary')
@@ -288,7 +215,7 @@ export default function StrengthSummaryPage() {
 
               console.log('Deleted exercise_summary rows:', deletedSummaries?.length ?? 0);
 
-              // ---- 4) Delete workout header ----
+              // ---- 3) Delete workout header (trigger reverts stats if completed) ----
               const { data: deletedWorkouts, error: workoutError } = await supabase
                 .schema('strength')
                 .from('strength_workouts')

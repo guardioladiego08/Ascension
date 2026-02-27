@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { LatLng } from 'react-native-maps';
 
 import { Colors } from '@/constants/Colors';
+import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 
 import OutdoorMetrics from './components/OutdoorMetrics';
@@ -44,6 +45,7 @@ function outdoorTitle(activityType?: string, fallback?: string) {
 
 export default function OutdoorSession() {
   const router = useRouter();
+  const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{ title?: string; activityType?: string }>();
   const { width } = useWindowDimensions();
 
@@ -282,6 +284,7 @@ export default function OutdoorSession() {
                         elapsedSeconds={elapsedSeconds}
                         distanceMeters={distanceMeters}
                         currentPaceSecPerKm={currentPace}
+                        distanceUnit={distanceUnit}
                       />
                       <Text style={styles.hint}>Swipe left for map</Text>
                     </View>

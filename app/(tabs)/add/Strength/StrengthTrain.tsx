@@ -24,7 +24,6 @@ import CancelConfirmModal from './components/CancelConfirmModal';
 import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
-import { updateWeeklyAndLifetimeFromStrengthWorkout } from './components/strengthStats';
 import { useUnits } from '@/contexts/UnitsContext';
 
 const BG = Colors.dark.background;
@@ -307,14 +306,7 @@ export default function StrengthTrain() {
 
       if (wErr) throw wErr;
 
-      // 4) Update weekly + lifetime stats (atomic via one RPC)
-      await updateWeeklyAndLifetimeFromStrengthWorkout({
-        endedAt,
-        durationSeconds: seconds,
-        totalWeightLiftedKg: totalVol,
-      });
-
-      console.log('✅ workout saved + stats updated', { workoutId });
+      console.log('✅ workout saved', { workoutId });
       router.replace(`/(tabs)/add/Strength/${workoutId}`);
     } catch (err: any) {
       console.error('[StrengthTrain] finish failed', err);

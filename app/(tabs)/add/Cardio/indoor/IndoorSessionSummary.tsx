@@ -12,6 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/Colors';
+import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
@@ -31,6 +32,7 @@ const TEXT = Colors.dark.text;
 
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
+const FT_PER_M = 3.28084;
 
 const MPH_PER_MPS = 2.236936;
 const KMH_PER_MPS = 3.6;
@@ -52,8 +54,21 @@ function formatPace(secondsPerUnit: number | null, suffix: '/mi' | '/km') {
   return `${mm}:${String(ss).padStart(2, '0')} ${suffix}`;
 }
 
+function paceForUnit(
+  paceMi: number | null | undefined,
+  paceKm: number | null | undefined,
+  unit: 'mi' | 'km'
+) {
+  const mi = paceMi != null && Number.isFinite(paceMi) && paceMi > 0 ? paceMi : null;
+  const km = paceKm != null && Number.isFinite(paceKm) && paceKm > 0 ? paceKm : null;
+
+  if (unit === 'mi') return mi ?? (km != null ? km * 1.609344 : null);
+  return km ?? (mi != null ? mi / 1.609344 : null);
+}
+
 export default function IndoorSessionSummary() {
   const router = useRouter();
+  const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{ draftId?: string }>();
   const draftId = params.draftId;
 
@@ -106,7 +121,7 @@ export default function IndoorSessionSummary() {
     };
   }, [draftId, router]);
 
-  const distUnit = draft?.distance_unit ?? 'mi';
+  const distUnit = distanceUnit;
   const distLabelUnit = distUnit === 'mi' ? 'MI' : 'KM';
 
   const title = useMemo(() => {
@@ -122,10 +137,12 @@ export default function IndoorSessionSummary() {
 
   const displayDistance = draft ? mToDisplay(draft.total_distance_m, distUnit) : 0;
 
-  const avgPaceText =
-    distUnit === 'mi'
-      ? formatPace(draft?.avg_pace_s_per_mi ?? null, '/mi')
-      : formatPace(draft?.avg_pace_s_per_km ?? null, '/km');
+  const avgPaceForUnit = paceForUnit(
+    draft?.avg_pace_s_per_mi ?? null,
+    draft?.avg_pace_s_per_km ?? null,
+    distUnit
+  );
+  const avgPaceText = formatPace(avgPaceForUnit, distUnit === 'mi' ? '/mi' : '/km');
 
   // -----------------------------
   // Charts: build series from draft.samples (before saving)
@@ -136,14 +153,17 @@ export default function IndoorSessionSummary() {
 
   const pacePoints: SamplePoint[] = useMemo(() => {
     if (!draft?.samples?.length) return [];
-    if (distUnit === 'mi') {
-      return draft.samples
-        .filter((s: any) => Number.isFinite(s.pace_s_per_mi) && s.pace_s_per_mi > 0)
-        .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.pace_s_per_mi) }));
-    }
     return draft.samples
-      .filter((s: any) => Number.isFinite(s.pace_s_per_km) && s.pace_s_per_km > 0)
-      .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.pace_s_per_km) }));
+      .map((s: any) => {
+        const v = paceForUnit(
+          Number.isFinite(s.pace_s_per_mi) ? Number(s.pace_s_per_mi) : null,
+          Number.isFinite(s.pace_s_per_km) ? Number(s.pace_s_per_km) : null,
+          distUnit
+        );
+        if (v == null || v <= 0) return null;
+        return { t: Number(s.elapsed_s ?? 0), v };
+      })
+      .filter(Boolean) as SamplePoint[];
   }, [draft?.samples, distUnit]);
 
   const speedPoints: SamplePoint[] = useMemo(() => {
@@ -156,10 +176,11 @@ export default function IndoorSessionSummary() {
 
   const elevationPoints: SamplePoint[] = useMemo(() => {
     if (!draft?.samples?.length) return [];
+    const mult = distUnit === 'mi' ? FT_PER_M : 1;
     return draft.samples
       .filter((s: any) => Number.isFinite(s.elevation_m))
-      .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.elevation_m) }));
-  }, [draft?.samples]);
+      .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.elevation_m) * mult }));
+  }, [draft?.samples, distUnit]);
 
   const inclinePoints: SamplePoint[] = useMemo(() => {
     if (!draft?.samples?.length) return [];
@@ -204,23 +225,52 @@ export default function IndoorSessionSummary() {
     try {
       setSaving(true);
 
-      // 1) insert session
-      const { data: inserted, error: insErr } = await supabase
+      const sessionPayload = {
+        status: 'completed',
+        ended_at: draft.ended_at,
+        total_time_s: draft.total_time_s,
+        total_distance_m: draft.total_distance_m,
+        total_elevation_m: draft.total_elevation_m,
+        avg_speed_mps: draft.avg_speed_mps,
+        avg_pace_s_per_km: draft.avg_pace_s_per_km,
+        avg_pace_s_per_mi: draft.avg_pace_s_per_mi,
+      };
+
+      const fallbackExerciseType =
+        draft.exercise_type === 'indoor_walk' ? 'walk' : 'run';
+
+      // 1) insert session (with enum compatibility fallback)
+      let savedExerciseType: string = draft.exercise_type;
+      let { data: inserted, error: insErr } = await supabase
         .schema('run_walk')
         .from('sessions')
         .insert({
-          exercise_type: draft.exercise_type,
-          status: 'completed',
-          ended_at: draft.ended_at,
-          total_time_s: draft.total_time_s,
-          total_distance_m: draft.total_distance_m,
-          total_elevation_m: draft.total_elevation_m,
-          avg_speed_mps: draft.avg_speed_mps,
-          avg_pace_s_per_km: draft.avg_pace_s_per_km,
-          avg_pace_s_per_mi: draft.avg_pace_s_per_mi,
+          ...sessionPayload,
+          exercise_type: savedExerciseType,
         })
         .select('id')
         .single();
+
+      if (insErr && fallbackExerciseType !== savedExerciseType) {
+        const msg = String(insErr.message ?? '').toLowerCase();
+        const looksLikeEnumMismatch =
+          insErr.code === '22P02' || msg.includes('invalid input value for enum');
+
+        if (looksLikeEnumMismatch) {
+          savedExerciseType = fallbackExerciseType;
+          const retry = await supabase
+            .schema('run_walk')
+            .from('sessions')
+            .insert({
+              ...sessionPayload,
+              exercise_type: savedExerciseType,
+            })
+            .select('id')
+            .single();
+          inserted = retry.data;
+          insErr = retry.error;
+        }
+      }
 
       if (insErr || !inserted?.id) {
         console.log('[IndoorSessionSummary] session insert error', insErr);
@@ -251,7 +301,15 @@ export default function IndoorSessionSummary() {
 
         if (sampErr) {
           console.log('[IndoorSessionSummary] samples insert error', sampErr);
-          // session is saved; do not block exit
+          // Keep storage atomic for chart summaries: if sample insert fails,
+          // remove the just-created session and keep the draft for retry.
+          await supabase
+            .schema('run_walk')
+            .from('sessions')
+            .delete()
+            .eq('id', sessionId);
+          Alert.alert('Error', 'Could not save session samples. Please try again.');
+          return;
         }
       }
 
@@ -261,7 +319,7 @@ export default function IndoorSessionSummary() {
         try {
           await shareRunWalkSessionToFeed({
             sessionId,
-            exerciseType: draft.exercise_type,
+            exerciseType: savedExerciseType,
             totalDistanceM: draft.total_distance_m,
             totalTimeS: draft.total_time_s,
             avgPaceSPerMi: draft.avg_pace_s_per_mi ?? null,
@@ -311,6 +369,11 @@ export default function IndoorSessionSummary() {
 
   const speedUnitSuffix = distUnit === 'mi' ? 'mph' : 'km/h';
   const paceSuffix = distUnit === 'mi' ? '/mi' : '/km';
+  const elevationUnitSuffix = distUnit === 'mi' ? 'ft' : 'm';
+  const totalElevationDisplay =
+    distUnit === 'mi'
+      ? draft.total_elevation_m * FT_PER_M
+      : draft.total_elevation_m;
 
   return (
     <View style={styles.safe}>
@@ -335,7 +398,10 @@ export default function IndoorSessionSummary() {
         <View style={styles.card}>
           <Row label="Total Time" value={formatClock(draft.total_time_s)} />
           <Row label="Total Distance" value={`${displayDistance.toFixed(2)} ${distLabelUnit}`} />
-          <Row label="Elevation Gain" value={`${draft.total_elevation_m.toFixed(0)} m`} />
+          <Row
+            label="Elevation Gain"
+            value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
+          />
           <Row label="Avg Pace" value={avgPaceText} />
         </View>
 
@@ -374,13 +440,14 @@ export default function IndoorSessionSummary() {
           />
 
           <MetricChart
-            title="Elevation Over Time (m)"
+            title={`Elevation Over Time (${elevationUnitSuffix})`}
             color={Colors.dark.highlight2 ?? Colors.dark.highlight1}
             points={elevationPoints}
             cardBg={CARD}
             textColor={TEXT}
             valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
             xLabelFormatter={elapsedLabel}
+            unitSuffix={elevationUnitSuffix}
             noOfSections={4}
             showGrid={false}
             showYAxisIndices={false}

@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/Colors';
-import { formatDuration, formatKm, formatPace, paceSecPerKm } from '@/lib/OutdoorSession/outdoorUtils';
+import { useUnits } from '@/contexts/UnitsContext';
+import { formatDuration, formatDistance, formatPaceForUnit, paceSecPerKm } from '@/lib/OutdoorSession/outdoorUtils';
 
 const BG = Colors?.dark?.background ?? '#F5F6F8';
 const TEXT = Colors?.dark?.text ?? '#111';
@@ -13,6 +14,7 @@ const ACCENT = Colors?.dark?.highlight1 ?? '#16A34A';
 
 export default function SessionSummary() {
   const router = useRouter();
+  const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{
     title?: string;
     activityType?: string;
@@ -45,8 +47,8 @@ export default function SessionSummary() {
 
       <View style={styles.card}>
         <Row label="Time" value={formatDuration(elapsedSeconds)} />
-        <Row label="Distance" value={`${formatKm(distanceMeters)} km`} />
-        <Row label="Avg Pace" value={formatPace(avgPace)} />
+        <Row label="Distance" value={formatDistance(distanceMeters, distanceUnit)} />
+        <Row label="Avg Pace" value={formatPaceForUnit(avgPace, distanceUnit)} />
       </View>
 
       <View style={styles.footer}>

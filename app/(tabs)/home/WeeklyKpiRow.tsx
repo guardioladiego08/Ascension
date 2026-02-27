@@ -14,7 +14,13 @@ type WeeklySummaryRow = {
   workouts_count: number;
   total_hours: number;
   total_kcal_consumed: number;
+  total_distance_ran_m: number;
+  total_distance_walked_m: number;
+  total_distance_run_walk_m: number;
+  total_elev_gain_m: number;
 };
+
+const M_PER_MI = 1609.344;
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
@@ -48,6 +54,11 @@ function formatCalories(value: number) {
   return String(rounded);
 }
 
+function formatMeters(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  return Math.round(value).toLocaleString();
+}
+
 export default function WeeklyKpiRow() {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<WeeklySummaryRow | null>(null);
@@ -72,7 +83,7 @@ export default function WeeklyKpiRow() {
           const tz =
             Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone ?? null;
 
-          const { data: ensured, error: ensureErr } = await supabase
+          const { error: ensureErr } = await supabase
             .schema('user')
             .rpc('ensure_weekly_summary', {
               p_date: todayISO,
@@ -84,23 +95,49 @@ export default function WeeklyKpiRow() {
             return;
           }
 
-          if (ensured) {
-            setSummary({
-              week_start: ensured.week_start,
-              workouts_count: Number(ensured.workouts_count ?? 0),
-              total_hours: Number(ensured.total_hours ?? 0),
-              total_kcal_consumed: Number(ensured.total_kcal_consumed ?? 0),
-            });
-            return;
+          // Read the canonical weekly row. If newer columns are missing (migration not run yet),
+          // fall back to a legacy-compatible select.
+          let data: any = null;
+          let error: any = null;
+
+          {
+            const res = await supabase
+              .schema('user')
+              .from('weekly_summary')
+              .select(
+                'week_start,workouts_count,total_hours,total_kcal_consumed,total_distance_ran_m,total_distance_walked_m,total_distance_run_walk_m,total_elev_gain_m'
+              )
+              .eq('week_start', weekStartISO)
+              .maybeSingle();
+            data = res.data;
+            error = res.error;
           }
 
-          // Fallback direct select (should rarely happen)
-          const { data, error } = await supabase
-            .schema('user')
-            .from('weekly_summary')
-            .select('week_start,workouts_count,total_hours,total_kcal_consumed')
-            .eq('week_start', weekStartISO)
-            .maybeSingle();
+          if (error?.code === '42703') {
+            const fallbackRes = await supabase
+              .schema('user')
+              .from('weekly_summary')
+              .select(
+                'week_start,workouts_count,total_hours,total_kcal_consumed,total_miles_ran,total_miles_walked,total_miles_run_walk,total_elev_gain_m'
+              )
+              .eq('week_start', weekStartISO)
+              .maybeSingle();
+            data = fallbackRes.data;
+            error = fallbackRes.error;
+          }
+
+          if (error?.code === '42703') {
+            const legacyRes = await supabase
+              .schema('user')
+              .from('weekly_summary')
+              .select(
+                'week_start,workouts_count,total_hours,total_kcal_consumed,total_miles_ran,total_elev_gain_m'
+              )
+              .eq('week_start', weekStartISO)
+              .maybeSingle();
+            data = legacyRes.data;
+            error = legacyRes.error;
+          }
 
           if (error && (error as any).code !== 'PGRST116') {
             console.error('[WeeklyKpiRow] select weekly_summary error:', error);
@@ -114,6 +151,24 @@ export default function WeeklyKpiRow() {
                   workouts_count: Number(data.workouts_count ?? 0),
                   total_hours: Number(data.total_hours ?? 0),
                   total_kcal_consumed: Number(data.total_kcal_consumed ?? 0),
+                  total_distance_ran_m: Number(
+                    data.total_distance_ran_m ??
+                      Number(data.total_miles_ran ?? 0) * M_PER_MI
+                  ),
+                  total_distance_walked_m: Number(
+                    data.total_distance_walked_m ??
+                      Number(data.total_miles_walked ?? 0) * M_PER_MI
+                  ),
+                  total_distance_run_walk_m: Number(
+                    data.total_distance_run_walk_m ??
+                      Number(
+                        data.total_miles_run_walk ??
+                          (Number(data.total_miles_ran ?? 0) +
+                            Number(data.total_miles_walked ?? 0))
+                      ) *
+                        M_PER_MI
+                  ),
+                  total_elev_gain_m: Number(data.total_elev_gain_m ?? 0),
                 }
               : null
           );
@@ -129,6 +184,10 @@ export default function WeeklyKpiRow() {
   const workouts = summary?.workouts_count ?? 0;
   const hours = summary?.total_hours ?? 0;
   const calories = summary?.total_kcal_consumed ?? 0;
+  const runWalkDistanceM =
+    summary?.total_distance_run_walk_m ??
+    (summary?.total_distance_ran_m ?? 0) + (summary?.total_distance_walked_m ?? 0);
+  const elevGainM = summary?.total_elev_gain_m ?? 0;
 
   return (
     <View>
@@ -153,6 +212,11 @@ export default function WeeklyKpiRow() {
           <Text style={GlobalStyles.kpiLabel}>Calories</Text>
         </View>
       </View>
+
+      <View style={styles.extraRow}>
+        <Text style={styles.extraText}>Run + Walk: {formatMeters(runWalkDistanceM)} m</Text>
+        <Text style={styles.extraText}>Elevation: {formatMeters(elevGainM)} m</Text>
+      </View>
     </View>
   );
 }
@@ -173,5 +237,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 6,
+  },
+  extraRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  extraText: {
+    color: TEXT_MUTED,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

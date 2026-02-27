@@ -6,16 +6,6 @@ begin;
 
 create schema if not exists "user";
 
--- Remove old overloads first so PostgREST RPC resolution is unambiguous.
-drop function if exists "user".increment_strength_workout_stats(date, text, numeric, numeric);
-drop function if exists "user".increment_strength_workout_stats(date, text, double precision, double precision);
-
-drop function if exists "user".decrement_strength_workout_stats(date, text, numeric, numeric);
-drop function if exists "user".decrement_strength_workout_stats(date, text, double precision, double precision);
-
-drop function if exists "user".apply_strength_workout_stats_delta(date, text, integer, numeric, numeric);
-drop function if exists "user".apply_strength_workout_stats_delta(date, text, integer, double precision, double precision);
-
 create or replace function "user".apply_strength_workout_stats_delta(
   p_date date,
   p_timezone_str text default null,

@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
-import { formatDuration, formatKm, formatPace } from '@/lib/OutdoorSession/outdoorUtils';
+import { formatDuration, formatDistance, formatPaceForUnit, type DistanceUnit } from '@/lib/OutdoorSession/outdoorUtils';
 
 type Props = {
   elapsedSeconds: number;
   distanceMeters: number;
   currentPaceSecPerKm: number | null;
+  distanceUnit: DistanceUnit;
 };
 
 const CARD = Colors.dark.card;
@@ -16,12 +17,13 @@ export default function OutdoorMetrics({
   elapsedSeconds,
   distanceMeters,
   currentPaceSecPerKm,
+  distanceUnit,
 }: Props) {
   return (
     <View style={styles.wrap}>
-      <StatBox label="DISTANCE" value={`${formatKm(distanceMeters)}km`} />
+      <StatBox label="DISTANCE" value={formatDistance(distanceMeters, distanceUnit)} />
       <StatBox label="TIME" value={formatDuration(elapsedSeconds)} />
-      <StatBox label="PACE" value={formatPace(currentPaceSecPerKm)} />
+      <StatBox label="PACE" value={formatPaceForUnit(currentPaceSecPerKm, distanceUnit)} />
     </View>
   );
 }
