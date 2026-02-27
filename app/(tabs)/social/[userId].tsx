@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
+  FlatList,
   View,
   Text,
   StyleSheet,
@@ -17,6 +18,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import { useUnits } from '@/contexts/UnitsContext';
 
 import ProfileHeaderSection, {
   type ProfileStats,
@@ -35,7 +37,14 @@ import {
   type PublicProfile,
   type FollowStatus,
 } from '@/lib/social/api';
-import { getSocialCounts } from '@/lib/social/feed';
+import {
+  getSocialCounts,
+  getSocialFeedForUser,
+  togglePostLike,
+  type SocialActivityType,
+  type SocialFeedPost,
+} from '@/lib/social/feed';
+import SocialPostCard from './components/SocialPostCard';
 
 // ----- Constants -----
 const BG = Colors.dark.background;
@@ -44,8 +53,19 @@ const BORDER = Colors.dark?.border ?? '#1F2937';
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.dark.highlight1;
+const POSTS_PAGE_SIZE = 12;
 
-type DetailTab = 'stats' | 'lifetime' | 'calendar';
+type DetailTab = 'posts' | 'stats' | 'lifetime' | 'calendar';
+type ActivityFilter = 'all' | SocialActivityType;
+
+const POST_FILTERS: Array<{ key: ActivityFilter; label: string; icon?: keyof typeof Ionicons.glyphMap }> = [
+  { key: 'all', label: 'All' },
+  { key: 'run', label: 'Run', icon: 'walk-outline' },
+  { key: 'walk', label: 'Walk', icon: 'walk-outline' },
+  { key: 'ride', label: 'Ride', icon: 'bicycle-outline' },
+  { key: 'strength', label: 'Strength', icon: 'barbell-outline' },
+  { key: 'nutrition', label: 'Nutrition', icon: 'nutrition-outline' },
+];
 
 function formatSupabaseErr(err: any) {
   if (!err) return 'Unknown error';
@@ -59,6 +79,7 @@ function formatSupabaseErr(err: any) {
 
 export default function ViewProfileScreen() {
   const router = useRouter();
+  const { distanceUnit, weightUnit } = useUnits();
   const params = useLocalSearchParams();
 
   const userIdParam =
@@ -68,7 +89,7 @@ export default function ViewProfileScreen() {
       ? params.userId[0]
       : '';
 
-  const [detailTab, setDetailTab] = useState<DetailTab>('stats');
+  const [detailTab, setDetailTab] = useState<DetailTab>('posts');
 
   const [meId, setMeId] = useState<string | null>(null);
 
@@ -85,6 +106,16 @@ export default function ViewProfileScreen() {
 
   // Calendar state (in case RLS blocks goal reads, we show a gentle message)
   const [goalsBlocked, setGoalsBlocked] = useState(false);
+
+  // Posts tab state
+  const [postFilter, setPostFilter] = useState<ActivityFilter>('all');
+  const [posts, setPosts] = useState<SocialFeedPost[]>([]);
+  const [postExpandedIds, setPostExpandedIds] = useState<Record<string, boolean>>({});
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [postsRefreshing, setPostsRefreshing] = useState(false);
+  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+  const [postsHasMore, setPostsHasMore] = useState(true);
+  const [postsError, setPostsError] = useState<string | null>(null);
 
   const fullName = useMemo(() => {
     if (!profile) return '';
@@ -175,6 +206,139 @@ export default function ViewProfileScreen() {
     if (!profile.is_private) return true;
     return followStatus === 'accepted';
   }, [profile, meId, followStatus]);
+
+  const loadPostsFirstPage = useCallback(async () => {
+    if (!profile?.id || !canViewContent) {
+      setPosts([]);
+      setPostsHasMore(false);
+      setPostsLoading(false);
+      setPostsRefreshing(false);
+      setPostsLoadingMore(false);
+      return;
+    }
+
+    setPostsLoading(true);
+    setPostsError(null);
+
+    try {
+      const rows = await getSocialFeedForUser({
+        userId: profile.id,
+        offset: 0,
+        limit: POSTS_PAGE_SIZE,
+        activityType: postFilter === 'all' ? null : postFilter,
+      });
+      setPosts(rows);
+      setPostsHasMore(rows.length === POSTS_PAGE_SIZE);
+      setPostExpandedIds({});
+    } catch (err: any) {
+      console.error('[ViewProfile] load posts failed', err);
+      setPosts([]);
+      setPostsHasMore(false);
+      setPostsError(formatSupabaseErr(err));
+    } finally {
+      setPostsLoading(false);
+      setPostsRefreshing(false);
+    }
+  }, [canViewContent, postFilter, profile?.id]);
+
+  useEffect(() => {
+    if (detailTab !== 'posts') return;
+    loadPostsFirstPage();
+  }, [detailTab, loadPostsFirstPage]);
+
+  const onRefreshPosts = useCallback(async () => {
+    setPostsRefreshing(true);
+    await loadPostsFirstPage();
+  }, [loadPostsFirstPage]);
+
+  const onLoadMorePosts = useCallback(async () => {
+    if (!profile?.id || postsLoading || postsLoadingMore || postsRefreshing || !postsHasMore) return;
+
+    setPostsLoadingMore(true);
+    try {
+      const rows = await getSocialFeedForUser({
+        userId: profile.id,
+        offset: posts.length,
+        limit: POSTS_PAGE_SIZE,
+        activityType: postFilter === 'all' ? null : postFilter,
+      });
+
+      setPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const merged = [...prev];
+        for (const row of rows) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id);
+            merged.push(row);
+          }
+        }
+        return merged;
+      });
+
+      setPostsHasMore(rows.length === POSTS_PAGE_SIZE);
+    } catch (err: any) {
+      console.error('[ViewProfile] load more posts failed', err);
+      setPostsError(formatSupabaseErr(err));
+    } finally {
+      setPostsLoadingMore(false);
+    }
+  }, [postFilter, posts.length, postsHasMore, postsLoading, postsLoadingMore, postsRefreshing, profile?.id]);
+
+  const onTogglePostLike = useCallback(async (post: SocialFeedPost) => {
+    const nextLiked = !post.isLikedByMe;
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? {
+              ...p,
+              isLikedByMe: nextLiked,
+              likeCount: Math.max(0, p.likeCount + (nextLiked ? 1 : -1)),
+            }
+          : p
+      )
+    );
+
+    try {
+      await togglePostLike(post.id, post.isLikedByMe);
+    } catch (err) {
+      console.error('[ViewProfile] toggle like failed', err);
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id
+            ? {
+                ...p,
+                isLikedByMe: post.isLikedByMe,
+                likeCount: Math.max(0, post.likeCount),
+              }
+            : p
+        )
+      );
+    }
+  }, []);
+
+  const onTogglePostExpand = useCallback((postId: string) => {
+    setPostExpandedIds((prev) => ({ ...prev, [postId]: !prev[postId] }));
+  }, []);
+
+  const onOpenSession = useCallback(
+    (post: SocialFeedPost) => {
+      if (!post.sessionId) return;
+
+      if (post.activityType === 'strength') {
+        router.push({ pathname: '/add/Strength/[id]', params: { id: post.sessionId, postId: post.id } });
+        return;
+      }
+
+      if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+        router.push({
+          pathname: '/progress/run_walk/[sessionId]',
+          params: { sessionId: post.sessionId, postId: post.id },
+        });
+      }
+    },
+    [router]
+  );
 
   // Build header actions (Follow / Requested / Following) using your existing social/api helpers
   const primaryAction: ProfilePrimaryAction = useMemo(() => {
@@ -270,6 +434,12 @@ export default function ViewProfileScreen() {
 
   const renderDetailTabs = () => (
     <View style={styles.detailTabs}>
+      <TabButton
+        label="Posts"
+        icon="albums-outline"
+        active={detailTab === 'posts'}
+        onPress={() => setDetailTab('posts')}
+      />
       <TabButton
         label="Activity"
         icon="bar-chart-outline"
@@ -367,6 +537,79 @@ export default function ViewProfileScreen() {
     }
 
     // Public (or accepted private)
+    if (detailTab === 'posts') {
+      return (
+        <FlatList
+          style={styles.flex}
+          data={posts}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          onRefresh={onRefreshPosts}
+          refreshing={postsRefreshing}
+          onEndReachedThreshold={0.4}
+          onEndReached={onLoadMorePosts}
+          contentContainerStyle={styles.postsListContent}
+          ListHeaderComponent={
+            <View style={styles.postsHeader}>
+              {renderHeaderBlock()}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.postFiltersRow}
+              >
+                {POST_FILTERS.map((filter) => (
+                  <PostFilterChip
+                    key={filter.key}
+                    label={filter.label}
+                    icon={filter.icon}
+                    active={postFilter === filter.key}
+                    onPress={() => setPostFilter(filter.key)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <SocialPostCard
+              post={item}
+              distanceUnit={distanceUnit}
+              weightUnit={weightUnit}
+              expanded={!!postExpandedIds[item.id]}
+              onToggleExpand={() => onTogglePostExpand(item.id)}
+              onToggleLike={() => onTogglePostLike(item)}
+              onPressSession={onOpenSession}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
+          ListFooterComponent={
+            postsLoadingMore ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color={TEXT_MUTED} />
+              </View>
+            ) : (
+              <View style={{ height: 24 }} />
+            )
+          }
+          ListEmptyComponent={
+            <View style={styles.stateWrap}>
+              {postsLoading ? (
+                <>
+                  <ActivityIndicator size="small" color={ACCENT} />
+                  <Text style={styles.stateText}>Loading posts…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="albums-outline" size={24} color={TEXT_MUTED} />
+                  <Text style={styles.stateText}>No posts for this filter yet.</Text>
+                  {postsError ? <Text style={styles.errorText}>{postsError}</Text> : null}
+                </>
+              )}
+            </View>
+          }
+        />
+      );
+    }
+
     if (detailTab === 'stats') {
       return <ActivityGrid userId={profile.id} header={renderHeaderBlock()} />;
     }
@@ -448,6 +691,29 @@ function TabButton({
     <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
       <Ionicons name={icon} size={18} color={active ? TEXT_PRIMARY : TEXT_MUTED} />
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function PostFilterChip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.filterChip, active && styles.filterChipActive]}
+    >
+      {icon ? <Ionicons name={icon} size={14} color={active ? TEXT_PRIMARY : TEXT_MUTED} /> : null}
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -763,6 +1029,10 @@ const styles = StyleSheet.create({
 
   body: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  postsListContent: { paddingHorizontal: 16, paddingBottom: 26 },
+  postsHeader: { marginBottom: 12 },
+  postFiltersRow: { paddingTop: 10, gap: 10 },
+  footerLoading: { paddingVertical: 14, alignItems: 'center' },
 
   stateWrap: {
     flex: 1,
@@ -798,6 +1068,24 @@ const styles = StyleSheet.create({
   },
   tabLabel: { color: TEXT_MUTED, fontSize: 12, fontWeight: '600' },
   tabLabelActive: { color: TEXT_PRIMARY },
+
+  filterChip: {
+    height: 34,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  filterChipText: { color: TEXT_MUTED, fontSize: 12.5, fontWeight: '700' },
+  filterChipTextActive: { color: TEXT_PRIMARY },
 
   headerDivider: {
     height: 1,

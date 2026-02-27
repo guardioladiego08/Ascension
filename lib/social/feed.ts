@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { v4 as uuidv4 } from 'uuid';
 
 export type SocialActivityType = 'run' | 'walk' | 'ride' | 'strength' | 'nutrition' | 'other';
 export type PostVisibility = 'public' | 'followers' | 'private';
@@ -16,12 +17,16 @@ export type SocialFeedPost = {
   displayName: string;
   profileImageUrl: string | null;
   activityType: SocialActivityType;
+  sourceType: string | null;
+  sourceId: string | null;
+  sessionId: string | null;
   title: string | null;
   subtitle: string | null;
   caption: string | null;
   visibility: PostVisibility;
   createdAt: string;
   metrics: Record<string, number | string | null>;
+  mediaUrls: string[];
   likeCount: number;
   commentCount: number;
   isLikedByMe: boolean;
@@ -56,6 +61,17 @@ function normalizeMetrics(value: unknown): Record<string, number | string | null
   return out;
 }
 
+function normalizeMediaUrls(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => String(v ?? '').trim())
+      .filter((v) => v.length > 0);
+  }
+
+  const single = String(value ?? '').trim();
+  return single ? [single] : [];
+}
+
 function isMissingDbObject(error: any): boolean {
   if (!error) return false;
   const code = String(error?.code ?? '');
@@ -69,6 +85,212 @@ function isMissingDbObject(error: any): boolean {
     msg.includes('undefined column') ||
     msg.includes('schema must be one of the following')
   );
+}
+
+function isRpcUnavailableError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === 'PGRST204' ||
+    msg.includes('could not find the function') ||
+    msg.includes('schema cache')
+  );
+}
+
+function isAuthSessionError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '').toUpperCase();
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === 'PGRST301' ||
+    code === 'PGRST302' ||
+    msg.includes('jwt') ||
+    msg.includes('token') ||
+    msg.includes('not authenticated') ||
+    msg.includes('unauthorized')
+  );
+}
+
+function isOnConflictConstraintError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return code === '42P10' || msg.includes('no unique or exclusion constraint');
+}
+
+function asUuidOrNull(value: unknown): string | null {
+  const v = String(value ?? '').trim();
+  if (!v) return null;
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRe.test(v) ? v : null;
+}
+
+function stableUuidFromRef(value: string): string {
+  const ref = String(value ?? '').trim();
+  if (!ref) return uuidv4();
+
+  const bytes = new Uint8Array(16);
+  let seed = 0x811c9dc5;
+
+  for (let i = 0; i < 16; i++) {
+    const charCode = ref.charCodeAt(i % ref.length);
+    seed ^= charCode + i * 131;
+    seed = Math.imul(seed, 0x01000193);
+    bytes[i] = (seed >>> 24) & 0xff;
+  }
+
+  // RFC4122 variant/version bits
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const h = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
+async function getAuthedUserIdWithRefresh(): Promise<string> {
+  const first = await supabase.auth.getUser();
+  if (!first.error && first.data.user?.id) return first.data.user.id;
+
+  await supabase.auth.refreshSession();
+
+  const second = await supabase.auth.getUser();
+  if (second.error) throw second.error;
+  if (!second.data.user?.id) throw new Error('Not authenticated');
+  return second.data.user.id;
+}
+
+async function shareSessionViaRpc(args: {
+  sessionId: string;
+  activityType: SocialActivityType;
+  title: string;
+  subtitle: string;
+  caption?: string | null;
+  visibility: PostVisibility;
+  metrics: Record<string, unknown>;
+}): Promise<{ data: any; error: any }> {
+  const payload = {
+    p_session_id: args.sessionId,
+    p_activity_type: args.activityType,
+    p_title: args.title,
+    p_subtitle: args.subtitle,
+    p_caption: args.caption?.trim() ? args.caption.trim() : null,
+    p_visibility: args.visibility,
+    p_metrics: args.metrics,
+  };
+
+  let rpcRes = await supabase.rpc('share_run_walk_session_user', payload);
+  if (!rpcRes.error) return rpcRes;
+
+  if (isAuthSessionError(rpcRes.error)) {
+    await supabase.auth.refreshSession();
+    rpcRes = await supabase.rpc('share_run_walk_session_user', payload);
+  }
+
+  return rpcRes;
+}
+
+async function lookupExistingPostId(args: {
+  userId: string;
+  sourceType: string;
+  sourceId: string;
+}): Promise<string | null> {
+  const res = await supabase
+    .schema('social')
+    .from('posts')
+    .select('id')
+    .eq('user_id', args.userId)
+    .eq('source_type', args.sourceType)
+    .eq('source_id', args.sourceId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (res.error || !res.data) return null;
+  return String((res.data as any).id);
+}
+
+async function persistPostDirect(args: {
+  sourceType: string;
+  sourceId?: string | null;
+  sessionId?: string | null;
+  activityType: SocialActivityType;
+  title: string;
+  subtitle: string;
+  caption?: string | null;
+  visibility?: PostVisibility;
+  metrics?: Record<string, unknown>;
+}): Promise<string> {
+  const userId = await getAuthedUserIdWithRefresh();
+  const visibility = args.visibility ?? 'followers';
+
+  const row = {
+    user_id: userId,
+    source_type: args.sourceType,
+    source_id: args.sourceId ?? null,
+    session_id: args.sessionId ?? null,
+    activity_type: args.activityType,
+    title: args.title,
+    subtitle: args.subtitle,
+    caption: args.caption?.trim() ? args.caption.trim() : null,
+    visibility,
+    metrics: args.metrics ?? {},
+  };
+
+  if (row.source_id) {
+    const upsertRes = await supabase
+      .schema('social')
+      .from('posts')
+      .upsert(row, { onConflict: 'user_id,source_type,source_id' })
+      .select('id')
+      .single();
+
+    if (!upsertRes.error) return String((upsertRes.data as any).id);
+
+    if (isOnConflictConstraintError(upsertRes.error)) {
+      const insertRes = await supabase
+        .schema('social')
+        .from('posts')
+        .insert(row)
+        .select('id')
+        .single();
+
+      if (!insertRes.error) return String((insertRes.data as any).id);
+
+      if (String(insertRes.error?.code ?? '') === '23505') {
+        const existingId = await lookupExistingPostId({
+          userId,
+          sourceType: args.sourceType,
+          sourceId: row.source_id,
+        });
+        if (existingId) return existingId;
+      }
+
+      throw insertRes.error;
+    }
+
+    if (String(upsertRes.error?.code ?? '') === '23505') {
+      const existingId = await lookupExistingPostId({
+        userId,
+        sourceType: args.sourceType,
+        sourceId: row.source_id,
+      });
+      if (existingId) return existingId;
+    }
+
+    throw upsertRes.error;
+  }
+
+  const insertRes = await supabase
+    .schema('social')
+    .from('posts')
+    .insert(row)
+    .select('id')
+    .single();
+
+  if (insertRes.error) throw insertRes.error;
+  return String((insertRes.data as any).id);
 }
 
 function coerceActivityType(value: unknown): SocialActivityType {
@@ -90,6 +312,233 @@ function coerceVisibility(value: unknown): PostVisibility {
 
 function fallbackUsername(userId: string): string {
   return `user_${String(userId).slice(0, 8)}`;
+}
+
+function cleanIdentityText(value: unknown): string | null {
+  const text = String(value ?? '').trim();
+  return text.length > 0 ? text : null;
+}
+
+function cleanUsername(value: unknown): string | null {
+  const raw = cleanIdentityText(value);
+  if (!raw) return null;
+  return raw.replace(/^@+/, '').trim() || null;
+}
+
+function isGenericIdentityLabel(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return v === 'user' || v === 'null' || v === 'undefined' || v === 'unknown';
+}
+
+async function fetchProfileCardMap(ownerIds: string[]): Promise<
+  Map<string, { username: string | null; display_name: string | null; profile_image_url: string | null }>
+> {
+  const out = new Map<string, { username: string | null; display_name: string | null; profile_image_url: string | null }>();
+  if (ownerIds.length === 0) return out;
+
+  const uniqueIds = Array.from(new Set(ownerIds.map((v) => String(v ?? '').trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return out;
+
+  await Promise.all(
+    uniqueIds.map(async (ownerId) => {
+      let row: any = null;
+      for (const fn of ['get_profile_card_user', 'get_profile_card'] as const) {
+        const rpc = await supabase.rpc(fn, { p_id: ownerId });
+        if (rpc.error) continue;
+        row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+        if (row) break;
+      }
+      if (!row) return;
+
+      const key = String((row as any).user_id ?? (row as any).id ?? ownerId);
+      out.set(key, {
+        username: ((row as any).username ?? null) as string | null,
+        display_name: ((row as any).display_name ?? null) as string | null,
+        profile_image_url: ((row as any).profile_image_url ?? null) as string | null,
+      });
+    })
+  );
+
+  return out;
+}
+
+async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
+  if (postRows.length === 0) return [];
+
+  const ownerIds = Array.from(new Set(postRows.map((r) => String(r.user_id)).filter(Boolean)));
+  const postIds = postRows.map((r) => String(r.id));
+
+  const [profilesRes, usersRes, likesRes] = await Promise.all([
+    supabase
+      .schema('public')
+      .from('profiles')
+      .select('id, username, display_name, profile_image_url')
+      .in('id', ownerIds),
+    supabase
+      .schema('user')
+      .from('users')
+      .select('user_id, username, first_name, last_name, profile_image_url')
+      .in('user_id', ownerIds),
+    supabase.rpc('get_liked_post_ids_user', {
+      p_post_ids: postIds,
+    }),
+  ]);
+
+  const profileMap = new Map<
+    string,
+    { username: string | null; display_name: string | null; profile_image_url: string | null }
+  >();
+  const userMap = new Map<
+    string,
+    {
+      username: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      profile_image_url: string | null;
+    }
+  >();
+
+  if (!profilesRes.error) {
+    for (const row of (profilesRes.data ?? []) as any[]) {
+      profileMap.set(String(row.id), {
+        username: (row.username ?? null) as string | null,
+        display_name: (row.display_name ?? null) as string | null,
+        profile_image_url: (row.profile_image_url ?? null) as string | null,
+      });
+    }
+  }
+
+  if (!usersRes.error) {
+    for (const row of (usersRes.data ?? []) as any[]) {
+      userMap.set(String(row.user_id), {
+        username: (row.username ?? null) as string | null,
+        first_name: (row.first_name ?? null) as string | null,
+        last_name: (row.last_name ?? null) as string | null,
+        profile_image_url: (row.profile_image_url ?? null) as string | null,
+      });
+    }
+  }
+
+  const likedSet = new Set<string>();
+  if (!likesRes.error) {
+    for (const row of likesRes.data ?? []) {
+      likedSet.add(String((row as any).post_id));
+    }
+  }
+
+  const needsProfileCard = ownerIds.filter((ownerId) => {
+    const profile = profileMap.get(ownerId);
+    const user = userMap.get(ownerId);
+
+    const candidateUsername =
+      cleanUsername(user?.username) ??
+      cleanUsername(profile?.username) ??
+      null;
+    const hasGoodUsername = !!candidateUsername && !isGenericIdentityLabel(candidateUsername);
+
+    const hasHumanDisplay =
+      !!cleanIdentityText(user?.first_name) ||
+      !!cleanIdentityText(user?.last_name) ||
+      !!cleanIdentityText(profile?.display_name);
+
+    return !hasGoodUsername || !hasHumanDisplay;
+  });
+
+  const rpcProfileMap = await fetchProfileCardMap(needsProfileCard);
+
+  return postRows.map((row) => {
+    const ownerId = String(row.user_id);
+    const profile = profileMap.get(ownerId);
+    const user = userMap.get(ownerId);
+    const rpcProfile = rpcProfileMap.get(ownerId);
+
+    const firstLast = [cleanIdentityText(user?.first_name), cleanIdentityText(user?.last_name)]
+      .filter((s): s is string => Boolean(s))
+      .join(' ')
+      .trim();
+
+    // Prefer canonical username from user.users over public.profiles and avoid generic placeholders
+    // like "user" when a better value exists.
+    const candidateUsernames = [
+      cleanUsername(rpcProfile?.username),
+      cleanUsername(user?.username),
+      cleanUsername(profile?.username),
+    ].filter((v): v is string => Boolean(v));
+    const preferredUsername =
+      candidateUsernames.find((v) => !isGenericIdentityLabel(v)) ?? candidateUsernames[0] ?? null;
+    const username = preferredUsername ?? fallbackUsername(ownerId);
+
+    const profileDisplayName = cleanIdentityText(rpcProfile?.display_name) ?? cleanIdentityText(profile?.display_name);
+    const preferredDisplayName =
+      firstLast ||
+      (profileDisplayName && !isGenericIdentityLabel(profileDisplayName) ? profileDisplayName : null) ||
+      profileDisplayName ||
+      username;
+    const displayName = preferredDisplayName;
+    const profileImageUrl = profile?.profile_image_url ?? user?.profile_image_url ?? rpcProfile?.profile_image_url ?? null;
+
+    return {
+      id: String(row.id),
+      userId: ownerId,
+      username,
+      displayName,
+      profileImageUrl,
+      activityType: coerceActivityType(row.activity_type),
+      sourceType: row.source_type == null ? null : String(row.source_type),
+      sourceId: row.source_id == null ? null : String(row.source_id),
+      sessionId: row.session_id == null ? null : String(row.session_id),
+      title: row.title == null ? null : String(row.title),
+      subtitle: row.subtitle == null ? null : String(row.subtitle),
+      caption: row.caption == null ? null : String(row.caption),
+      visibility: coerceVisibility(row.visibility),
+      createdAt: String(row.created_at),
+      metrics: normalizeMetrics(row.metrics),
+      mediaUrls: normalizeMediaUrls(row.media_urls),
+      likeCount: asInt(row.like_count),
+      commentCount: asInt(row.comment_count),
+      isLikedByMe: likedSet.has(String(row.id)),
+    } satisfies SocialFeedPost;
+  });
+}
+
+async function mergePostSourceMetadata(postRows: any[]): Promise<any[]> {
+  if (postRows.length === 0) return [];
+  const hasInlineMetadata = postRows.every(
+    (row) =>
+      Object.prototype.hasOwnProperty.call(row, 'source_type') &&
+      Object.prototype.hasOwnProperty.call(row, 'source_id') &&
+      Object.prototype.hasOwnProperty.call(row, 'session_id') &&
+      Object.prototype.hasOwnProperty.call(row, 'media_urls')
+  );
+  if (hasInlineMetadata) return postRows;
+
+  const postIds = postRows.map((r) => String(r.id)).filter(Boolean);
+  if (postIds.length === 0) return postRows;
+
+  const metaRes = await supabase
+    .schema('social')
+    .from('posts')
+    .select('id, source_type, source_id, session_id, media_urls')
+    .in('id', postIds);
+
+  if (metaRes.error) return postRows;
+
+  const metaById = new Map<string, any>();
+  for (const row of (metaRes.data ?? []) as any[]) {
+    metaById.set(String(row.id), row);
+  }
+
+  return postRows.map((row) => {
+    const meta = metaById.get(String(row.id));
+    if (!meta) return row;
+    return {
+      ...row,
+      source_type: row.source_type ?? meta.source_type ?? null,
+      source_id: row.source_id ?? meta.source_id ?? null,
+      session_id: row.session_id ?? meta.session_id ?? null,
+      media_urls: row.media_urls ?? meta.media_urls ?? [],
+    };
+  });
 }
 
 export async function getSocialCounts(userId: string): Promise<SocialCounts> {
@@ -126,100 +575,61 @@ export async function getSocialFeedPage(args: {
   const postRows = (postsRes.data ?? []) as any[];
   if (postRows.length === 0) return [];
 
-  const ownerIds = Array.from(new Set(postRows.map((r) => String(r.user_id)).filter(Boolean)));
+  const withMeta = await mergePostSourceMetadata(postRows);
+  return hydrateFeedPosts(withMeta);
+}
 
-  const [profilesRes, usersRes] = await Promise.all([
-    supabase
-      .schema('public')
-      .from('profiles')
-      .select('id, username, display_name, profile_image_url')
-      .in('id', ownerIds),
-    supabase
-      .schema('user')
-      .from('users')
-      .select('user_id, username, first_name, last_name, profile_image_url')
-      .in('user_id', ownerIds),
-  ]);
+export async function getSocialFeedForUser(args: {
+  userId: string;
+  offset?: number;
+  limit?: number;
+  activityType?: SocialActivityType | null;
+}): Promise<SocialFeedPost[]> {
+  const userId = String(args.userId ?? '').trim();
+  if (!userId) return [];
 
-  const profileMap = new Map<
-    string,
-    { username: string | null; display_name: string | null; profile_image_url: string | null }
-  >();
-  const userMap = new Map<
-    string,
-    { username: string | null; first_name: string | null; last_name: string | null; profile_image_url: string | null }
-  >();
+  const offset = Math.max(0, Math.trunc(args.offset ?? 0));
+  const limit = Math.max(1, Math.min(50, Math.trunc(args.limit ?? 20)));
 
-  if (!profilesRes.error) {
-    for (const row of (profilesRes.data ?? []) as any[]) {
-      profileMap.set(String(row.id), {
-        username: (row.username ?? null) as string | null,
-        display_name: (row.display_name ?? null) as string | null,
-        profile_image_url: (row.profile_image_url ?? null) as string | null,
-      });
-    }
+  let query = supabase
+    .schema('social')
+    .from('posts')
+    .select(
+      'id, user_id, activity_type, source_type, source_id, session_id, title, subtitle, caption, metrics, media_urls, visibility, created_at, like_count, comment_count'
+    )
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (args.activityType) {
+    query = query.eq('activity_type', args.activityType);
   }
 
-  if (!usersRes.error) {
-    for (const row of (usersRes.data ?? []) as any[]) {
-      userMap.set(String(row.user_id), {
-        username: (row.username ?? null) as string | null,
-        first_name: (row.first_name ?? null) as string | null,
-        last_name: (row.last_name ?? null) as string | null,
-        profile_image_url: (row.profile_image_url ?? null) as string | null,
-      });
-    }
+  const postsRes = await query;
+  if (!postsRes.error) {
+    const postRows = (postsRes.data ?? []) as any[];
+    return hydrateFeedPosts(postRows);
   }
 
-  const postIds = postRows.map((r) => String(r.id));
+  if (!isMissingDbObject(postsRes.error)) {
+    throw postsRes.error;
+  }
 
-  const likesRes = await supabase.rpc('get_liked_post_ids_user', {
-    p_post_ids: postIds,
+  // Fallback when `social` schema is not exposed: derive from feed RPC and filter by user.
+  const fetchLimit = Math.max(50, Math.min(500, (offset + limit) * 3));
+  const rpcRes = await supabase.rpc('get_feed_user', {
+    p_limit: fetchLimit,
+    p_offset: 0,
+    p_activity_type: args.activityType ?? null,
   });
+  if (rpcRes.error) return [];
 
-  const likedSet = new Set<string>();
-  if (!likesRes.error) {
-    for (const row of likesRes.data ?? []) {
-      likedSet.add(String((row as any).post_id));
-    }
-  }
+  const filtered = ((rpcRes.data ?? []) as any[])
+    .filter((row) => String(row.user_id) === userId)
+    .slice(offset, offset + limit);
 
-  return postRows.map((row) => {
-    const ownerId = String(row.user_id);
-    const profile = profileMap.get(ownerId);
-    const user = userMap.get(ownerId);
-
-    const firstLast = [user?.first_name ?? '', user?.last_name ?? '']
-      .filter((s) => s && String(s).trim().length > 0)
-      .join(' ')
-      .trim();
-
-    const username =
-      profile?.username?.trim() || user?.username?.trim() || fallbackUsername(ownerId);
-
-    const displayName =
-      profile?.display_name?.trim() || firstLast || username;
-
-    const profileImageUrl = profile?.profile_image_url ?? user?.profile_image_url ?? null;
-
-    return {
-      id: String(row.id),
-      userId: ownerId,
-      username,
-      displayName,
-      profileImageUrl,
-      activityType: coerceActivityType(row.activity_type),
-      title: row.title == null ? null : String(row.title),
-      subtitle: row.subtitle == null ? null : String(row.subtitle),
-      caption: row.caption == null ? null : String(row.caption),
-      visibility: coerceVisibility(row.visibility),
-      createdAt: String(row.created_at),
-      metrics: normalizeMetrics(row.metrics),
-      likeCount: asInt(row.like_count),
-      commentCount: asInt(row.comment_count),
-      isLikedByMe: likedSet.has(String(row.id)),
-    } satisfies SocialFeedPost;
-  });
+  const withMeta = await mergePostSourceMetadata(filtered);
+  return hydrateFeedPosts(withMeta);
 }
 
 export async function togglePostLike(postId: string, currentlyLiked: boolean): Promise<void> {
@@ -268,6 +678,8 @@ export async function shareRunWalkSessionToFeed(args: {
 }): Promise<string> {
   const activityType = mapRunWalkExerciseTypeToActivityType(args.exerciseType);
   const visibility = args.visibility ?? 'followers';
+  const sessionUuid = asUuidOrNull(args.sessionId);
+  const rpcSessionId = sessionUuid ?? stableUuidFromRef(String(args.sessionId ?? ''));
 
   const metrics = {
     distance_m: Number.isFinite(args.totalDistanceM) ? args.totalDistanceM : 0,
@@ -280,18 +692,63 @@ export async function shareRunWalkSessionToFeed(args: {
       args.avgPaceSPerKm != null && Number.isFinite(args.avgPaceSPerKm)
         ? args.avgPaceSPerKm
         : null,
+    source_session_ref: sessionUuid ? null : String(args.sessionId ?? '').trim() || null,
   };
 
-  const { data, error } = await supabase.rpc('share_run_walk_session_user', {
-    p_session_id: args.sessionId,
-    p_activity_type: activityType,
-    p_title: buildRunWalkTitle(activityType),
-    p_subtitle: 'Run/Walk Session',
-    p_caption: args.caption?.trim() ? args.caption.trim() : null,
-    p_visibility: visibility,
-    p_metrics: metrics,
+  // Preferred path: RPC (works even when social schema is not directly exposed).
+  const rpcRes = await shareSessionViaRpc({
+    sessionId: rpcSessionId,
+    activityType,
+    title: buildRunWalkTitle(activityType),
+    subtitle: 'Run/Walk Session',
+    caption: args.caption ?? null,
+    visibility,
+    metrics,
   });
 
-  if (error) throw error;
-  return String(data);
+  if (!rpcRes.error) return String(rpcRes.data);
+
+  if (!isRpcUnavailableError(rpcRes.error) && !isMissingDbObject(rpcRes.error)) {
+    console.warn('[social] share_run_walk_session_user failed', rpcRes.error);
+  }
+  throw rpcRes.error;
+}
+
+export async function shareStrengthWorkoutToFeed(args: {
+  workoutId: string;
+  totalVolumeKg: number;
+  totalSets: number;
+  exerciseCount: number;
+  durationS?: number | null;
+  caption?: string | null;
+  visibility?: PostVisibility;
+}): Promise<string> {
+  const visibility = args.visibility ?? 'followers';
+  const workoutUuid = asUuidOrNull(args.workoutId);
+  const fallbackRpcId = workoutUuid ?? stableUuidFromRef(String(args.workoutId ?? ''));
+
+  const metrics = {
+    total_volume_kg: Number.isFinite(args.totalVolumeKg) ? Number(args.totalVolumeKg) : 0,
+    total_sets: Number.isFinite(args.totalSets) ? Math.max(0, Math.trunc(args.totalSets)) : 0,
+    exercise_count: Number.isFinite(args.exerciseCount) ? Math.max(0, Math.trunc(args.exerciseCount)) : 0,
+    total_time_s:
+      args.durationS != null && Number.isFinite(args.durationS)
+        ? Math.max(0, Math.trunc(args.durationS))
+        : null,
+    source_workout_ref: workoutUuid ? null : String(args.workoutId ?? '').trim() || null,
+  };
+
+  // Use the existing share RPC so we never depend on direct `social` schema access.
+  const rpcRes = await shareSessionViaRpc({
+    sessionId: fallbackRpcId,
+    activityType: 'strength',
+    title: 'Strength Training Session',
+    subtitle: 'Strength Session',
+    caption: args.caption ?? null,
+    visibility,
+    metrics,
+  });
+
+  if (!rpcRes.error) return String(rpcRes.data);
+  throw rpcRes.error;
 }

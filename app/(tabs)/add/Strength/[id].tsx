@@ -8,12 +8,14 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { shareStrengthWorkoutToFeed } from '@/lib/social/feed';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
@@ -63,6 +65,16 @@ function formatSetWeight(
   return `${weight}${setUnit}`;
 }
 
+function formatShareErr(err: any): string {
+  if (!err) return 'Unknown share error';
+  const code = String(err?.code ?? '').trim();
+  if (code === '42P10') {
+    return 'Backend share function is outdated (42P10). Apply migration 20260227_fix_share_run_walk_session_user_no_on_conflict.sql.';
+  }
+  const message = String(err?.message ?? 'Share request failed').trim();
+  return code ? `${message} (${code})` : message;
+}
+
 type ExerciseSummaryRow = {
   exercise_id: string;
   exercise_name?: string | null;
@@ -73,12 +85,15 @@ type ExerciseSummaryRow = {
 };
 
 export default function StrengthSummaryPage() {
-  const { id } = useLocalSearchParams<{ id?: string }>(); // workout ID
+  const { id, postId } = useLocalSearchParams<{ id?: string; postId?: string }>(); // workout ID
 
   const [loading, setLoading] = React.useState(true);
   const [workout, setWorkout] = React.useState<any>(null);
   const [exercises, setExercises] = React.useState<ExerciseSummaryRow[]>([]);
   const [setsByExercise, setSetsByExercise] = React.useState<Record<string, any[]>>({});
+  const [canDelete, setCanDelete] = React.useState(true);
+  const [shareToFeed, setShareToFeed] = React.useState(false);
+  const [sharing, setSharing] = React.useState(false);
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
 
@@ -89,86 +104,125 @@ export default function StrengthSummaryPage() {
       try {
         setLoading(true);
 
-        // 1. Load main workout row from strength schema
-        const { data: w, error: wError } = await supabase
-          .schema('strength')
-          .from('strength_workouts')
-          .select('*')
-          .eq('id', id)
-          .single();
+        const meRes = await supabase.auth.getUser();
+        const meId = meRes.data.user?.id ?? null;
 
-        if (wError) {
-          console.error('Error loading workout', wError);
-          Alert.alert('Error', 'Could not load workout.');
-          setLoading(false);
-          return;
-        }
+        const enrichSummariesWithExerciseNames = async (summaries: ExerciseSummaryRow[]) => {
+          if (summaries.length === 0) return summaries;
 
-        // 2. Load exercise summaries (no join yet)
-        const { data: summaryRows, error: sError } = await supabase
-          .schema('strength')
-          .from('exercise_summary')
-          .select(
-            'exercise_id, vol, strongest_set, best_est_1rm, avg_set'
-          )
-          .eq('strength_workout_id', id);
-
-        if (sError) {
-          console.error('Error loading exercise_summary', sError);
-        }
-
-        const summaries = (summaryRows ?? []) as ExerciseSummaryRow[];
-
-        // 3. Load exercise names from public.exercises for all exercise_ids
-        let enrichedSummaries = summaries;
-        if (summaries.length > 0) {
-          const uniqueIds = Array.from(
-            new Set(summaries.map((row) => row.exercise_id))
-          );
-
+          const uniqueIds = Array.from(new Set(summaries.map((row) => row.exercise_id)));
           const { data: exRows, error: exError } = await supabase
-            .from('exercises') // public.exercises
+            .from('exercises')
             .select('id, exercise_name')
             .in('id', uniqueIds);
 
           if (exError) {
             console.error('Error loading exercises', exError);
+            return summaries;
           }
 
           const nameById: Record<string, string | null> = {};
           exRows?.forEach((er: any) => {
-            nameById[er.id] = er.exercise_name;
+            nameById[String(er.id)] = er.exercise_name ?? null;
           });
 
-          enrichedSummaries = summaries.map((row) => ({
+          return summaries.map((row) => ({
             ...row,
-            exercise_name: nameById[row.exercise_id] ?? null,
+            exercise_name: nameById[row.exercise_id] ?? row.exercise_name ?? null,
           }));
-        }
+        };
 
-        // 4. Load ALL sets for this workout from strength schema
-        const { data: sets, error: setsError } = await supabase
+        // 1) Try direct table reads first (owner path)
+        const directWorkout = await supabase
           .schema('strength')
-          .from('strength_sets')
+          .from('strength_workouts')
           .select('*')
-          .eq('strength_workout_id', id)
-          .order('exercise_id', { ascending: true })
-          .order('set_index', { ascending: true });
+          .eq('id', id)
+          .maybeSingle();
 
-        if (setsError) {
-          console.error('Error loading strength_sets', setsError);
+        if (!directWorkout.error && directWorkout.data) {
+          const [summaryRes, setsRes] = await Promise.all([
+            supabase
+              .schema('strength')
+              .from('exercise_summary')
+              .select('exercise_id, vol, strongest_set, best_est_1rm, avg_set')
+              .eq('strength_workout_id', id),
+            supabase
+              .schema('strength')
+              .from('strength_sets')
+              .select('*')
+              .eq('strength_workout_id', id)
+              .order('exercise_id', { ascending: true })
+              .order('set_index', { ascending: true }),
+          ]);
+
+          const summaries = ((summaryRes.data ?? []) as ExerciseSummaryRow[]).map((row) => ({
+            ...row,
+            exercise_id: String(row.exercise_id),
+          }));
+          const enrichedSummaries = await enrichSummariesWithExerciseNames(summaries);
+
+          const grouped: Record<string, any[]> = {};
+          (setsRes.data ?? []).forEach((st: any) => {
+            const exerciseId = String(st.exercise_id ?? '');
+            if (!exerciseId) return;
+            if (!grouped[exerciseId]) grouped[exerciseId] = [];
+            grouped[exerciseId].push(st);
+          });
+
+          setWorkout(directWorkout.data);
+          setExercises(enrichedSummaries);
+          setSetsByExercise(grouped);
+          setCanDelete(!!meId && String((directWorkout.data as any).user_id ?? '') === meId);
+          return;
         }
 
-        // Group sets by exercise
+        // 2) Fallback for accepted followers: security-definer RPC with social visibility check
+        let rpc = await supabase.rpc('get_strength_workout_summary_user', {
+          p_workout_id: id,
+          p_post_id: postId ?? null,
+        });
+        if (
+          rpc.error &&
+          (String(rpc.error?.code ?? '') === 'PGRST202' || String(rpc.error?.message ?? '').includes('get_strength_workout_summary_user'))
+        ) {
+          // Backward compatibility with older backend signature (single argument).
+          rpc = await supabase.rpc('get_strength_workout_summary_user', {
+            p_workout_id: id,
+          });
+        }
+        if (rpc.error) {
+          throw rpc.error;
+        }
+
+        const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+        if (!row) throw new Error('Workout not found');
+
+        const workoutRow = (row as any).workout ?? null;
+        const summaryRows = (Array.isArray((row as any).exercise_summary) ? (row as any).exercise_summary : []).map(
+          (s: any) => ({
+            exercise_id: String(s?.exercise_id ?? ''),
+            exercise_name: s?.exercise_name ?? null,
+            vol: s?.vol == null ? null : Number(s.vol),
+            strongest_set: s?.strongest_set == null ? null : Number(s.strongest_set),
+            best_est_1rm: s?.best_est_1rm == null ? null : Number(s.best_est_1rm),
+            avg_set: s?.avg_set == null ? null : Number(s.avg_set),
+          })
+        ) as ExerciseSummaryRow[];
+        const enrichedSummaries = await enrichSummariesWithExerciseNames(summaryRows);
+
         const grouped: Record<string, any[]> = {};
-        (sets ?? []).forEach((st: any) => {
-          if (!grouped[st.exercise_id]) grouped[st.exercise_id] = [];
-          grouped[st.exercise_id].push(st);
+        (Array.isArray((row as any).sets) ? (row as any).sets : []).forEach((st: any) => {
+          const exerciseId = String(st?.exercise_id ?? '');
+          if (!exerciseId) return;
+          if (!grouped[exerciseId]) grouped[exerciseId] = [];
+          grouped[exerciseId].push(st);
         });
 
-        setWorkout(w);
+        setWorkout(workoutRow);
         setExercises(enrichedSummaries);
         setSetsByExercise(grouped);
+        setCanDelete(Boolean((row as any).can_delete));
       } catch (err) {
         console.error('Error loading strength summary', err);
         Alert.alert('Error', 'Could not load strength workout summary.');
@@ -176,10 +230,11 @@ export default function StrengthSummaryPage() {
         setLoading(false);
       }
     })();
-  }, [id]);
+  }, [id, postId]);
 
   // ---------- DELETE WORKOUT & RELATED DATA ----------
   const handleDeleteWorkout = () => {
+    if (!canDelete) return;
     if (!id) return;
 
     Alert.alert(
@@ -255,11 +310,13 @@ export default function StrengthSummaryPage() {
   const end = workout?.ended_at ? new Date(workout.ended_at) : null;
 
   let durationStr = '';
+  let durationSeconds = 0;
   if (start && end) {
     const ms = end.getTime() - start.getTime();
     const mins = Math.floor(ms / 60000);
     const secs = Math.floor((ms % 60000) / 1000);
     durationStr = `${mins}m ${secs}s`;
+    durationSeconds = Math.max(0, Math.round(ms / 1000));
   }
 
   const dateStr = end
@@ -269,6 +326,47 @@ export default function StrengthSummaryPage() {
         year: 'numeric',
       })
     : '';
+
+  const totalSets = Object.values(setsByExercise).reduce((sum, rows) => sum + rows.length, 0);
+
+  const handleReturnHome = async () => {
+    if (sharing) return;
+    if (!canDelete) {
+      router.back();
+      return;
+    }
+    if (!id) {
+      router.replace('/');
+      return;
+    }
+
+    if (!shareToFeed) {
+      router.replace('/');
+      return;
+    }
+
+    try {
+      setSharing(true);
+      await shareStrengthWorkoutToFeed({
+        workoutId: id,
+        totalVolumeKg: Number(workout?.total_vol ?? 0),
+        totalSets,
+        exerciseCount: exercises.length,
+        durationS: durationSeconds,
+        visibility: 'followers',
+      });
+      Alert.alert('Shared', 'Workout saved and posted to your social feed.');
+      router.replace('/');
+    } catch (err) {
+      console.error('[StrengthSummary] share failed', err);
+      Alert.alert(
+        'Share failed',
+        `Workout was saved, but posting to feed failed.\n\n${formatShareErr(err)}\n\nTap "Share + Return Home" to retry.`
+      );
+    } finally {
+      setSharing(false);
+    }
+  };
 
   return (
     <LinearGradient
@@ -352,19 +450,45 @@ export default function StrengthSummaryPage() {
             </View>
           ))}
 
+          {canDelete ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.shareCard}
+              onPress={() => setShareToFeed((v) => !v)}
+              disabled={sharing}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.shareTitle}>Share to social feed</Text>
+                <Text style={styles.shareSubtitle}>
+                  {shareToFeed ? 'Followers will see this workout.' : 'Keep this workout private.'}
+                </Text>
+              </View>
+              <Ionicons
+                name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
+                size={24}
+                color={shareToFeed ? Colors.dark.highlight1 : Colors.dark.text}
+              />
+            </TouchableOpacity>
+          ) : null}
+
           {/* DELETE + HOME BUTTONS */}
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={handleDeleteWorkout}
-          >
-            <Text style={styles.deleteBtnText}>Delete Workout</Text>
-          </TouchableOpacity>
+          {canDelete ? (
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={handleDeleteWorkout}
+            >
+              <Text style={styles.deleteBtnText}>Delete Workout</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
-            style={styles.homeBtn}
-            onPress={() => router.replace('/')}
+            style={[styles.homeBtn, sharing ? { opacity: 0.7 } : null]}
+            onPress={handleReturnHome}
+            disabled={sharing}
           >
-            <Text style={styles.homeBtnText}>Return Home</Text>
+            <Text style={styles.homeBtnText}>
+              {sharing ? 'Posting…' : !canDelete ? 'Back' : shareToFeed ? 'Share + Return Home' : 'Return Home'}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -405,6 +529,30 @@ const styles = StyleSheet.create({
     color: Colors.dark.highlight1,
     fontSize: 16,
     marginBottom: 20,
+  },
+
+  shareCard: {
+    borderRadius: 14,
+    backgroundColor: Colors.dark.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareTitle: {
+    color: '#fff',
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  shareSubtitle: {
+    marginTop: 4,
+    color: '#9aa4bf',
+    fontSize: 12,
+    lineHeight: 16,
   },
 
   card: {

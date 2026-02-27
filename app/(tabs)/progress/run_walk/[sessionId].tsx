@@ -58,6 +58,7 @@ function formatElevation(meters: number, unit: 'mi' | 'km') {
 
 type SessionRow = {
   id: string;
+  user_id?: string;
   exercise_type: string;
   total_time_s: number;
   total_distance_m: number;
@@ -75,9 +76,53 @@ type SampleRow = {
   incline_deg: number | null;
 };
 
+function formatLoadSessionErr(err: any): string {
+  if (!err) return 'Could not load session.';
+
+  const code = String(err?.code ?? '').trim();
+  const message = String(err?.message ?? '').trim();
+  const details = String(err?.details ?? '').trim();
+  const raw = `${message} ${details}`.toLowerCase();
+
+  if (
+    code === 'PGRST202' ||
+    code === 'PGRST204' ||
+    raw.includes('get_run_walk_session_summary_user')
+  ) {
+    return 'Backend summary RPC is missing. Apply migration 20260227_shared_workout_summary_rpcs.sql.';
+  }
+
+  if (code === '42804' || raw.includes('structure of query does not match function result type')) {
+    return 'Backend summary RPC is outdated (42804). Apply migration 20260228_fix_run_walk_summary_rpc_return_types.sql (or compatibility file 20260227_fix_run_walk_summary_rpc_return_types.sql).';
+  }
+
+  if (raw.includes('session not found')) {
+    return 'This session could not be found.';
+  }
+
+  if (raw.includes('not allowed') || code === '42501') {
+    return 'You do not have permission to view this session.';
+  }
+
+  if (!message) return 'Could not load session.';
+  return code ? `${message} (${code})` : message;
+}
+
+function parseSampleRows(value: unknown): SampleRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((row: any) => ({
+    elapsed_s: Number(row?.elapsed_s ?? 0),
+    pace_s_per_mi: row?.pace_s_per_mi == null ? null : Number(row.pace_s_per_mi),
+    pace_s_per_km: row?.pace_s_per_km == null ? null : Number(row.pace_s_per_km),
+    speed_mps: row?.speed_mps == null ? null : Number(row.speed_mps),
+    elevation_m: row?.elevation_m == null ? null : Number(row.elevation_m),
+    incline_deg: row?.incline_deg == null ? null : Number(row.incline_deg),
+  }));
+}
+
 export default function RunWalkSessionSummary() {
   const router = useRouter();
-  const { sessionId } = useLocalSearchParams<{ sessionId?: string }>();
+  const { sessionId, postId } = useLocalSearchParams<{ sessionId?: string; postId?: string }>();
   const { distanceUnit } = useUnits();
 
   const [loading, setLoading] = useState(true);
@@ -85,6 +130,7 @@ export default function RunWalkSessionSummary() {
   const [session, setSession] = useState<SessionRow | null>(null);
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -93,31 +139,75 @@ export default function RunWalkSessionSummary() {
       try {
         if (!sessionId) throw new Error('Missing session id');
 
-        const { data: sesh, error: seshErr } = await supabase
+        const meRes = await supabase.auth.getUser();
+        const meId = meRes.data.user?.id ?? null;
+
+        const directSession = await supabase
           .schema('run_walk')
           .from('sessions')
           .select(
-            'id, exercise_type, total_time_s, total_distance_m, total_elevation_m, avg_pace_s_per_mi, avg_pace_s_per_km'
+            'id, user_id, exercise_type, total_time_s, total_distance_m, total_elevation_m, avg_pace_s_per_mi, avg_pace_s_per_km'
           )
           .eq('id', sessionId)
-          .single();
+          .maybeSingle();
 
-        if (seshErr) throw seshErr;
+        if (!directSession.error && directSession.data) {
+          const directSamples = await supabase
+            .schema('run_walk')
+            .from('samples')
+            .select('elapsed_s, pace_s_per_mi, pace_s_per_km, speed_mps, elevation_m, incline_deg')
+            .eq('session_id', sessionId)
+            .order('elapsed_s');
 
-        const { data: samp, error: sampErr } = await supabase
-          .schema('run_walk')
-          .from('samples')
-          .select('elapsed_s, pace_s_per_mi, pace_s_per_km, speed_mps, elevation_m, incline_deg')
-          .eq('session_id', sessionId)
-          .order('elapsed_s');
+          if (!directSamples.error) {
+            if (!mounted) return;
+            setSession(directSession.data as SessionRow);
+            setSamples((directSamples.data ?? []) as SampleRow[]);
+            setCanDelete(!!meId && String((directSession.data as any).user_id ?? '') === meId);
+            return;
+          }
+        }
 
-        if (sampErr) throw sampErr;
+        // Fallback for accepted followers (or any RLS-restricted reads):
+        // use security-definer RPC with social visibility checks.
+        let rpc = await supabase.rpc('get_run_walk_session_summary_user', {
+          p_session_id: sessionId,
+          p_post_id: postId ?? null,
+        });
+        if (
+          rpc.error &&
+          (String(rpc.error?.code ?? '') === 'PGRST202' || String(rpc.error?.message ?? '').includes('get_run_walk_session_summary_user'))
+        ) {
+          // Backward compatibility with older backend signature (single argument).
+          rpc = await supabase.rpc('get_run_walk_session_summary_user', {
+            p_session_id: sessionId,
+          });
+        }
+        if (rpc.error) {
+          throw rpc.error;
+        }
+
+        const row = Array.isArray(rpc.data) ? rpc.data[0] : rpc.data;
+        if (!row) throw new Error('Session not found');
 
         if (!mounted) return;
-        setSession(sesh);
-        setSamples(samp ?? []);
+        setSession({
+          id: String((row as any).session_id),
+          user_id: String((row as any).owner_id),
+          exercise_type: String((row as any).exercise_type ?? ''),
+          total_time_s: Number((row as any).total_time_s ?? 0),
+          total_distance_m: Number((row as any).total_distance_m ?? 0),
+          total_elevation_m: Number((row as any).total_elevation_m ?? 0),
+          avg_pace_s_per_mi:
+            (row as any).avg_pace_s_per_mi == null ? null : Number((row as any).avg_pace_s_per_mi),
+          avg_pace_s_per_km:
+            (row as any).avg_pace_s_per_km == null ? null : Number((row as any).avg_pace_s_per_km),
+        });
+        setSamples(parseSampleRows((row as any).samples));
+        setCanDelete(Boolean((row as any).can_delete));
       } catch (e) {
-        Alert.alert('Error', 'Could not load session.');
+        console.warn('[RunWalkSessionSummary] load failed', e);
+        Alert.alert('Error', formatLoadSessionErr(e));
         router.back();
       } finally {
         if (mounted) setLoading(false);
@@ -127,7 +217,7 @@ export default function RunWalkSessionSummary() {
     return () => {
       mounted = false;
     };
-  }, [sessionId, router]);
+  }, [sessionId, postId, router]);
 
   const title = useMemo(() => {
     if (!session) return '';
@@ -169,37 +259,6 @@ export default function RunWalkSessionSummary() {
     [samples, distanceUnit]
   );
 
-  const onDelete = () => {
-    Alert.alert(
-      'Delete session?',
-      'This will permanently delete this session and update your stats.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setDeleting(true);
-              const { error } = await supabase
-                .schema('run_walk')
-                .from('sessions')
-                .delete()
-                .eq('id', sessionId);
-
-              if (error) throw error;
-              router.back();
-            } catch {
-              Alert.alert('Error', 'Could not delete session.');
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   if (loading || !session) {
     return (
       <View style={[styles.safe, styles.centered]}>
@@ -227,13 +286,15 @@ export default function RunWalkSessionSummary() {
             <Text style={styles.headerTitle}>{title}</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.trashBtn, deleting && { opacity: 0.6 }]}
-            onPress={() => setShowDeleteModal(true)}
-            disabled={deleting}
-          >
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
-          </TouchableOpacity>
+          {canDelete ? (
+            <TouchableOpacity
+              style={[styles.trashBtn, deleting && { opacity: 0.6 }]}
+              onPress={() => setShowDeleteModal(true)}
+              disabled={deleting}
+            >
+              <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            </TouchableOpacity>
+          ) : null}
 
         </View>
 
@@ -283,31 +344,33 @@ export default function RunWalkSessionSummary() {
           <View style={{ height: 24 }} />
         </ScrollView>
       </View>
-      <DeleteConfirmModal
-        visible={showDeleteModal}
-        onCancel={() => setShowDeleteModal(false)}
-        onDelete={async () => {
-          try {
-            setDeleting(true);
-            setShowDeleteModal(false);
+      {canDelete ? (
+        <DeleteConfirmModal
+          visible={showDeleteModal}
+          onCancel={() => setShowDeleteModal(false)}
+          onDelete={async () => {
+            try {
+              setDeleting(true);
+              setShowDeleteModal(false);
 
-            const { error } = await supabase
-              .schema('run_walk')
-              .from('sessions')
-              .delete()
-              .eq('id', sessionId);
+              const { error } = await supabase
+                .schema('run_walk')
+                .from('sessions')
+                .delete()
+                .eq('id', sessionId);
 
-            if (error) {
-              Alert.alert('Error', 'Could not delete session.');
-              return;
+              if (error) {
+                Alert.alert('Error', 'Could not delete session.');
+                return;
+              }
+
+              router.back();
+            } finally {
+              setDeleting(false);
             }
-
-            router.back();
-          } finally {
-            setDeleting(false);
-          }
-        }}
-      />
+          }}
+        />
+      ) : null}
     </LinearGradient>
   );
 }

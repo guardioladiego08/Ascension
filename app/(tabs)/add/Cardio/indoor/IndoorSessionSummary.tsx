@@ -66,6 +66,16 @@ function paceForUnit(
   return km ?? (mi != null ? mi / 1.609344 : null);
 }
 
+function formatShareErr(err: any): string {
+  if (!err) return 'Unknown share error';
+  const code = String(err?.code ?? '').trim();
+  if (code === '42P10') {
+    return 'Backend share function is outdated (42P10). Apply migration 20260227_fix_share_run_walk_session_user_no_on_conflict.sql.';
+  }
+  const message = String(err?.message ?? 'Share request failed').trim();
+  return code ? `${message} (${code})` : message;
+}
+
 export default function IndoorSessionSummary() {
   const router = useRouter();
   const { distanceUnit } = useUnits();
@@ -315,6 +325,7 @@ export default function IndoorSessionSummary() {
 
       // 3) delete local draft
       let shared = false;
+      let shareErrorMsg: string | null = null;
       if (shareToFeed) {
         try {
           await shareRunWalkSessionToFeed({
@@ -327,7 +338,8 @@ export default function IndoorSessionSummary() {
             visibility: 'followers',
           });
           shared = true;
-        } catch (shareErr) {
+        } catch (shareErr: any) {
+          shareErrorMsg = formatShareErr(shareErr);
           console.warn('[IndoorSessionSummary] share failed', shareErr);
         }
       }
@@ -338,7 +350,10 @@ export default function IndoorSessionSummary() {
       if (shareToFeed && shared) {
         Alert.alert('Saved', 'Your session has been saved and shared to your feed.');
       } else if (shareToFeed && !shared) {
-        Alert.alert('Saved', 'Your session was saved, but sharing to feed failed.');
+        Alert.alert(
+          'Saved',
+          `Your session was saved, but sharing to feed failed.${shareErrorMsg ? `\n\n${shareErrorMsg}` : ''}`
+        );
       } else {
         Alert.alert('Saved', 'Your session has been saved.');
       }
