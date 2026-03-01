@@ -13,55 +13,17 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
+import {
+  computeRings,
+  type DailyGoalResults,
+  type Rings,
+} from '@/lib/goals/goalLogic';
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
 const BORDER = Colors.dark?.border ?? '#1F2937';
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted;
-
-type RingStatus = {
-  active: boolean; // at least one metric enabled for that ring
-  met: boolean; // all enabled metrics met
-};
-
-type GoalFlags = {
-  strength: RingStatus;
-  cardio: RingStatus;
-  nutrition: RingStatus;
-};
-
-type DailyGoalResultsRow = {
-  date?: string; // daily_goal_results.date
-
-  // Strength
-  strength_use_time?: boolean | null;
-  strength_use_volume?: boolean | null;
-  met_strength_time?: boolean | null;
-  met_strength_volume?: boolean | null;
-
-  // Cardio
-  cardio_use_time?: boolean | null;
-  cardio_use_distance?: boolean | null;
-  met_cardio_time?: boolean | null;
-  met_cardio_distance?: boolean | null;
-
-  // Nutrition
-  protein_enabled?: boolean | null;
-  carbs_enabled?: boolean | null;
-  fats_enabled?: boolean | null;
-  calorie_goal_mode?: string | null;
-  met_protein?: boolean | null;
-  met_carbs?: boolean | null;
-  met_fats?: boolean | null;
-  met_calories?: boolean | null;
-
-  // Backwards compatibility (if you keep a view/table emitting these)
-  goal_date?: string;
-  strength_met?: boolean | null;
-  cardio_met?: boolean | null;
-  nutrition_met?: boolean | null;
-};
 
 const GOAL_COLORS = {
   strength: '#F97373',
@@ -75,78 +37,9 @@ type Props = {
   initialMonth?: Dayjs;
 };
 
-const asBool = (v: unknown) => v === true;
-
-function deriveRingStatus(opts: { enabled: boolean[]; met: boolean[] }): RingStatus {
-  const active = opts.enabled.some(Boolean);
-  if (!active) return { active: false, met: false };
-
-  // all enabled must be met
-  for (let i = 0; i < opts.enabled.length; i++) {
-    if (opts.enabled[i] && !opts.met[i]) return { active: true, met: false };
-  }
-  return { active: true, met: true };
-}
-
-function deriveFlags(row: DailyGoalResultsRow): { key: string; flags: GoalFlags } | null {
-  const key = row.date ?? row.goal_date;
-  if (!key) return null;
-
-  // If you have aggregated booleans already, prefer them.
-  const hasAggregate =
-    typeof row.strength_met === 'boolean' ||
-    typeof row.cardio_met === 'boolean' ||
-    typeof row.nutrition_met === 'boolean';
-
-  if (hasAggregate) {
-    return {
-      key,
-      flags: {
-        strength: { active: true, met: asBool(row.strength_met) },
-        cardio: { active: true, met: asBool(row.cardio_met) },
-        nutrition: { active: true, met: asBool(row.nutrition_met) },
-      },
-    };
-  }
-
-  // Strength ring
-  const strengthEnabled = [asBool(row.strength_use_time), asBool(row.strength_use_volume)];
-  const strengthMet = [asBool(row.met_strength_time), asBool(row.met_strength_volume)];
-
-  // Cardio ring
-  const cardioEnabled = [asBool(row.cardio_use_time), asBool(row.cardio_use_distance)];
-  const cardioMet = [asBool(row.met_cardio_time), asBool(row.met_cardio_distance)];
-
-  // Nutrition ring
-  const calorieEnabled =
-    row.calorie_goal_mode != null && String(row.calorie_goal_mode).toLowerCase() !== 'disabled';
-
-  const nutritionEnabled = [
-    asBool(row.protein_enabled),
-    asBool(row.carbs_enabled),
-    asBool(row.fats_enabled),
-    calorieEnabled,
-  ];
-  const nutritionMet = [
-    asBool(row.met_protein),
-    asBool(row.met_carbs),
-    asBool(row.met_fats),
-    asBool(row.met_calories),
-  ];
-
-  return {
-    key,
-    flags: {
-      strength: deriveRingStatus({ enabled: strengthEnabled, met: strengthMet }),
-      cardio: deriveRingStatus({ enabled: cardioEnabled, met: cardioMet }),
-      nutrition: deriveRingStatus({ enabled: nutritionEnabled, met: nutritionMet }),
-    },
-  };
-}
-
 const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
   const [currentMonth, setCurrentMonth] = useState<Dayjs>(initialMonth ?? dayjs());
-  const [goalData, setGoalData] = useState<Record<string, GoalFlags>>({});
+  const [goalData, setGoalData] = useState<Record<string, Rings>>({});
   const [loading, setLoading] = useState(false);
 
   const fetchMonthGoals = useCallback(async () => {
@@ -172,11 +65,10 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
 
       if (error) throw error;
 
-      const map: Record<string, GoalFlags> = {};
-      (data as DailyGoalResultsRow[] | null)?.forEach((row) => {
-        const derived = deriveFlags(row);
-        if (!derived) return;
-        map[derived.key] = derived.flags;
+      const map: Record<string, Rings> = {};
+      (data as DailyGoalResults[] | null)?.forEach((row) => {
+        if (!row?.date) return;
+        map[row.date] = computeRings(row);
       });
 
       setGoalData(map);
@@ -259,7 +151,7 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
 
               return (
                 <View key={`day-${wi}-${di}`} style={styles.calendarCell}>
-                  <GoalRings flags={flags} />
+                  <GoalRings rings={flags} />
                   <Text style={styles.calendarDayText}>{day}</Text>
                 </View>
               );
@@ -281,20 +173,20 @@ export default GoalCalendar;
 
 // ---- Subcomponents ----
 
-const GoalRings = ({ flags }: { flags?: GoalFlags }) => {
-  const strength = flags?.strength ?? { active: false, met: false };
-  const cardio = flags?.cardio ?? { active: false, met: false };
-  const nutrition = flags?.nutrition ?? { active: false, met: false };
+const GoalRings = ({ rings }: { rings?: Rings }) => {
+  const strength = rings?.strength ?? { active: false, closed: false };
+  const cardio = rings?.cardio ?? { active: false, closed: false };
+  const nutrition = rings?.nutrition ?? { active: false, closed: false };
 
   return (
     <View style={styles.ringsWrap}>
       <Svg width={26} height={26} viewBox="0 0 32 32">
         {/* Outer: Strength */}
-        <Ring r={13} strokeWidth={3} active={strength.active} met={strength.met} color={GOAL_COLORS.strength} />
+        <Ring r={13} strokeWidth={3} active={strength.active} closed={strength.closed} color={GOAL_COLORS.strength} />
         {/* Middle: Cardio */}
-        <Ring r={9} strokeWidth={3} active={cardio.active} met={cardio.met} color={GOAL_COLORS.cardio} />
+        <Ring r={9} strokeWidth={3} active={cardio.active} closed={cardio.closed} color={GOAL_COLORS.cardio} />
         {/* Inner: Nutrition */}
-        <Ring r={5} strokeWidth={3} active={nutrition.active} met={nutrition.met} color={GOAL_COLORS.nutrition} />
+        <Ring r={5} strokeWidth={3} active={nutrition.active} closed={nutrition.closed} color={GOAL_COLORS.nutrition} />
       </Svg>
     </View>
   );
@@ -304,13 +196,13 @@ const Ring = ({
   r,
   strokeWidth,
   active,
-  met,
+  closed,
   color,
 }: {
   r: number;
   strokeWidth: number;
   active: boolean;
-  met: boolean;
+  closed: boolean;
   color: string;
 }) => {
   const baseOpacity = active ? 0.85 : 0.35;
@@ -318,7 +210,7 @@ const Ring = ({
   return (
     <>
       <Circle cx={16} cy={16} r={r} fill="none" stroke={BORDER} strokeWidth={strokeWidth} opacity={baseOpacity} />
-      {met ? <Circle cx={16} cy={16} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} /> : null}
+      {closed ? <Circle cx={16} cy={16} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} /> : null}
     </>
   );
 };

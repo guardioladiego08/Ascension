@@ -44,6 +44,16 @@ export async function updateOutdoorSession(sessionId: string, patch: Record<stri
   if (error) throw error;
 }
 
+export async function deleteOutdoorSession(sessionId: string) {
+  const { error } = await supabase
+    .schema(SCHEMA)
+    .from('outdoor_sessions')
+    .delete()
+    .eq('id', sessionId);
+
+  if (error) throw error;
+}
+
 export async function insertOutdoorSamples(samples: OutdoorSampleInsert[]) {
   if (samples.length === 0) return;
 

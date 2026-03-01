@@ -13,112 +13,180 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
+import { useUnits } from '@/contexts/UnitsContext';
+import {
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
 
 const BG = Colors.dark?.background ?? '#050816';
 const CARD = Colors.dark?.card ?? '#13182B';
 const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.textPrimary ?? '#EAF2FF';
+const TEXT_PRIMARY = Colors.dark?.text ?? '#EAF2FF';
 const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.primary ?? '#6366F1';
+const ACCENT = Colors.dark?.highlight1 ?? '#6366F1';
 
 type CalorieGoalMode = 'disabled' | 'lose' | 'maintain' | 'gain';
+type GoalConditionMode = 'and' | 'or';
+
+const KG_TO_LB = 2.20462262185;
+const KM_TO_MI = 0.62137119223733;
+
+function convertWeight(value: number, from: 'kg' | 'lb', to: 'kg' | 'lb') {
+  if (from === to) return value;
+  return from === 'kg' ? value * KG_TO_LB : value / KG_TO_LB;
+}
+
+function convertDistance(value: number, from: 'km' | 'mi', to: 'km' | 'mi') {
+  if (from === to) return value;
+  return from === 'km' ? value * KM_TO_MI : value / KM_TO_MI;
+}
 
 export default function GoalSettingsScreen() {
   const router = useRouter();
+  const { weightUnit, distanceUnit } = useUnits();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // ---- Strength ----
   const [strengthUseTime, setStrengthUseTime] = useState(false);
   const [strengthTimeMin, setStrengthTimeMin] = useState('');
   const [strengthUseVolume, setStrengthUseVolume] = useState(false);
   const [strengthVolumeMin, setStrengthVolumeMin] = useState('');
+  const [strengthConditionMode, setStrengthConditionMode] =
+    useState<GoalConditionMode>('and');
 
-  // ---- Cardio ----
   const [cardioUseTime, setCardioUseTime] = useState(false);
   const [cardioTimeMin, setCardioTimeMin] = useState('');
   const [cardioUseDistance, setCardioUseDistance] = useState(false);
   const [cardioDistance, setCardioDistance] = useState('');
+  const [cardioConditionMode, setCardioConditionMode] =
+    useState<GoalConditionMode>('and');
 
-  // ---- Nutrition: macros ----
   const [proteinEnabled, setProteinEnabled] = useState(false);
   const [proteinTarget, setProteinTarget] = useState('');
   const [carbsEnabled, setCarbsEnabled] = useState(false);
   const [carbsTarget, setCarbsTarget] = useState('');
   const [fatsEnabled, setFatsEnabled] = useState(false);
   const [fatsTarget, setFatsTarget] = useState('');
+  const [nutritionConditionMode, setNutritionConditionMode] =
+    useState<GoalConditionMode>('and');
 
-  // ---- Nutrition: calories ----
   const [calorieMode, setCalorieMode] = useState<CalorieGoalMode>('disabled');
   const [calorieTarget, setCalorieTarget] = useState('');
 
   useEffect(() => {
+    let mounted = true;
+
     const loadLatestGoals = async () => {
       try {
+        setLoading(true);
+
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+        if (!user) return;
+
         const { data, error } = await supabase
-          .schema('user')  // <- new schema
+          .schema('user')
           .from('user_goal_snapshots')
           .select('*')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (error) {
           console.error('Error loading goals', error);
-        } else if (data && data.length > 0) {
-          const g = data[0];
-
-          // Strength
-          setStrengthUseTime(g.strength_use_time ?? false);
-          setStrengthTimeMin(
-            g.strength_time_min != null ? String(g.strength_time_min) : ''
-          );
-          setStrengthUseVolume(g.strength_use_volume ?? false);
-          setStrengthVolumeMin(
-            g.strength_volume_min != null ? String(g.strength_volume_min) : ''
-          );
-
-          // Cardio
-          setCardioUseTime(g.cardio_use_time ?? false);
-          setCardioTimeMin(
-            g.cardio_time_min != null ? String(g.cardio_time_min) : ''
-          );
-          setCardioUseDistance(g.cardio_use_distance ?? false);
-          setCardioDistance(
-            g.cardio_distance != null ? String(g.cardio_distance) : ''
-          );
-
-          // Nutrition macros
-          setProteinEnabled(g.protein_enabled ?? false);
-          setProteinTarget(
-            g.protein_target_g != null ? String(g.protein_target_g) : ''
-          );
-          setCarbsEnabled(g.carbs_enabled ?? false);
-          setCarbsTarget(
-            g.carbs_target_g != null ? String(g.carbs_target_g) : ''
-          );
-          setFatsEnabled(g.fats_enabled ?? false);
-          setFatsTarget(
-            g.fats_target_g != null ? String(g.fats_target_g) : ''
-          );
-
-          // Calories
-          setCalorieMode(
-            (g.calorie_goal_mode ?? 'disabled') as CalorieGoalMode
-          );
-          setCalorieTarget(
-            g.calorie_target_kcal != null ? String(g.calorie_target_kcal) : ''
-          );
+          return;
         }
+
+        if (!mounted || !data?.length) return;
+
+        const g = data[0] as any;
+        const storedStrengthUnit = g.strength_volume_unit === 'lb' ? 'lb' : 'kg';
+        const storedDistanceUnit = g.cardio_distance_unit === 'mi' ? 'mi' : 'km';
+
+        setStrengthConditionMode(
+          g.strength_condition_mode === 'or' ? 'or' : 'and'
+        );
+        setStrengthUseTime(g.strength_use_time ?? false);
+        setStrengthTimeMin(
+          g.strength_time_min != null ? String(g.strength_time_min) : ''
+        );
+        setStrengthUseVolume(g.strength_use_volume ?? false);
+        setStrengthVolumeMin(
+          g.strength_volume_min != null
+            ? String(
+                Math.round(
+                  convertWeight(
+                    Number(g.strength_volume_min),
+                    storedStrengthUnit,
+                    weightUnit
+                  )
+                )
+              )
+            : ''
+        );
+
+        setCardioConditionMode(
+          g.cardio_condition_mode === 'or' ? 'or' : 'and'
+        );
+        setCardioUseTime(g.cardio_use_time ?? false);
+        setCardioTimeMin(
+          g.cardio_time_min != null ? String(g.cardio_time_min) : ''
+        );
+        setCardioUseDistance(g.cardio_use_distance ?? false);
+        setCardioDistance(
+          g.cardio_distance != null
+            ? String(
+                Number(
+                  convertDistance(
+                    Number(g.cardio_distance),
+                    storedDistanceUnit,
+                    distanceUnit
+                  ).toFixed(2)
+                )
+              )
+            : ''
+        );
+
+        setNutritionConditionMode(
+          g.nutrition_condition_mode === 'or' ? 'or' : 'and'
+        );
+        setProteinEnabled(g.protein_enabled ?? false);
+        setProteinTarget(
+          g.protein_target_g != null ? String(g.protein_target_g) : ''
+        );
+        setCarbsEnabled(g.carbs_enabled ?? false);
+        setCarbsTarget(
+          g.carbs_target_g != null ? String(g.carbs_target_g) : ''
+        );
+        setFatsEnabled(g.fats_enabled ?? false);
+        setFatsTarget(
+          g.fats_target_g != null ? String(g.fats_target_g) : ''
+        );
+
+        setCalorieMode((g.calorie_goal_mode ?? 'disabled') as CalorieGoalMode);
+        setCalorieTarget(
+          g.calorie_target_kcal != null ? String(g.calorie_target_kcal) : ''
+        );
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     loadLatestGoals();
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [distanceUnit, weightUnit]);
 
   const intOrNull = (value: string) => {
     const n = parseInt(value.trim(), 10);
@@ -140,27 +208,26 @@ export default function GoalSettingsScreen() {
 
       if (userError || !user) {
         Alert.alert('Error', 'You must be logged in to save goals.');
-        setSaving(false);
         return;
       }
 
-      const payload: any = {
+      const payload = {
         user_id: user.id,
-        // strength
+        strength_condition_mode: strengthConditionMode,
         strength_use_time: strengthUseTime,
         strength_time_min: strengthUseTime ? intOrNull(strengthTimeMin) : null,
         strength_use_volume: strengthUseVolume,
-        strength_volume_min: strengthUseVolume
-          ? intOrNull(strengthVolumeMin)
-          : null,
+        strength_volume_min: strengthUseVolume ? intOrNull(strengthVolumeMin) : null,
+        strength_volume_unit: weightUnit,
 
-        // cardio
+        cardio_condition_mode: cardioConditionMode,
         cardio_use_time: cardioUseTime,
         cardio_time_min: cardioUseTime ? intOrNull(cardioTimeMin) : null,
         cardio_use_distance: cardioUseDistance,
         cardio_distance: cardioUseDistance ? floatOrNull(cardioDistance) : null,
+        cardio_distance_unit: distanceUnit,
 
-        // nutrition macros
+        nutrition_condition_mode: nutritionConditionMode,
         protein_enabled: proteinEnabled,
         protein_target_g: proteinEnabled ? intOrNull(proteinTarget) : null,
         carbs_enabled: carbsEnabled,
@@ -168,15 +235,13 @@ export default function GoalSettingsScreen() {
         fats_enabled: fatsEnabled,
         fats_target_g: fatsEnabled ? intOrNull(fatsTarget) : null,
 
-        // calories
         calorie_goal_mode: calorieMode,
         calorie_target_kcal:
           calorieMode === 'disabled' ? null : intOrNull(calorieTarget),
       };
 
-      // 1) Insert snapshot
       const { error } = await supabase
-        .schema('user')  // <- new schema
+        .schema('user')
         .from('user_goal_snapshots')
         .insert([payload]);
 
@@ -185,9 +250,14 @@ export default function GoalSettingsScreen() {
         Alert.alert('Error', error.message);
         return;
       }
+
+      try {
+        await syncAndFetchMyDailyGoalResult(toLocalISODate(new Date()));
+      } catch (goalRefreshError) {
+        console.warn('[GoalSettings] goal refresh failed', goalRefreshError);
+      }
+
       Alert.alert('Goals saved', 'Your goals have been updated.');
-
-
       router.back();
     } finally {
       setSaving(false);
@@ -196,7 +266,6 @@ export default function GoalSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -218,17 +287,21 @@ export default function GoalSettingsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* STRENGTH */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Strength goals</Text>
             <View style={styles.card}>
               <Text style={styles.helperText}>
-                Any option you toggle on becomes part of your daily strength
-                goal. All enabled options must be met.
+                Choose whether all enabled checks are required or whether one
+                completed check is enough for your strength goal.
               </Text>
 
               <View style={styles.divider} />
+              <ConditionModeRow
+                value={strengthConditionMode}
+                onChange={setStrengthConditionMode}
+              />
 
+              <View style={styles.divider} />
               <View style={styles.row}>
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Time threshold</Text>
@@ -236,10 +309,7 @@ export default function GoalSettingsScreen() {
                 </View>
                 <View style={styles.rowControlCol}>
                   <TextInput
-                    style={[
-                      styles.input,
-                      !strengthUseTime && styles.inputDisabled,
-                    ]}
+                    style={[styles.input, !strengthUseTime && styles.inputDisabled]}
                     editable={strengthUseTime}
                     keyboardType="numeric"
                     value={strengthTimeMin}
@@ -255,12 +325,11 @@ export default function GoalSettingsScreen() {
               </View>
 
               <View style={styles.divider} />
-
               <View style={styles.row}>
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Volume threshold</Text>
                   <Text style={styles.rowSubLabel}>
-                    Total volume (lbs / kg)
+                    Total volume ({weightUnit})
                   </Text>
                 </View>
                 <View style={styles.rowControlCol}>
@@ -285,22 +354,26 @@ export default function GoalSettingsScreen() {
             </View>
           </View>
 
-          {/* CARDIO */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Cardio goals</Text>
             <View style={styles.card}>
               <Text style={styles.helperText}>
-                Any option you toggle on becomes part of your daily cardio goal.
-                All enabled options must be met.
+                Choose whether one cardio check is enough or whether all enabled
+                cardio checks must be completed.
               </Text>
 
               <View style={styles.divider} />
+              <ConditionModeRow
+                value={cardioConditionMode}
+                onChange={setCardioConditionMode}
+              />
 
+              <View style={styles.divider} />
               <View style={styles.row}>
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Distance threshold</Text>
                   <Text style={styles.rowSubLabel}>
-                    Daily distance (mi / km)
+                    Daily distance ({distanceUnit})
                   </Text>
                 </View>
                 <View style={styles.rowControlCol}>
@@ -324,7 +397,6 @@ export default function GoalSettingsScreen() {
               </View>
 
               <View style={styles.divider} />
-
               <View style={styles.row}>
                 <View style={styles.rowLabelCol}>
                   <Text style={styles.rowLabel}>Time threshold</Text>
@@ -332,10 +404,7 @@ export default function GoalSettingsScreen() {
                 </View>
                 <View style={styles.rowControlCol}>
                   <TextInput
-                    style={[
-                      styles.input,
-                      !cardioUseTime && styles.inputDisabled,
-                    ]}
+                    style={[styles.input, !cardioUseTime && styles.inputDisabled]}
                     editable={cardioUseTime}
                     keyboardType="numeric"
                     value={cardioTimeMin}
@@ -352,17 +421,21 @@ export default function GoalSettingsScreen() {
             </View>
           </View>
 
-          {/* NUTRITION – MACROS */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Nutrition – macros</Text>
             <View style={styles.card}>
               <Text style={styles.helperText}>
-                Enable any macro you want to track as a daily goal. Each enabled
-                macro is checked individually.
+                Pick whether nutrition completes when any enabled target is met
+                or only when every enabled target is met.
               </Text>
 
               <View style={styles.divider} />
+              <ConditionModeRow
+                value={nutritionConditionMode}
+                onChange={setNutritionConditionMode}
+              />
 
+              <View style={styles.divider} />
               <MacroRow
                 label="Protein"
                 unit="g"
@@ -395,7 +468,6 @@ export default function GoalSettingsScreen() {
             </View>
           </View>
 
-          {/* NUTRITION – CALORIES */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Nutrition – calories</Text>
             <View style={styles.card}>
@@ -449,7 +521,6 @@ export default function GoalSettingsScreen() {
             </View>
           </View>
 
-          {/* Save button */}
           <TouchableOpacity
             style={[styles.saveButton, saving && { opacity: 0.7 }]}
             onPress={handleSave}
@@ -467,7 +538,31 @@ export default function GoalSettingsScreen() {
   );
 }
 
-// ---- Small components ----
+function ConditionModeRow({
+  value,
+  onChange,
+}: {
+  value: GoalConditionMode;
+  onChange: (next: GoalConditionMode) => void;
+}) {
+  return (
+    <View>
+      <Text style={styles.subSectionLabel}>Completion rule</Text>
+      <View style={styles.chipRow}>
+        <GoalChip
+          label="All enabled"
+          active={value === 'and'}
+          onPress={() => onChange('and')}
+        />
+        <GoalChip
+          label="Any enabled"
+          active={value === 'or'}
+          onPress={() => onChange('or')}
+        />
+      </View>
+    </View>
+  );
+}
 
 function GoalChip({
   label,
@@ -529,8 +624,6 @@ function MacroRow({
     </View>
   );
 }
-
-// ---- Styles ----
 
 const styles = StyleSheet.create({
   safeArea: {

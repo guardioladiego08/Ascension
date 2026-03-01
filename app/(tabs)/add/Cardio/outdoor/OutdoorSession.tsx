@@ -66,9 +66,11 @@ export default function OutdoorSession() {
   const [pageIndex, setPageIndex] = useState(0);
   const pagerRef = useRef<ScrollView | null>(null);
 
-  const timerRef = useRef<NodeJS.Timer | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
   const lastPointRef = useRef<{ lat: number; lng: number } | null>(null);
+  const phaseRef = useRef<Phase>('idle');
+  const sessionStartedAtRef = useRef<string | null>(null);
 
   const hasProgress = elapsedSeconds > 0 || distanceMeters > 0;
 
@@ -76,6 +78,10 @@ export default function OutdoorSession() {
     if (phase === 'idle') return null;
     return paceSecPerKm(distanceMeters, elapsedSeconds);
   }, [distanceMeters, elapsedSeconds, phase]);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     return () => {
@@ -113,7 +119,7 @@ export default function OutdoorSession() {
         distanceInterval: 2,
       },
       (loc) => {
-        if (phase !== 'running') return;
+        if (phaseRef.current !== 'running') return;
 
         const { latitude, longitude, accuracy } = loc.coords;
         if (accuracy && accuracy > 35) return;
@@ -145,6 +151,7 @@ export default function OutdoorSession() {
     setElapsedSeconds(0);
     setDistanceMeters(0);
     lastPointRef.current = null;
+    sessionStartedAtRef.current = null;
 
     coordsRef.current = [];
     setCoords([]);
@@ -157,6 +164,7 @@ export default function OutdoorSession() {
 
   async function onStart() {
     resetSession();
+    sessionStartedAtRef.current = new Date().toISOString();
     setPhase('running');
     startTimer();
     await startLocation();
@@ -178,6 +186,11 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
 
+    const endedAtISO = new Date().toISOString();
+    const startedAtISO =
+      sessionStartedAtRef.current ??
+      new Date(Date.now() - Math.max(0, elapsedSeconds) * 1000).toISOString();
+
     router.push({
       pathname: './SessionSummary',
       params: {
@@ -185,6 +198,8 @@ export default function OutdoorSession() {
         activityType: params.activityType ?? 'other',
         elapsedSeconds: String(elapsedSeconds),
         distanceMeters: String(distanceMeters),
+        startedAtISO,
+        endedAtISO,
       },
     });
 

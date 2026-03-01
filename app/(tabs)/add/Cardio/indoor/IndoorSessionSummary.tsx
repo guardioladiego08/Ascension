@@ -16,6 +16,16 @@ import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
+import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
+import {
+  getDeviceTimezone,
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
+import {
+  isGoalCategoryClosed,
+  type DailyGoalResults,
+} from '@/lib/goals/goalLogic';
 
 import {
   getDraft,
@@ -86,6 +96,9 @@ export default function IndoorSessionSummary() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
+  const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
+  const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
+  const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
 
   // ✅ Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -244,6 +257,7 @@ export default function IndoorSessionSummary() {
         avg_speed_mps: draft.avg_speed_mps,
         avg_pace_s_per_km: draft.avg_pace_s_per_km,
         avg_pace_s_per_mi: draft.avg_pace_s_per_mi,
+        timezone_str: getDeviceTimezone(),
       };
 
       const fallbackExerciseType =
@@ -347,17 +361,29 @@ export default function IndoorSessionSummary() {
       // 4) delete local draft
       await deleteDraft(draftId);
 
+      let nextGoalResult: DailyGoalResults | null = null;
+      try {
+        nextGoalResult = await syncAndFetchMyDailyGoalResult(
+          toLocalISODate(new Date(draft.ended_at))
+        );
+      } catch (goalError) {
+        console.warn('[IndoorSessionSummary] goal refresh failed', goalError);
+      }
+
+      setSavedSessionId(sessionId);
+      setGoalResult(nextGoalResult);
+
       if (shareToFeed && shared) {
-        Alert.alert('Saved', 'Your session has been saved and shared to your feed.');
+        setSaveStatusText('Session saved and shared to your feed.');
       } else if (shareToFeed && !shared) {
+        setSaveStatusText('Session saved. Sharing to your feed failed.');
         Alert.alert(
-          'Saved',
-          `Your session was saved, but sharing to feed failed.${shareErrorMsg ? `\n\n${shareErrorMsg}` : ''}`
+          'Share failed',
+          `Session saved, but sharing to your feed failed.${shareErrorMsg ? `\n\n${shareErrorMsg}` : ''}`
         );
       } else {
-        Alert.alert('Saved', 'Your session has been saved.');
+        setSaveStatusText('Session saved.');
       }
-      router.back();
     } catch (e) {
       console.log('[IndoorSessionSummary] save unexpected error', e);
       Alert.alert('Error', 'Could not save session.');
@@ -419,6 +445,21 @@ export default function IndoorSessionSummary() {
           />
           <Row label="Avg Pace" value={avgPaceText} />
         </View>
+
+        {savedSessionId && saveStatusText ? (
+          <View style={styles.noticeCard}>
+            <Text style={styles.noticeText}>{saveStatusText}</Text>
+          </View>
+        ) : null}
+
+        {savedSessionId && goalResult && isGoalCategoryClosed(goalResult, 'cardio') ? (
+          <View style={styles.goalCardWrap}>
+            <GoalAchievementCard
+              title="Cardio goal complete"
+              description="This session completed your cardio goal for today."
+            />
+          </View>
+        ) : null}
 
         <View style={styles.chartsWrap}>
           <MetricChart
@@ -487,50 +528,63 @@ export default function IndoorSessionSummary() {
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.shareCard}
-            onPress={() => setShareToFeed((v) => !v)}
-            disabled={saving || deleting}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.shareTitle}>Share to social feed</Text>
-              <Text style={styles.shareSubtitle}>
-                {shareToFeed ? 'Followers will be able to see this session.' : 'Keep this session private.'}
-              </Text>
-            </View>
-            <Ionicons
-              name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
-              size={24}
-              color={shareToFeed ? Colors.dark.highlight1 : TEXT}
-            />
-          </TouchableOpacity>
+          {savedSessionId ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.saveBtn}
+              onPress={() => router.back()}
+            >
+              <Ionicons name="checkmark" size={18} color="#0E151F" />
+              <Text style={styles.saveText}>Done</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={styles.shareCard}
+                onPress={() => setShareToFeed((v) => !v)}
+                disabled={saving || deleting}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shareTitle}>Share to social feed</Text>
+                  <Text style={styles.shareSubtitle}>
+                    {shareToFeed ? 'Followers will be able to see this session.' : 'Keep this session private.'}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={shareToFeed ? Colors.dark.highlight1 : TEXT}
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-            onPress={onSave}
-            disabled={saving || deleting}
-          >
-            {saving ? (
-              <ActivityIndicator />
-            ) : (
-              <>
-                <Ionicons name="save-outline" size={18} color="#0E151F" />
-                <Text style={styles.saveText}>Save</Text>
-              </>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+                onPress={onSave}
+                disabled={saving || deleting}
+              >
+                {saving ? (
+                  <ActivityIndicator />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#0E151F" />
+                    <Text style={styles.saveText}>Save</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[styles.deleteBtn, (saving || deleting) && { opacity: 0.6 }]}
-            onPress={() => setShowDeleteModal(true)}
-            disabled={saving || deleting}
-          >
-            <Ionicons name="trash-outline" size={18} color="#e04b4b" />
-            <Text style={styles.deleteText}>Delete</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.deleteBtn, (saving || deleting) && { opacity: 0.6 }]}
+                onPress={() => setShowDeleteModal(true)}
+                disabled={saving || deleting}
+              >
+                <Ionicons name="trash-outline" size={18} color="#e04b4b" />
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         <View style={{ height: 18 }} />
@@ -637,6 +691,25 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingHorizontal: 16,
     gap: 12,
+  },
+  noticeCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: CARD,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  noticeText: {
+    color: '#D7E0F4',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  goalCardWrap: {
+    marginTop: 12,
+    paddingHorizontal: 16,
   },
 
   actions: {

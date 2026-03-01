@@ -1,23 +1,24 @@
-// lib/goals/goalLogic.ts
-
 export type CalorieGoalMode = string | null | undefined;
+export type GoalConditionMode = 'and' | 'or' | string | null | undefined;
+export type GoalCategoryKey = 'strength' | 'cardio' | 'nutrition';
 
 export type DailyGoalResults = {
   date: string;
 
-  // Strength enable + met
+  strength_condition_mode?: GoalConditionMode;
+  cardio_condition_mode?: GoalConditionMode;
+  nutrition_condition_mode?: GoalConditionMode;
+
   strength_use_time: boolean;
   strength_use_volume: boolean;
   met_strength_time: boolean | null;
   met_strength_volume: boolean | null;
 
-  // Cardio enable + met
   cardio_use_time: boolean;
   cardio_use_distance: boolean;
   met_cardio_time: boolean | null;
   met_cardio_distance: boolean | null;
 
-  // Nutrition enable + met
   protein_enabled: boolean;
   carbs_enabled: boolean;
   fats_enabled: boolean;
@@ -28,14 +29,17 @@ export type DailyGoalResults = {
   met_fats: boolean | null;
   met_calories: boolean | null;
 
-  // Stored overall
-  active_metrics_count: number;
-  met_all: boolean;
+  strength_met?: boolean | null;
+  cardio_met?: boolean | null;
+  nutrition_met?: boolean | null;
+
+  active_metrics_count?: number;
+  met_all?: boolean;
 };
 
 export type RingStatus = {
-  active: boolean; // at least one metric enabled in this ring
-  closed: boolean; // all enabled metrics met
+  active: boolean;
+  closed: boolean;
 };
 
 export type Rings = {
@@ -45,43 +49,77 @@ export type Rings = {
   allClosed: boolean;
 };
 
-// ---- helpers ----
-const asTrue = (v: boolean | null | undefined) => v === true;
+const asTrue = (value: boolean | null | undefined) => value === true;
 
 export const caloriesEnabled = (mode: CalorieGoalMode) =>
   mode != null && String(mode).toLowerCase() !== 'disabled';
 
-function ringStatus(enabled: boolean[], met: boolean[]): RingStatus {
+export const normalizeGoalConditionMode = (
+  mode: GoalConditionMode
+): 'and' | 'or' => (String(mode ?? '').toLowerCase() === 'or' ? 'or' : 'and');
+
+function ringStatus(
+  enabled: boolean[],
+  met: boolean[],
+  mode: GoalConditionMode
+): RingStatus {
   const active = enabled.some(Boolean);
   if (!active) return { active: false, closed: false };
 
-  // Any enabled metric that is not met => ring not closed
+  const conditionMode = normalizeGoalConditionMode(mode);
+  if (conditionMode === 'or') {
+    return {
+      active: true,
+      closed: enabled.some((isEnabled, index) => isEnabled && met[index]),
+    };
+  }
+
   for (let i = 0; i < enabled.length; i++) {
     if (enabled[i] && !met[i]) return { active: true, closed: false };
   }
+
   return { active: true, closed: true };
 }
 
-/**
- * Derive ring closure from a daily_goal_results row.
- * Rules:
- * - Ring is ACTIVE if any metric in that category is enabled
- * - Ring is CLOSED if all enabled metrics are met
- * - If a metric is enabled but met_* is NULL -> treat as not met
- */
+function categoryRing(
+  categoryMet: boolean | null | undefined,
+  enabled: boolean[],
+  met: boolean[],
+  mode: GoalConditionMode
+): RingStatus {
+  const computed = ringStatus(enabled, met, mode);
+  if (typeof categoryMet !== 'boolean') return computed;
+
+  return {
+    active: computed.active || categoryMet,
+    closed: categoryMet,
+  };
+}
+
 export function computeRings(row: DailyGoalResults): Rings {
-  const strengthEnabled = [asTrue(row.strength_use_time), asTrue(row.strength_use_volume)];
-  const strengthMet = [asTrue(row.met_strength_time), asTrue(row.met_strength_volume)];
+  const strengthEnabled = [
+    asTrue(row.strength_use_time),
+    asTrue(row.strength_use_volume),
+  ];
+  const strengthMet = [
+    asTrue(row.met_strength_time),
+    asTrue(row.met_strength_volume),
+  ];
 
-  const cardioEnabled = [asTrue(row.cardio_use_time), asTrue(row.cardio_use_distance)];
-  const cardioMet = [asTrue(row.met_cardio_time), asTrue(row.met_cardio_distance)];
+  const cardioEnabled = [
+    asTrue(row.cardio_use_time),
+    asTrue(row.cardio_use_distance),
+  ];
+  const cardioMet = [
+    asTrue(row.met_cardio_time),
+    asTrue(row.met_cardio_distance),
+  ];
 
-  const calEnabled = caloriesEnabled(row.calorie_goal_mode);
   const nutritionEnabled = [
     asTrue(row.protein_enabled),
     asTrue(row.carbs_enabled),
     asTrue(row.fats_enabled),
-    calEnabled,
+    caloriesEnabled(row.calorie_goal_mode),
   ];
   const nutritionMet = [
     asTrue(row.met_protein),
@@ -90,11 +128,25 @@ export function computeRings(row: DailyGoalResults): Rings {
     asTrue(row.met_calories),
   ];
 
-  const strength = ringStatus(strengthEnabled, strengthMet);
-  const cardio = ringStatus(cardioEnabled, cardioMet);
-  const nutrition = ringStatus(nutritionEnabled, nutritionMet);
+  const strength = categoryRing(
+    row.strength_met,
+    strengthEnabled,
+    strengthMet,
+    row.strength_condition_mode
+  );
+  const cardio = categoryRing(
+    row.cardio_met,
+    cardioEnabled,
+    cardioMet,
+    row.cardio_condition_mode
+  );
+  const nutrition = categoryRing(
+    row.nutrition_met,
+    nutritionEnabled,
+    nutritionMet,
+    row.nutrition_condition_mode
+  );
 
-  // Overall: all active rings must be closed; and at least one metric enabled overall.
   const anyActive = strength.active || cardio.active || nutrition.active;
   const allClosed = anyActive
     ? (!strength.active || strength.closed) &&
@@ -105,26 +157,19 @@ export function computeRings(row: DailyGoalResults): Rings {
   return { strength, cardio, nutrition, allClosed };
 }
 
-/**
- * Optional: compute met_all exactly from flags (matches the SQL-style "enabled implies met" rule).
- * Use this if you ever want to validate met_all or compute it client-side.
- */
+export function isGoalCategoryClosed(
+  row: DailyGoalResults,
+  category: GoalCategoryKey
+): boolean {
+  return computeRings(row)[category].closed;
+}
+
+export function goalCategoryLabel(category: GoalCategoryKey): string {
+  if (category === 'strength') return 'Strength goal complete';
+  if (category === 'cardio') return 'Cardio goal complete';
+  return 'Nutrition goal complete';
+}
+
 export function computeMetAllFromRow(row: DailyGoalResults): boolean {
-  const calEnabled = caloriesEnabled(row.calorie_goal_mode);
-
-  const checks: Array<[boolean, boolean]> = [
-    [row.strength_use_time, asTrue(row.met_strength_time)],
-    [row.strength_use_volume, asTrue(row.met_strength_volume)],
-    [row.cardio_use_time, asTrue(row.met_cardio_time)],
-    [row.cardio_use_distance, asTrue(row.met_cardio_distance)],
-    [row.protein_enabled, asTrue(row.met_protein)],
-    [row.carbs_enabled, asTrue(row.met_carbs)],
-    [row.fats_enabled, asTrue(row.met_fats)],
-    [calEnabled, asTrue(row.met_calories)],
-  ];
-
-  const activeCount = checks.reduce((acc, [enabled]) => acc + (enabled ? 1 : 0), 0);
-  if (activeCount === 0) return false;
-
-  return checks.every(([enabled, met]) => (enabled ? met : true));
+  return computeRings(row).allClosed;
 }

@@ -16,6 +16,15 @@ import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { shareStrengthWorkoutToFeed } from '@/lib/social/feed';
+import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
+import {
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
+import {
+  isGoalCategoryClosed,
+  type DailyGoalResults,
+} from '@/lib/goals/goalLogic';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
@@ -94,6 +103,7 @@ export default function StrengthSummaryPage() {
   const [canDelete, setCanDelete] = React.useState(true);
   const [shareToFeed, setShareToFeed] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
+  const [goalResult, setGoalResult] = React.useState<DailyGoalResults | null>(null);
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
 
@@ -173,7 +183,20 @@ export default function StrengthSummaryPage() {
           setWorkout(directWorkout.data);
           setExercises(enrichedSummaries);
           setSetsByExercise(grouped);
-          setCanDelete(!!meId && String((directWorkout.data as any).user_id ?? '') === meId);
+          const isOwnWorkout =
+            !!meId && String((directWorkout.data as any).user_id ?? '') === meId;
+          setCanDelete(isOwnWorkout);
+          if (isOwnWorkout && (directWorkout.data as any).ended_at) {
+            try {
+              setGoalResult(
+                await syncAndFetchMyDailyGoalResult(
+                  toLocalISODate(new Date((directWorkout.data as any).ended_at))
+                )
+              );
+            } catch (goalError) {
+              console.warn('[StrengthSummary] goal refresh failed', goalError);
+            }
+          }
           return;
         }
 
@@ -222,7 +245,19 @@ export default function StrengthSummaryPage() {
         setWorkout(workoutRow);
         setExercises(enrichedSummaries);
         setSetsByExercise(grouped);
-        setCanDelete(Boolean((row as any).can_delete));
+        const isOwnWorkout = Boolean((row as any).can_delete);
+        setCanDelete(isOwnWorkout);
+        if (isOwnWorkout && workoutRow?.ended_at) {
+          try {
+            setGoalResult(
+              await syncAndFetchMyDailyGoalResult(
+                toLocalISODate(new Date(workoutRow.ended_at))
+              )
+            );
+          } catch (goalError) {
+            console.warn('[StrengthSummary] goal refresh failed', goalError);
+          }
+        }
       } catch (err) {
         console.error('Error loading strength summary', err);
         Alert.alert('Error', 'Could not load strength workout summary.');
@@ -389,6 +424,15 @@ export default function StrengthSummaryPage() {
             Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
           </Text>
 
+          {goalResult && isGoalCategoryClosed(goalResult, 'strength') ? (
+            <View style={styles.goalCardWrap}>
+              <GoalAchievementCard
+                title="Strength goal complete"
+                description="This workout completed your strength goal for today."
+              />
+            </View>
+          ) : null}
+
           {/* ---- Per Exercise Summary ---- */}
           {exercises.length === 0 && (
             <Text style={{ color: '#9aa4bf', marginTop: 8 }}>
@@ -529,6 +573,9 @@ const styles = StyleSheet.create({
     color: Colors.dark.highlight1,
     fontSize: 16,
     marginBottom: 20,
+  },
+  goalCardWrap: {
+    marginBottom: 18,
   },
 
   shareCard: {

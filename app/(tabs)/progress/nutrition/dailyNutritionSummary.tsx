@@ -14,6 +14,12 @@ import { Colors } from '@/constants/Colors';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import DailyStatsCard from './components/DailyStatsCard';
+import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
+import { syncAndFetchMyDailyGoalResult } from '@/lib/goals/client';
+import {
+  isGoalCategoryClosed,
+  type DailyGoalResults,
+} from '@/lib/goals/goalLogic';
 
 const CARD = Colors.dark.card;
 const TEXT_PRIMARY = '#EAF2FF';
@@ -69,6 +75,7 @@ export default function DailyNutritionSummary() {
   const [day, setDay] = useState<DiaryDay | null>(null);
   const [items, setItems] = useState<DisplayItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
 
   const dayLabel = useMemo(() => {
     const raw = date ?? new Date().toISOString().slice(0, 10);
@@ -98,6 +105,14 @@ export default function DailyNutritionSummary() {
         if (!user) throw new Error('No authenticated user found.');
 
         const dateStr = (date as string) ?? new Date().toISOString().slice(0, 10);
+
+        try {
+          const goalRow = await syncAndFetchMyDailyGoalResult(dateStr);
+          if (isMounted) setGoalResult(goalRow);
+        } catch (goalErr) {
+          console.warn('Error refreshing nutrition goal summary', goalErr);
+          if (isMounted) setGoalResult(null);
+        }
 
         const { data: dayRow, error: dayErr } = await supabase
           .schema('nutrition')
@@ -276,6 +291,15 @@ export default function DailyNutritionSummary() {
               />
             </View>
 
+            {goalResult && isGoalCategoryClosed(goalResult, 'nutrition') ? (
+              <View style={styles.goalCardWrap}>
+                <GoalAchievementCard
+                  title="Nutrition goal complete"
+                  description="Your logged nutrition for this day meets the goal you set."
+                />
+              </View>
+            ) : null}
+
             {/* Items list */}
             <Text style={styles.sectionLabel}>ITEMS CONSUMED</Text>
 
@@ -334,6 +358,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 40,
+  },
+  goalCardWrap: {
+    marginBottom: 16,
   },
   centerState: {
     flex: 1,
