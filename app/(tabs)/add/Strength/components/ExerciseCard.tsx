@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { v4 as uuidv4 } from 'uuid';
 
-import type { ExerciseDraft, SetDraft } from '../StrengthTrain';
+import type { ExerciseDraft, SetDraft } from '@/lib/strength/types';
 import SetRow from './SetRow';
 import { Colors } from '@/constants/Colors';
 import { Swipeable } from 'react-native-gesture-handler';

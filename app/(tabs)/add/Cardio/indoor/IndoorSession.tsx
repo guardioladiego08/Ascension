@@ -33,6 +33,7 @@ import {
   clearActiveRunWalkLock,
   type RunWalkMode,
 } from '@/lib/runWalkSessionLock';
+import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const CARD = Colors.dark.card;
 const TEXT = Colors.dark.text;
@@ -85,9 +86,15 @@ export default function IndoorSession() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { distanceUnit } = useUnits();
+  const {
+    activeSession,
+    hydrated: activeSessionHydrated,
+    setSession: setActiveSession,
+    clearSession: clearActiveSession,
+  } = useActiveRunWalk();
 
-  const mode: Mode =
-    (params.mode === 'indoor_walk' ? 'indoor_walk' : 'indoor_run') as Mode;
+  const mode: Extract<Mode, 'indoor_run' | 'indoor_walk'> =
+    params.mode === 'indoor_walk' ? 'indoor_walk' : 'indoor_run';
 
   const lockMode: RunWalkMode = mode; // same values for indoor
 
@@ -117,6 +124,8 @@ export default function IndoorSession() {
   // samples
   const samplesRef = useRef<RunWalkSample[]>([]);
   const seqRef = useRef(0);
+  const sessionInitializedRef = useRef(false);
+  const hydrationAppliedRef = useRef(false);
 
   // refs for interval accuracy (avoid stale closures)
   const elapsedRef = useRef(0);
@@ -132,6 +141,37 @@ export default function IndoorSession() {
   useEffect(() => { inclineRef.current = inclineDeg; }, [inclineDeg]);
 
   const hasProgress = elapsedRef.current > 0 || distanceRef.current > 0;
+
+  useEffect(() => {
+    if (!activeSessionHydrated || hydrationAppliedRef.current) return;
+
+    const existingSession =
+      activeSession?.kind === 'indoor' && activeSession.mode === mode
+        ? activeSession
+        : null;
+
+    if (existingSession) {
+      const nextRunning = existingSession.phase === 'running';
+      setIsRunning(nextRunning);
+      setElapsedS(existingSession.elapsedS);
+      setDistanceM(existingSession.distanceM);
+      setElevM(existingSession.elevM);
+      setSpeed(existingSession.speed);
+      setInclineDeg(existingSession.inclineDeg);
+
+      elapsedRef.current = existingSession.elapsedS;
+      distanceRef.current = existingSession.distanceM;
+      elevRef.current = existingSession.elevM;
+      speedRef.current = existingSession.speed;
+      inclineRef.current = existingSession.inclineDeg;
+
+      samplesRef.current = existingSession.samples;
+      seqRef.current = existingSession.samples[existingSession.samples.length - 1]?.seq ?? 0;
+      sessionInitializedRef.current = true;
+    }
+
+    hydrationAppliedRef.current = true;
+  }, [activeSession, activeSessionHydrated, mode]);
 
   const resetSessionState = (nextRunning: boolean) => {
     // Stop ticking, clear everything
@@ -169,14 +209,31 @@ export default function IndoorSession() {
    * - This prevents "run while walk is in progress" and vice versa.
    */
   useEffect(() => {
+    if (!activeSessionHydrated || !hydrationAppliedRef.current) return;
     let mounted = true;
 
     (async () => {
       try {
+        if (activeSession?.kind === 'strength') {
+          Alert.alert(
+            'Session in progress',
+            'You already have an active strength workout. Finish or cancel it before starting an indoor session.'
+          );
+          router.back();
+          return;
+        }
+
         const existing = await getActiveRunWalkLock();
+        const resumingExisting =
+          activeSession?.kind === 'indoor' && activeSession.mode === mode;
         if (!mounted) return;
 
         if (existing) {
+          if (resumingExisting && existing.mode === lockMode) {
+            sessionInitializedRef.current = true;
+            return;
+          }
+
           Alert.alert(
             'Session in progress',
             `You already have a ${existing.mode.replace('_', ' ')} session in progress. Finish or cancel it before starting a new one.`
@@ -186,23 +243,56 @@ export default function IndoorSession() {
         }
 
         await setActiveRunWalkLock(lockMode);
+        sessionInitializedRef.current = true;
       } catch (e) {
         console.log('[IndoorSession] lock error', e);
         // If lock fails, we still allow session (best effort)
+        sessionInitializedRef.current = true;
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, [lockMode, router]);
+  }, [activeSession, activeSessionHydrated, lockMode, mode, router]);
 
   // keep speed aligned with unit/mode defaults
   useEffect(() => {
+    if (!activeSessionHydrated) return;
+    if (activeSession?.kind === 'indoor' && activeSession.mode === mode) return;
     setSpeed(defaultSpeed);
     speedRef.current = defaultSpeed;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultSpeed]);
+  }, [activeSession, activeSessionHydrated, defaultSpeed, mode]);
+
+  useEffect(() => {
+    if (!activeSessionHydrated || !sessionInitializedRef.current) return;
+
+    setActiveSession({
+      kind: 'indoor',
+      mode,
+      title,
+      phase: isRunning ? 'running' : 'paused',
+      distanceUnit,
+      elapsedS,
+      distanceM,
+      elevM,
+      speed,
+      inclineDeg,
+      samples: samplesRef.current,
+    });
+  }, [
+    activeSessionHydrated,
+    distanceM,
+    distanceUnit,
+    elapsedS,
+    elevM,
+    inclineDeg,
+    isRunning,
+    mode,
+    setActiveSession,
+    speed,
+    title,
+  ]);
 
   // 1-second tick
   useEffect(() => {
@@ -284,6 +374,8 @@ export default function IndoorSession() {
     }
     // no progress: clear lock and exit
     clearActiveRunWalkLock().catch(() => null);
+    clearActiveSession();
+    sessionInitializedRef.current = false;
     router.back();
   };
 
@@ -321,6 +413,8 @@ export default function IndoorSession() {
     try {
       await upsertDraft(draft);
 
+      clearActiveSession();
+      sessionInitializedRef.current = false;
       await clearActiveRunWalkLock();
 
       // Reset but keep running=false because we're leaving screen
@@ -339,6 +433,8 @@ export default function IndoorSession() {
 
   // Cancel confirmed -> clear lock -> reset with running=true (fix next start) -> leave
   const confirmDiscardCancel = async () => {
+    clearActiveSession();
+    sessionInitializedRef.current = false;
     try {
       await clearActiveRunWalkLock();
     } catch {}

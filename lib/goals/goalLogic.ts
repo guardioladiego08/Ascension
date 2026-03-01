@@ -92,7 +92,10 @@ function categoryRing(
 
   return {
     active: computed.active || categoryMet,
-    closed: categoryMet,
+    // Prefer a closed ring when either the aggregate flag or the metric-level
+    // checks say the category was met. This keeps the UI correct even if the
+    // denormalized *_met boolean lags behind the detailed metric fields.
+    closed: categoryMet || computed.closed,
   };
 }
 

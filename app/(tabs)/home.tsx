@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
+import { toLocalISODate } from '@/lib/goals/client';
 import { supabase } from '@/lib/supabase';
 import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 
@@ -79,10 +80,7 @@ export default function BlankHome() {
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
 
   // YYYY-MM-DD for "today"
-  const todayISO = useMemo(() => {
-    const d = new Date();
-    return d.toISOString().slice(0, 10);
-  }, []);
+  const todayISO = useMemo(() => toLocalISODate(), []);
 
   // Fetch today's diary_days row whenever this screen is focused
   useFocusEffect(
@@ -403,8 +401,8 @@ export default function BlankHome() {
             router.push({
               pathname: '/add/Cardio/outdoor/OutdoorSession',
               params: {
-                title: 'Walking Session',
-                activityType: 'walk',
+                title: type === 'outdoor_walk' ? 'Walking Session' : 'Running Session',
+                activityType: type === 'outdoor_walk' ? 'walk' : 'run',
               },
             });
             return;

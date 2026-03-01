@@ -1,32 +1,18 @@
 // app/(tabs)/add/Strength/components/SessionHeader.tsx
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlobalStyles } from '@/constants/GlobalStyles';
-import { Colors } from '@/constants/Colors';
 
 type Props = {
   title: string;
   paused: boolean;
-  timerResetKey: number;   // 👈 NEW
+  seconds: number;
   onPauseToggle: () => void;
   onCancel: () => void;
 };
 
-const SessionHeader: React.FC<Props> = ({ title, paused, timerResetKey, onPauseToggle, onCancel }) => {
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!paused) setSeconds(s => s + 1);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [paused]);
-  
-  useEffect(() => {
-    setSeconds(0);  
-  }, [timerResetKey]);
-
+const SessionHeader: React.FC<Props> = ({ title, paused, seconds, onPauseToggle, onCancel }) => {
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
 
@@ -38,7 +24,9 @@ const SessionHeader: React.FC<Props> = ({ title, paused, timerResetKey, onPauseT
       </View>
 
       <Text style={GlobalStyles.timer}>{mm}:{ss}</Text>
-      <Text style={styles.status}>● In Progress</Text>
+      <Text style={[styles.status, paused ? styles.pausedStatus : null]}>
+        {paused ? '● Paused' : '● In Progress'}
+      </Text>
 
       <View style={styles.controls}>
         <TouchableOpacity
@@ -72,6 +60,7 @@ const styles = StyleSheet.create({
   wrap: { padding: 16, paddingTop: 12 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   status: { color: '#6fdb7f', marginTop: 4, fontWeight: '600' },
+  pausedStatus: { color: '#f9b24e' },
   controls: { flexDirection: 'row', gap: 12, marginTop: 12 },
   pauseBtn: {
     backgroundColor: '#5c976eff',

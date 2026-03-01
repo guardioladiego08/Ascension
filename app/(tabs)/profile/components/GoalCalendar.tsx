@@ -35,9 +35,31 @@ const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 type Props = {
   initialMonth?: Dayjs;
+  userId?: string;
 };
 
-const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
+function normalizeGoalDateKey(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const match = value.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : null;
+  }
+
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  return null;
+}
+
+function isMissingRpc(error: any, fn: string) {
+  const message = String(error?.message ?? '').toLowerCase();
+  return String(error?.code ?? '') === 'PGRST202' || message.includes(fn.toLowerCase());
+}
+
+const GoalCalendar: React.FC<Props> = ({ initialMonth, userId }) => {
   const [currentMonth, setCurrentMonth] = useState<Dayjs>(initialMonth ?? dayjs());
   const [goalData, setGoalData] = useState<Record<string, Rings>>({});
   const [loading, setLoading] = useState(false);
@@ -48,27 +70,52 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
       const start = currentMonth.startOf('month').format('YYYY-MM-DD');
       const end = currentMonth.endOf('month').format('YYYY-MM-DD');
 
-      const {
-        data: { user },
-        error: userErr,
-      } = await supabase.auth.getUser();
-      if (userErr) throw userErr;
-      if (!user) throw new Error('Not signed in');
+      let targetUserId = userId;
+      if (!targetUserId) {
+        const {
+          data: { user },
+          error: userErr,
+        } = await supabase.auth.getUser();
+        if (userErr) throw userErr;
+        if (!user) throw new Error('Not signed in');
+        targetUserId = user.id;
+      }
+      if (!targetUserId) throw new Error('Not signed in');
 
-      const { data, error } = await supabase
-        .schema('user')
-        .from('daily_goal_results')
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('date', start)
-        .lte('date', end);
+      let rows: DailyGoalResults[] = [];
 
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .schema('user')
+          .rpc('list_visible_goal_calendar_user', {
+            p_user_id: targetUserId,
+            p_start: start,
+            p_end: end,
+          });
+
+        if (error) throw error;
+        rows = (data as DailyGoalResults[] | null) ?? [];
+      } catch (rpcError) {
+        if (!isMissingRpc(rpcError, 'list_visible_goal_calendar_user')) throw rpcError;
+
+        const { data, error } = await supabase
+          .schema('user')
+          .from('daily_goal_results')
+          .select('*')
+          .eq('user_id', targetUserId)
+          .gte('date', start)
+          .lte('date', end)
+          .order('date', { ascending: true });
+
+        if (error) throw error;
+        rows = (data as DailyGoalResults[] | null) ?? [];
+      }
 
       const map: Record<string, Rings> = {};
-      (data as DailyGoalResults[] | null)?.forEach((row) => {
-        if (!row?.date) return;
-        map[row.date] = computeRings(row);
+      rows.forEach((row) => {
+        const dateKey = normalizeGoalDateKey(row?.date);
+        if (!dateKey) return;
+        map[dateKey] = computeRings(row);
       });
 
       setGoalData(map);
@@ -78,7 +125,7 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
     } finally {
       setLoading(false);
     }
-  }, [currentMonth]);
+  }, [currentMonth, userId]);
 
   useEffect(() => {
     fetchMonthGoals();
@@ -145,8 +192,15 @@ const GoalCalendar: React.FC<Props> = ({ initialMonth }) => {
                 return <View key={`empty-${wi}-${di}`} style={styles.calendarCellEmpty} />;
               }
 
-              const dateObj = currentMonth.date(day);
-              const key = dateObj.format('YYYY-MM-DD');
+              const key = currentMonth
+                .year()
+                .toString()
+                .concat(
+                  '-',
+                  String(currentMonth.month() + 1).padStart(2, '0'),
+                  '-',
+                  String(day).padStart(2, '0')
+                );
               const flags = goalData[key];
 
               return (
@@ -174,6 +228,16 @@ export default GoalCalendar;
 // ---- Subcomponents ----
 
 const GoalRings = ({ rings }: { rings?: Rings }) => {
+  if (!rings) {
+    return (
+      <View style={styles.ringsWrap}>
+        <Svg width={26} height={26} viewBox="0 0 32 32">
+          <Circle cx={16} cy={16} r={13} fill="none" stroke={BORDER} strokeWidth={2} opacity={0.18} />
+        </Svg>
+      </View>
+    );
+  }
+
   const strength = rings?.strength ?? { active: false, closed: false };
   const cardio = rings?.cardio ?? { active: false, closed: false };
   const nutrition = rings?.nutrition ?? { active: false, closed: false };

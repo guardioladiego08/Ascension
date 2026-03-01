@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { clearAllRunWalkLocalState } from '@/lib/runWalkSessionCleanup';
 
 type SupabaseContextType = {
   session: Session | null;
@@ -26,12 +27,18 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session ?? null);
+      if (!data.session) {
+        clearAllRunWalkLocalState().catch(() => null);
+      }
       setLoading(false);
     });
 
     // Listen for auth state changes
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      if (event === 'SIGNED_OUT' || !newSession) {
+        clearAllRunWalkLocalState().catch(() => null);
+      }
     });
 
     return () => {

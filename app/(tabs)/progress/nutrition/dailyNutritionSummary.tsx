@@ -15,7 +15,10 @@ import { GlobalStyles } from '@/constants/GlobalStyles';
 import LogoHeader from '@/components/my components/logoHeader';
 import DailyStatsCard from './components/DailyStatsCard';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
-import { syncAndFetchMyDailyGoalResult } from '@/lib/goals/client';
+import {
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
 import {
   isGoalCategoryClosed,
   type DailyGoalResults,
@@ -76,17 +79,17 @@ export default function DailyNutritionSummary() {
   const [items, setItems] = useState<DisplayItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
+  const dateStr = useMemo(() => (date as string) ?? toLocalISODate(), [date]);
 
   const dayLabel = useMemo(() => {
-    const raw = date ?? new Date().toISOString().slice(0, 10);
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return raw;
+    const parsed = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return dateStr;
     return parsed.toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
-  }, [date]);
+  }, [dateStr]);
 
   useEffect(() => {
     let isMounted = true;
@@ -103,8 +106,6 @@ export default function DailyNutritionSummary() {
 
         if (userErr) throw userErr;
         if (!user) throw new Error('No authenticated user found.');
-
-        const dateStr = (date as string) ?? new Date().toISOString().slice(0, 10);
 
         try {
           const goalRow = await syncAndFetchMyDailyGoalResult(dateStr);
@@ -214,7 +215,7 @@ export default function DailyNutritionSummary() {
     return () => {
       isMounted = false;
     };
-  }, [date]);
+  }, [dateStr]);
 
   const totals = useMemo(() => {
     const baseKcal =

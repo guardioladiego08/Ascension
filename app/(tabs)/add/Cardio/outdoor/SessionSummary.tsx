@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -18,6 +18,7 @@ import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
 import {
   deleteOutdoorSession,
   createOutdoorSession,
+  insertOutdoorSamples,
   updateOutdoorSession,
 } from '@/lib/OutdoorSession/supabase';
 import {
@@ -35,6 +36,11 @@ import {
   isGoalCategoryClosed,
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
+import {
+  deleteOutdoorDraft,
+  getOutdoorDraft,
+  type OutdoorSessionDraft,
+} from '@/lib/OutdoorSession/draftStore';
 
 const BG = Colors?.dark?.background ?? '#F5F6F8';
 const CARD = Colors?.dark?.card ?? '#131A24';
@@ -59,6 +65,7 @@ export default function SessionSummary() {
   const router = useRouter();
   const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{
+    draftId?: string;
     title?: string;
     activityType?: string;
     elapsedSeconds?: string;
@@ -66,34 +73,77 @@ export default function SessionSummary() {
     startedAtISO?: string;
     endedAtISO?: string;
   }>();
+  const draftId = params.draftId?.toString();
 
   const title = (params.title ?? 'Outdoor Session').toString();
-  const activityType = normalizeOutdoorActivityType(params.activityType?.toString());
-  const elapsedSeconds = Math.max(0, Number(params.elapsedSeconds ?? 0) || 0);
-  const distanceMeters = Math.max(0, Number(params.distanceMeters ?? 0) || 0);
-  const endedAtISO = getSafeIsoDate(params.endedAtISO?.toString());
-  const startedAtISO = getSafeIsoDate(
-    params.startedAtISO?.toString(),
-    new Date(new Date(endedAtISO).getTime() - elapsedSeconds * 1000)
-  );
+  const [draft, setDraft] = useState<OutdoorSessionDraft | null>(null);
+  const [loading, setLoading] = useState(Boolean(draftId));
 
   const [saving, setSaving] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
   const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+
+    if (!draftId) {
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    (async () => {
+      try {
+        const nextDraft = await getOutdoorDraft(draftId);
+        if (!mounted) return;
+
+        if (!nextDraft) {
+          Alert.alert('Error', 'Outdoor draft not found.');
+          router.replace('/(tabs)/home');
+          return;
+        }
+
+        setDraft(nextDraft);
+      } catch (error) {
+        console.warn('[OutdoorSessionSummary] draft load failed', error);
+        if (mounted) {
+          Alert.alert('Error', 'Could not load outdoor summary.');
+          router.replace('/(tabs)/home');
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [draftId, router]);
+
+  const activityType = draft?.activity_type ?? normalizeOutdoorActivityType(params.activityType?.toString());
+  const elapsedSeconds = draft?.total_time_s ?? Math.max(0, Number(params.elapsedSeconds ?? 0) || 0);
+  const distanceMeters = draft?.total_distance_m ?? Math.max(0, Number(params.distanceMeters ?? 0) || 0);
+  const endedAtISO = getSafeIsoDate(draft?.ended_at ?? params.endedAtISO?.toString());
+  const startedAtISO = getSafeIsoDate(
+    draft?.started_at ?? params.startedAtISO?.toString(),
+    new Date(new Date(endedAtISO).getTime() - elapsedSeconds * 1000)
+  );
+
   const avgPace = useMemo(
-    () => paceSecPerKm(distanceMeters, elapsedSeconds),
-    [distanceMeters, elapsedSeconds]
+    () => draft?.avg_pace_s_per_km ?? paceSecPerKm(distanceMeters, elapsedSeconds),
+    [distanceMeters, draft?.avg_pace_s_per_km, elapsedSeconds]
   );
 
   const avgSpeedMps = useMemo(() => {
+    if (draft?.avg_speed_mps != null) return draft.avg_speed_mps;
     if (elapsedSeconds <= 0 || distanceMeters <= 0) return null;
     return distanceMeters / elapsedSeconds;
-  }, [distanceMeters, elapsedSeconds]);
+  }, [distanceMeters, draft?.avg_speed_mps, elapsedSeconds]);
 
   async function onSave() {
-    if (saving || savedSessionId) return;
+    if (saving || savedSessionId || loading) return;
 
     let sessionId: string | null = null;
 
@@ -105,6 +155,28 @@ export default function SessionSummary() {
         startedAtISO,
         timezoneStr: getDeviceTimezone(),
       });
+
+      if (draft?.samples?.length) {
+        await insertOutdoorSamples(
+          draft.samples.map((sample) => ({
+            session_id: sessionId!,
+            ts: sample.ts,
+            elapsed_s: sample.elapsed_s,
+            lat: sample.lat,
+            lon: sample.lon,
+            altitude_m: sample.altitude_m,
+            accuracy_m: sample.accuracy_m,
+            speed_mps: sample.speed_mps,
+            bearing_deg: sample.bearing_deg,
+            hr_bpm: null,
+            cadence_spm: null,
+            grade_pct: null,
+            distance_m: sample.distance_m,
+            is_moving: sample.is_moving,
+            source: 'fg',
+          }))
+        );
+      }
 
       await updateOutdoorSession(sessionId, {
         ended_at: endedAtISO,
@@ -122,6 +194,10 @@ export default function SessionSummary() {
         );
       } catch (goalError) {
         console.warn('[OutdoorSessionSummary] goal refresh failed', goalError);
+      }
+
+      if (draftId) {
+        await deleteOutdoorDraft(draftId);
       }
 
       setSavedSessionId(sessionId);
@@ -146,6 +222,16 @@ export default function SessionSummary() {
 
   function onDone() {
     router.replace('/(tabs)/home');
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -238,6 +324,11 @@ const rowStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollContent: {
     paddingBottom: 20,
   },

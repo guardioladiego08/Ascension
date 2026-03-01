@@ -244,7 +244,7 @@ export default function ProfileScreen() {
               showsVerticalScrollIndicator={false}
             >
               {renderHeaderBlock()}
-              <GoalCalendar />
+              <GoalCalendar userId={userId} />
             </ScrollView>
           )}
         </View>

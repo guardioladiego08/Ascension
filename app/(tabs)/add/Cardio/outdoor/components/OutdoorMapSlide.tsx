@@ -54,7 +54,7 @@ export default function OutdoorMapSlide({ coords }: Props) {
         </View>
       ) : (
         <MapView
-          ref={(r) => (mapRef.current = r)}
+          ref={mapRef}
           style={StyleSheet.absoluteFill}
           initialRegion={initialRegion}
           showsUserLocation

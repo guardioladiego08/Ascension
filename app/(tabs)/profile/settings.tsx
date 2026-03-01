@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
+import { clearAllRunWalkLocalState } from '@/lib/runWalkSessionCleanup';
+import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
@@ -29,6 +31,7 @@ const DANGER = '#F97373';
 export default function SettingsScreen() {
   const router = useRouter();
   const { weightUnit, distanceUnit } = useUnits();
+  const { activeSession, clearSession } = useActiveRunWalk();
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showDistanceModal, setShowDistanceModal] = useState(false);
   const [showProfileDetailsModal, setShowProfileDetailsModal] = useState(false);
@@ -43,11 +46,25 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = async () => {
+    if (activeSession?.kind === 'strength' && activeSession.workoutId) {
+      const { error: deleteError } = await supabase
+        .schema('strength')
+        .from('strength_workouts')
+        .delete()
+        .eq('id', activeSession.workoutId);
+
+      if (deleteError) {
+        console.warn('[Settings] failed to delete active strength workout on logout', deleteError);
+      }
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) {
       Alert.alert('Logout failed', error.message);
       return;
     }
+    clearSession();
+    await clearAllRunWalkLocalState().catch(() => null);
     // adjust this path to your auth route if different
     router.replace('../../SignInLogin/FirstPage');
   };

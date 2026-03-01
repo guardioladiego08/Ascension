@@ -1,5 +1,5 @@
 // app/(tabs)/add/Strength/StrengthTrain.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -25,33 +25,12 @@ import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import type { ExerciseDraft, UnitMass } from '@/lib/strength/types';
+import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
-
-export type UnitMass = 'kg' | 'lb';
-export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
-
-export type SetDraft = {
-  tempId: string;
-  set_index: number;
-  set_type: SetType;
-  weight?: number | null;
-  weight_unit_csv: UnitMass;
-  reps?: number | null;
-  rpe?: number | null;
-  est_1rm?: number | null;
-  superset_group?: number | null;
-  done?: boolean;
-  notes?: string | null;
-};
-
-export type ExerciseDraft = {
-  instanceId: string; // UI-only ID for this card instance
-  exercise_id: string; // FK → exercises.id
-  exercise_name: string;
-  sets: SetDraft[];
-};
+const TITLE = 'Strength Training Session';
 
 const toKg = (w: number | null | undefined, unit: UnitMass) =>
   w == null ? 0 : unit === 'kg' ? w : w * 0.45359237;
@@ -80,6 +59,12 @@ async function ensureAuthedUserId(): Promise<string> {
 
 export default function StrengthTrain() {
   const { weightUnit } = useUnits();
+  const {
+    activeSession,
+    hydrated: activeSessionHydrated,
+    setSession: setActiveSession,
+    clearSession: clearActiveSession,
+  } = useActiveRunWalk();
   const [workoutId, setWorkoutId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null); // convenience / UI state
   const [loading, setLoading] = useState(true);
@@ -89,11 +74,12 @@ export default function StrengthTrain() {
 
   const [paused, setPaused] = useState(false);
   const [seconds, setSeconds] = useState(0);
-  const [timerResetKey, setTimerResetKey] = useState(0);
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [exerciseRequiredOpen, setExerciseRequiredOpen] = useState(false);
+  const hydrationAppliedRef = useRef(false);
+  const sessionPersistEnabledRef = useRef(true);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -104,10 +90,44 @@ export default function StrengthTrain() {
 
   // Start workout row on mount
   useEffect(() => {
+    if (!activeSessionHydrated || hydrationAppliedRef.current) return;
+
     let mounted = true;
 
     (async () => {
       try {
+        hydrationAppliedRef.current = true;
+
+        if (activeSession && activeSession.kind !== 'strength') {
+          const sessionLabel =
+            activeSession.kind === 'outdoor'
+              ? activeSession.mode === 'outdoor_walk'
+                ? 'outdoor walk'
+                : 'outdoor run'
+              : activeSession.mode === 'indoor_walk'
+                ? 'indoor walk'
+                : 'indoor run';
+
+          Alert.alert(
+            'Session in progress',
+            `You already have an active ${sessionLabel} session. Finish or cancel it before starting a strength workout.`
+          );
+          router.back();
+          return;
+        }
+
+        if (activeSession?.kind === 'strength') {
+          if (!mounted) return;
+
+          setWorkoutId(activeSession.workoutId);
+          setUserId(activeSession.userId);
+          setExercises(activeSession.exercises);
+          setPaused(activeSession.phase === 'paused');
+          setSeconds(activeSession.seconds);
+          setLoading(false);
+          return;
+        }
+
         const uid = await ensureAuthedUserId();
         if (!mounted) return;
         setUserId(uid);
@@ -137,7 +157,29 @@ export default function StrengthTrain() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeSession, activeSessionHydrated]);
+
+  useEffect(() => {
+    if (!activeSessionHydrated || !workoutId || !sessionPersistEnabledRef.current) return;
+
+    setActiveSession({
+      kind: 'strength',
+      title: TITLE,
+      phase: paused ? 'paused' : 'running',
+      workoutId,
+      userId,
+      seconds,
+      exercises,
+    });
+  }, [
+    activeSessionHydrated,
+    exercises,
+    paused,
+    seconds,
+    setActiveSession,
+    userId,
+    workoutId,
+  ]);
 
   const addExercise = (ex: { id: string; exercise_name: string }) => {
     setExercises(prev => [
@@ -188,6 +230,11 @@ export default function StrengthTrain() {
   const handleCancel = () => {
     setPaused(true);
     setCancelModalOpen(true);
+  };
+
+  const stopPersistingStrengthSession = () => {
+    sessionPersistEnabledRef.current = false;
+    clearActiveSession();
   };
 
   const handleFinish = async () => {
@@ -306,6 +353,7 @@ export default function StrengthTrain() {
 
       if (wErr) throw wErr;
 
+      stopPersistingStrengthSession();
       console.log('✅ workout saved', { workoutId });
       router.replace(`/(tabs)/add/Strength/${workoutId}`);
     } catch (err: any) {
@@ -347,9 +395,9 @@ export default function StrengthTrain() {
 
         <SessionHeader
           key={workoutId}
-          title="Strength Training Session"
+          title={TITLE}
           paused={paused}
-          timerResetKey={timerResetKey}
+          seconds={seconds}
           onPauseToggle={() => setPaused(p => !p)}
           onCancel={handleCancel}
         />
@@ -418,10 +466,10 @@ export default function StrengthTrain() {
               // still proceed with local cleanup + navigation
             }
 
+            stopPersistingStrengthSession();
             setExercises([]);
             setSeconds(0);
             setPaused(false);
-            setTimerResetKey(k => k + 1);
 
             setCancelModalOpen(false);
             router.back();

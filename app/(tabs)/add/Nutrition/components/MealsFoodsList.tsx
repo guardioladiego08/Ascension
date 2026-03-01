@@ -12,6 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
+import {
+  getDeviceTimezone,
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
 
 const CARD = Colors.dark.card;
 const PRIMARY = Colors.dark.highlight1;
@@ -193,11 +198,8 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
       if (userError) throw userError;
       if (!user) throw new Error('No authenticated user found.');
 
-      // Use "today" for now – you can later pass a picked date
-      const today = new Date();
-      const dateStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
-      const timezoneStr =
-        Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+      const dateStr = toLocalISODate();
+      const timezoneStr = getDeviceTimezone();
 
       // 1) Ensure diary_day exists
       const { data: existingDay, error: dayErr } = await supabase
@@ -267,8 +269,11 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
       if (itemErr) throw itemErr;
 
-      // At this point, your DB trigger on nutrition.diary_items
-      // will update nutrition.diary_days totals + targets.
+      try {
+        await syncAndFetchMyDailyGoalResult(dateStr);
+      } catch (goalErr) {
+        console.warn('Error refreshing goal results after meal log', goalErr);
+      }
 
       // 3) Redirect to the daily summary page for that date
       router.push({

@@ -17,11 +17,11 @@ export function getDeviceTimezone(): string | null {
   }
 }
 
-function isMissingGoalRpc(error: any) {
+function isMissingGoalRpc(error: any, functionName: string) {
   const message = String(error?.message ?? '').toLowerCase();
   return (
     String(error?.code ?? '') === 'PGRST202' ||
-    message.includes('refresh_my_goal_results')
+    message.includes(functionName.toLowerCase())
   );
 }
 
@@ -31,6 +31,13 @@ function normalizeDailyGoalRow(
   if (!data) return null;
   if (Array.isArray(data)) return (data[0] as DailyGoalResults) ?? null;
   return data as DailyGoalResults;
+}
+
+function normalizeDailyGoalRows(
+  data: DailyGoalResults | DailyGoalResults[] | null
+): DailyGoalResults[] {
+  if (!data) return [];
+  return Array.isArray(data) ? data : [data];
 }
 
 export async function fetchMyDailyGoalResult(goalDate: string) {
@@ -63,11 +70,28 @@ export async function refreshMyDailyGoalResult(goalDate: string) {
   return normalizeDailyGoalRow(data as DailyGoalResults | DailyGoalResults[] | null);
 }
 
+export async function refreshMyGoalCalendarRange(startDate: string, endDate: string) {
+  const { data, error } = await supabase
+    .schema('user')
+    .rpc('refresh_my_goal_calendar_range', { p_start: startDate, p_end: endDate });
+
+  if (error) throw error;
+  return normalizeDailyGoalRows(data as DailyGoalResults | DailyGoalResults[] | null);
+}
+
+export function isMissingGoalRefreshRpc(error: any) {
+  return isMissingGoalRpc(error, 'refresh_my_goal_results');
+}
+
+export function isMissingGoalCalendarRangeRpc(error: any) {
+  return isMissingGoalRpc(error, 'refresh_my_goal_calendar_range');
+}
+
 export async function syncAndFetchMyDailyGoalResult(goalDate: string) {
   try {
     return await refreshMyDailyGoalResult(goalDate);
   } catch (error) {
-    if (!isMissingGoalRpc(error)) throw error;
+    if (!isMissingGoalRefreshRpc(error)) throw error;
     return fetchMyDailyGoalResult(goalDate);
   }
 }

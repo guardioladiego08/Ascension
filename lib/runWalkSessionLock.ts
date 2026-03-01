@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveRunWalkSession } from '@/lib/activeRunWalkSessionStore';
 
 export type RunWalkMode = 'indoor_run' | 'indoor_walk' | 'outdoor_run' | 'outdoor_walk';
 
@@ -25,6 +26,17 @@ export async function getActiveRunWalkLock(): Promise<ActiveLock | null> {
     const ageMs = Date.now() - new Date(parsed.started_at).getTime();
     const MAX_AGE_MS = 1000 * 60 * 60 * 12; // 12 hours
     if (Number.isFinite(ageMs) && ageMs > MAX_AGE_MS) {
+      await AsyncStorage.removeItem(KEY);
+      return null;
+    }
+
+    const activeSession = await getActiveRunWalkSession();
+    if (!activeSession) {
+      await AsyncStorage.removeItem(KEY);
+      return null;
+    }
+
+    if (activeSession.mode !== parsed.mode) {
       await AsyncStorage.removeItem(KEY);
       return null;
     }

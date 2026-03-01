@@ -9,7 +9,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
 } from 'react-native';
-import type { SetDraft } from '../StrengthTrain';
+import type { SetDraft } from '@/lib/strength/types';
 import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
 

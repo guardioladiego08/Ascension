@@ -20,6 +20,11 @@ import MealSummaryCard from './components/MealSummaryCard';
 import IngredientsList from './components/IngredientsList';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import {
+  getDeviceTimezone,
+  syncAndFetchMyDailyGoalResult,
+  toLocalISODate,
+} from '@/lib/goals/client';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -244,15 +249,17 @@ export default function CreateMeal() {
       totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
 
     // 1) Get or create today's diary_day
-    const todayStr = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const todayStr = toLocalISODate();
+    const timezoneStr = getDeviceTimezone();
 
     const { data: diaryDay, error: diaryDayError } = await supabase
+      .schema('nutrition')
       .from('diary_days')
       .upsert(
         {
           user_id: userId,
           date: todayStr,
-          timezone_str: 'America/Chicago',
+          timezone_str: timezoneStr,
         },
         { onConflict: 'user_id,date' }
       )
@@ -294,6 +301,12 @@ export default function CreateMeal() {
         }`
       );
       return;
+    }
+
+    try {
+      await syncAndFetchMyDailyGoalResult(todayStr);
+    } catch (goalErr) {
+      console.warn('Error refreshing goal results after create-and-add meal', goalErr);
     }
 
     router.back();
