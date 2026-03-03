@@ -1,5 +1,4 @@
-// components/my components/progress/ProgressDetailsSection.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,50 +8,25 @@ import {
   LayoutChangeEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
-import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+
+import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
-
-type StrengthWorkoutRow = {
-  id: string;
-  started_at: string;
-  ended_at: string | null;
-};
-
-type OutdoorSessionRow = {
-  id: string;
-  started_at: string | null;
-  ended_at: string | null;
-  activity_type: 'run' | 'walk' | string;
-  status: string | null;
-  duration_s: number | null;
-  distance_m: number | null;
-};
-
-type IndoorSessionRow = {
-  id: string;
-  started_at: string | null;
-  ended_at: string | null;
-  exercise_type: string;
-  status: string | null;
-  total_time_s: number | null;
-  total_distance_m: number | null;
-};
-
-type RunningSessionItem = {
-  id: string;
-  source: 'indoor' | 'outdoor';
-  startedAt: string | null;
-  endedAt: string | null;
-  activityType: string;
-  durationS: number | null;
-  distanceM: number | null;
-};
+import {
+  fetchCardioSessions,
+  fetchNutritionDays,
+  fetchStrengthWorkouts,
+  formatCardioActivityTypeLabel,
+  getAuthenticatedUserId,
+  type CardioSessionItem,
+  type NutritionDayItem,
+  type StrengthWorkoutRow,
+} from '@/lib/progress/history';
 
 const DETAIL_SEGMENTS = [
   { key: 'weights', label: 'Weights', icon: 'barbell-outline' as const },
-  { key: 'running', label: 'Running', icon: 'trail-sign-outline' as const },
+  { key: 'cardio', label: 'Cardio', icon: 'walk-outline' as const },
   { key: 'nutrition', label: 'Nutrition', icon: 'fast-food-outline' as const },
 ];
 
@@ -76,17 +50,19 @@ function formatDistanceFromMeters(
   return `${(meters / M_PER_MI).toFixed(2)} mi`;
 }
 
-function isRunWalkActivity(activityType: string) {
-  const v = (activityType ?? '').toLowerCase();
-  return v.includes('run') || v.includes('walk');
-}
+function formatNutritionPreview(day: NutritionDayItem) {
+  const parts = [
+    `${Math.round(day.kcalTotal)} kcal`,
+    `P ${Math.round(day.proteinGTotal)}g`,
+    `C ${Math.round(day.carbsGTotal)}g`,
+    `F ${Math.round(day.fatGTotal)}g`,
+  ];
 
-function formatActivityTypeLabel(activityType: string, source: 'indoor' | 'outdoor') {
-  const v = (activityType ?? '').toLowerCase();
-  const prefix = source === 'indoor' ? 'Indoor' : 'Outdoor';
-  if (v.includes('walk')) return `${prefix} walk`;
-  if (v.includes('run')) return `${prefix} run`;
-  return `${prefix} session`;
+  if (day.goalHit) {
+    parts.push('Goal hit');
+  }
+
+  return parts.join(' · ');
 }
 
 const ProgressDetailsSection: React.FC = () => {
@@ -100,12 +76,12 @@ const ProgressDetailsSection: React.FC = () => {
   );
   const [loadingWeights, setLoadingWeights] = useState(true);
 
-  const [runningSessions, setRunningSessions] = useState<RunningSessionItem[]>(
-    []
-  );
-  const [loadingRunning, setLoadingRunning] = useState(true);
+  const [cardioSessions, setCardioSessions] = useState<CardioSessionItem[]>([]);
+  const [loadingCardio, setLoadingCardio] = useState(true);
 
-  // --- SEGMENTED CONTROL HANDLERS -------------------------------------------
+  const [nutritionDays, setNutritionDays] = useState<NutritionDayItem[]>([]);
+  const [loadingNutrition, setLoadingNutrition] = useState(true);
+
   const handleDetailSelect = (index: number) => {
     setSelectedDetailIndex(index);
     Animated.spring(detailAnim, {
@@ -121,135 +97,105 @@ const ProgressDetailsSection: React.FC = () => {
     setSegmentWidth(totalWidth / DETAIL_SEGMENTS.length);
   };
 
-  // Navigate to "all strength workouts" screen
   const handleViewAllStrengthPress = () => {
     router.push('/progress/strength/allStrengthWorkouts');
   };
 
-  // Open profile tab, which contains the full merged activity grid.
-  const handleViewAllRunningPress = () => {
-    router.push('/profile');
+  const handleViewAllCardioPress = () => {
+    router.push('/progress/cardio/allSessions');
   };
 
-  // --- LOAD RECENT ITEMS -----------------------------------------------------
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-        if (userError) throw userError;
+  const handleViewAllNutritionPress = () => {
+    router.push('/progress/nutrition/allNutritionDays');
+  };
 
-        if (!user) {
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const load = async () => {
+        try {
+          setLoadingWeights(true);
+          setLoadingCardio(true);
+          setLoadingNutrition(true);
+
+          const userId = await getAuthenticatedUserId();
+          if (!userId) {
+            if (!isActive) return;
+            setWeightsWorkouts([]);
+            setCardioSessions([]);
+            setNutritionDays([]);
+            return;
+          }
+
+          const [strengthRows, cardioRows, nutritionRows] = await Promise.all([
+            fetchStrengthWorkouts(userId, 5),
+            fetchCardioSessions(userId, 5),
+            fetchNutritionDays(userId, 5),
+          ]);
+
+          if (!isActive) return;
+          setWeightsWorkouts(strengthRows);
+          setCardioSessions(cardioRows);
+          setNutritionDays(nutritionRows);
+        } catch (err) {
+          console.warn('Error loading progress details', err);
+          if (!isActive) return;
+          setWeightsWorkouts([]);
+          setCardioSessions([]);
+          setNutritionDays([]);
+        } finally {
+          if (!isActive) return;
           setLoadingWeights(false);
-          setLoadingRunning(false);
-          return;
+          setLoadingCardio(false);
+          setLoadingNutrition(false);
         }
+      };
 
-        // Strength (unchanged)
-        const strengthPromise = supabase
-          .schema('strength')
-          .from('strength_workouts')
-          .select('id, started_at, ended_at')
-          .eq('user_id', user.id)
-          .order('started_at', { ascending: false })
-          .limit(5);
+      load();
 
-        // Indoor sessions (completed only)
-        const indoorPromise = supabase
-          .schema('run_walk')
-          .from('sessions')
-          .select(
-            'id, started_at, ended_at, exercise_type, status, total_time_s, total_distance_m'
-          )
-          .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .order('ended_at', { ascending: false })
-          .limit(20);
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
-        // Outdoor Sessions (completed only)
-        const outdoorPromise = supabase
-          .schema('run_walk')
-          .from('outdoor_sessions')
-          .select('id, started_at, ended_at, activity_type, status, duration_s, distance_m')
-          .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .order('ended_at', { ascending: false })
-          .limit(20);
-
-        const [strengthRes, indoorRes, outdoorRes] = await Promise.all([
-          strengthPromise,
-          indoorPromise,
-          outdoorPromise,
-        ]);
-
-        if (strengthRes.error) throw strengthRes.error;
-        if (indoorRes.error) throw indoorRes.error;
-        if (outdoorRes.error) throw outdoorRes.error;
-
-        const indoorItems: RunningSessionItem[] = ((indoorRes.data ?? []) as IndoorSessionRow[])
-          .filter((row) => isRunWalkActivity(row.exercise_type))
-          .map((row) => ({
-            id: row.id,
-            source: 'indoor',
-            startedAt: row.started_at,
-            endedAt: row.ended_at,
-            activityType: row.exercise_type,
-            durationS: row.total_time_s == null ? null : Number(row.total_time_s),
-            distanceM: row.total_distance_m == null ? null : Number(row.total_distance_m),
-          }));
-
-        const outdoorItems: RunningSessionItem[] = ((outdoorRes.data ?? []) as OutdoorSessionRow[])
-          .filter((row) => isRunWalkActivity(row.activity_type))
-          .map((row) => ({
-            id: row.id,
-            source: 'outdoor',
-            startedAt: row.started_at,
-            endedAt: row.ended_at,
-            activityType: row.activity_type,
-            durationS: row.duration_s == null ? null : Number(row.duration_s),
-            distanceM: row.distance_m == null ? null : Number(row.distance_m),
-          }));
-
-        const merged = [...indoorItems, ...outdoorItems].sort((a, b) => {
-          const aTs = new Date(a.endedAt ?? a.startedAt ?? 0).getTime();
-          const bTs = new Date(b.endedAt ?? b.startedAt ?? 0).getTime();
-          return bTs - aTs;
-        });
-
-        setWeightsWorkouts((strengthRes.data ?? []) as StrengthWorkoutRow[]);
-        setRunningSessions(merged.slice(0, 5));
-      } catch (err) {
-        console.warn('Error loading progress details', err);
-      } finally {
-        setLoadingWeights(false);
-        setLoadingRunning(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  // Strength navigation (existing)
   const handleStrengthWorkoutPress = (workoutId: string) => {
     router.push(`/add/Strength/${workoutId}`);
   };
 
-  const handleRunningSessionPress = (session: RunningSessionItem) => {
+  const handleCardioSessionPress = (session: CardioSessionItem) => {
     if (session.source === 'indoor') {
-      router.push(`/progress/run_walk/${session.id}`);
+      router.push({
+        pathname: '/progress/run_walk/[sessionId]',
+        params: { sessionId: session.id },
+      });
       return;
     }
-    router.push(`/progress/outdoor/${session.id}`);
+
+    router.push({
+      pathname: '/progress/outdoor/[id]',
+      params: { id: session.id },
+    });
+  };
+
+  const handleNutritionDayPress = (date: string) => {
+    router.push({
+      pathname: '/progress/nutrition/dailyNutritionSummary',
+      params: { date },
+    });
   };
 
   const renderWeightsContent = () => {
+    const uniqueWeightsWorkouts = weightsWorkouts.filter((workout, index, rows) => {
+      return rows.findIndex((row) => row.id === workout.id) === index;
+    });
+
     if (loadingWeights) {
       return <Text style={styles.contentMuted}>Loading...</Text>;
     }
 
-    if (!weightsWorkouts.length) {
+    if (!uniqueWeightsWorkouts.length) {
       return (
         <View style={styles.listContainer}>
           <Text style={styles.contentMuted}>No recent strength workouts.</Text>
@@ -272,7 +218,7 @@ const ProgressDetailsSection: React.FC = () => {
 
     return (
       <View style={styles.listContainer}>
-        {weightsWorkouts.map((workout) => {
+        {uniqueWeightsWorkouts.map((workout) => {
           const date = new Date(workout.started_at);
           const dateLabel = date.toLocaleDateString(undefined, {
             month: 'short',
@@ -323,22 +269,22 @@ const ProgressDetailsSection: React.FC = () => {
     );
   };
 
-  const renderRunningContent = () => {
-    if (loadingRunning) {
+  const renderCardioContent = () => {
+    if (loadingCardio) {
       return <Text style={styles.contentMuted}>Loading...</Text>;
     }
 
-    if (!runningSessions.length) {
+    if (!cardioSessions.length) {
       return (
         <View style={styles.listContainer}>
-          <Text style={styles.contentMuted}>No recent running sessions.</Text>
+          <Text style={styles.contentMuted}>No recent cardio sessions.</Text>
 
           <TouchableOpacity
             style={styles.viewAllButton}
             activeOpacity={0.85}
-            onPress={handleViewAllRunningPress}
+            onPress={handleViewAllCardioPress}
           >
-            <Text style={styles.viewAllText}>View all running sessions</Text>
+            <Text style={styles.viewAllText}>View all cardio sessions</Text>
             <Ionicons
               name="arrow-forward-circle-outline"
               size={18}
@@ -351,32 +297,44 @@ const ProgressDetailsSection: React.FC = () => {
 
     return (
       <View style={styles.listContainer}>
-        {runningSessions.map((sesh) => {
-          const baseDate = sesh.endedAt ? new Date(sesh.endedAt) : (sesh.startedAt ? new Date(sesh.startedAt) : null);
+        {cardioSessions.map((session) => {
+          const baseDate = session.endedAt
+            ? new Date(session.endedAt)
+            : session.startedAt
+              ? new Date(session.startedAt)
+              : null;
+
           const dateLabel = baseDate
-            ? baseDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+            ? baseDate.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })
             : 'Session';
 
-          const typeLabel = formatActivityTypeLabel(sesh.activityType, sesh.source);
-          const dur = formatDurationFromSeconds(sesh.durationS);
-          const dist = formatDistanceFromMeters(sesh.distanceM, distanceUnit);
+          const typeLabel = formatCardioActivityTypeLabel(
+            session.activityType,
+            session.source
+          );
+          const durationLabel = formatDurationFromSeconds(session.durationS);
+          const distanceLabel = formatDistanceFromMeters(
+            session.distanceM,
+            distanceUnit
+          );
 
           const parts = [typeLabel];
-          if (dur) parts.push(dur);
-          if (dist) parts.push(dist);
-
-          const subtitle = parts.join(' · ');
+          if (durationLabel) parts.push(durationLabel);
+          if (distanceLabel) parts.push(distanceLabel);
 
           return (
             <TouchableOpacity
-              key={`${sesh.source}:${sesh.id}`}
+              key={`${session.source}:${session.id}`}
               style={styles.listItem}
               activeOpacity={0.8}
-              onPress={() => handleRunningSessionPress(sesh)}
+              onPress={() => handleCardioSessionPress(session)}
             >
               <View>
                 <Text style={styles.listTitle}>{dateLabel}</Text>
-                <Text style={styles.listSubtitle}>{subtitle}</Text>
+                <Text style={styles.listSubtitle}>{parts.join(' · ')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
             </TouchableOpacity>
@@ -386,9 +344,80 @@ const ProgressDetailsSection: React.FC = () => {
         <TouchableOpacity
           style={styles.viewAllButton}
           activeOpacity={0.85}
-          onPress={handleViewAllRunningPress}
+          onPress={handleViewAllCardioPress}
         >
-          <Text style={styles.viewAllText}>View all running sessions</Text>
+          <Text style={styles.viewAllText}>View all cardio sessions</Text>
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={18}
+            color="#A5B4FC"
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderNutritionContent = () => {
+    if (loadingNutrition) {
+      return <Text style={styles.contentMuted}>Loading...</Text>;
+    }
+
+    if (!nutritionDays.length) {
+      return (
+        <View style={styles.listContainer}>
+          <Text style={styles.contentMuted}>No recent nutrition days.</Text>
+
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            activeOpacity={0.85}
+            onPress={handleViewAllNutritionPress}
+          >
+            <Text style={styles.viewAllText}>View all nutrition days</Text>
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={18}
+              color="#A5B4FC"
+            />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.listContainer}>
+        {nutritionDays.map((day) => {
+          const baseDate = new Date(`${day.date}T00:00:00`);
+          const dateLabel = Number.isNaN(baseDate.getTime())
+            ? day.date
+            : baseDate.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              });
+
+          return (
+            <TouchableOpacity
+              key={day.id}
+              style={styles.listItem}
+              activeOpacity={0.8}
+              onPress={() => handleNutritionDayPress(day.date)}
+            >
+              <View>
+                <Text style={styles.listTitle}>{dateLabel}</Text>
+                <Text style={styles.listSubtitle}>
+                  {formatNutritionPreview(day)}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+            </TouchableOpacity>
+          );
+        })}
+
+        <TouchableOpacity
+          style={styles.viewAllButton}
+          activeOpacity={0.85}
+          onPress={handleViewAllNutritionPress}
+        >
+          <Text style={styles.viewAllText}>View all nutrition days</Text>
           <Ionicons
             name="arrow-forward-circle-outline"
             size={18}
@@ -401,15 +430,12 @@ const ProgressDetailsSection: React.FC = () => {
 
   const renderContent = () => {
     if (selectedDetailIndex === 0) return renderWeightsContent();
-    if (selectedDetailIndex === 1) return renderRunningContent();
-
-    // Nutrition blank for now
-    return <Text style={styles.contentMuted}>Nutrition details coming soon.</Text>;
+    if (selectedDetailIndex === 1) return renderCardioContent();
+    return renderNutritionContent();
   };
 
   return (
     <>
-      {/* Segmented Control */}
       <View style={styles.detailsRow} onLayout={handleDetailLayout}>
         {segmentWidth > 0 && (
           <Animated.View
@@ -425,15 +451,15 @@ const ProgressDetailsSection: React.FC = () => {
           />
         )}
 
-        {DETAIL_SEGMENTS.map((seg, index) => (
+        {DETAIL_SEGMENTS.map((segment, index) => (
           <TouchableOpacity
-            key={seg.key}
+            key={segment.key}
             style={styles.detailSegment}
             activeOpacity={0.8}
             onPress={() => handleDetailSelect(index)}
           >
             <Ionicons
-              name={seg.icon}
+              name={segment.icon}
               size={16}
               color={index === selectedDetailIndex ? '#FFFFFF' : '#9DA4C4'}
               style={{ marginRight: 6 }}
@@ -444,13 +470,12 @@ const ProgressDetailsSection: React.FC = () => {
                 index === selectedDetailIndex && styles.detailPillTextActive,
               ]}
             >
-              {seg.label}
+              {segment.label}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Content Card */}
       <View style={styles.contentCard}>{renderContent()}</View>
     </>
   );
@@ -491,7 +516,6 @@ const styles = StyleSheet.create({
   detailPillTextActive: {
     color: '#FFFFFF',
   },
-
   contentCard: {
     marginTop: 12,
     marginBottom: 24,
@@ -527,7 +551,6 @@ const styles = StyleSheet.create({
     color: '#9DA4C4',
     marginTop: 2,
   },
-
   viewAllButton: {
     flexDirection: 'row',
     alignItems: 'center',
