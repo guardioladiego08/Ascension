@@ -14,14 +14,9 @@ import { GlobalStyles } from '@/constants/GlobalStyles';
 import TopMetricCards from './progress/TopMetricCards';
 import ProgressDetailsSection from './progress/ProgressDetailsSection';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const dummyWeeklyData = [24, 40, 32, 60, 52, 36, 18];
+import WeeklyOverviewDashboard from './progress/WeeklyOverviewDashboard';
 
 const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
-
 /* ------------------ DATE HELPERS ------------------ */
 
 function getWeekRange(weekOffset: number) {
@@ -68,9 +63,6 @@ const ProgressScreen: React.FC = () => {
     () => formatRange(start, end),
     [start, end]
   );
-
-  const today = new Date();
-  const isCurrentWeek = weekOffset === 0;
 
   return (
     <LinearGradient
@@ -122,53 +114,19 @@ const ProgressScreen: React.FC = () => {
 
           {/* TOP METRIC CARDS */}
           <TopMetricCards
+            rangeStart={start}
+            rangeEnd={end}
             onExercisesPress={() =>
               router.push('/progress/strength/exercises')
             }
           />
 
-          {/* WEEKLY ACTIVITY */}
+          {/* WEEKLY OVERVIEW */}
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>WEEKLY ACTIVITY</Text>
+            <Text style={styles.sectionTitle}>WEEKLY OVERVIEW</Text>
           </View>
 
-          <View style={styles.activityCard}>
-            <View style={styles.activityTopRow}>
-              <Text style={styles.activityTitle}>Calories Burned</Text>
-              <Text style={styles.activityRange}>Daily</Text>
-            </View>
-
-            <View style={styles.fakeChartRow}>
-              {dummyWeeklyData.map((h, idx) => (
-                <View key={idx} style={styles.fakeBarWrapper}>
-                  <View style={[styles.fakeBar, { height: h }]} />
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.daysRow}>
-              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, idx) => {
-                const dayDate = new Date(start);
-                dayDate.setDate(start.getDate() + idx);
-
-                const isToday =
-                  isCurrentWeek &&
-                  dayDate.toDateString() === today.toDateString();
-
-                return (
-                  <Text
-                    key={idx}
-                    style={[
-                      styles.dayLabel,
-                      isToday && styles.dayLabelActive,
-                    ]}
-                  >
-                    {d}
-                  </Text>
-                );
-              })}
-            </View>
-          </View>
+          <WeeklyOverviewDashboard rangeStart={start} rangeEnd={end} />
 
           {/* VIEW DETAILS */}
           <View style={styles.sectionHeaderRow}>
@@ -226,54 +184,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.8,
     color: '#9DA4C4',
-  },
-
-  activityCard: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  activityTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  activityTitle: {
-    fontSize: 13,
-    color: '#E5E7F5',
-  },
-  activityRange: {
-    fontSize: 11,
-    color: '#6366F1',
-  },
-  fakeChartRow: {
-    marginTop: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  fakeBarWrapper: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  fakeBar: {
-    width: 12,
-    borderRadius: 6,
-    backgroundColor: '#6366F1',
-  },
-  daysRow: {
-    marginTop: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dayLabel: {
-    fontSize: 10,
-    color: '#4B5563',
-  },
-  dayLabelActive: {
-    color: '#6366F1',
-    fontWeight: '600',
   },
 });
 

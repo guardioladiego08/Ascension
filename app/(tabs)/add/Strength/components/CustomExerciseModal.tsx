@@ -12,9 +12,13 @@ import {
   ScrollView,
   FlatList,
 } from "react-native";
-import { supabase } from "@/lib/supabase";
 import { Colors } from "@/constants/Colors";
 import { MaterialIcons } from "@expo/vector-icons";
+import {
+  createCustomExercise,
+  findVisibleExerciseByName,
+  getAuthenticatedUserId,
+} from "@/lib/strength/exercises";
 
 const BODY_PARTS = [
   "chest",
@@ -93,37 +97,30 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
     setLoading(true);
 
     try {
-      const {
-        data,
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !data?.user) {
-        throw userError || new Error("Not signed in.");
+      const userId = await getAuthenticatedUserId();
+      if (!userId) {
+        throw new Error("Not signed in.");
       }
 
-      const userId = data.user.id;
+      const existingExercise = await findVisibleExerciseByName(userId, name);
+      if (existingExercise) {
+        const alreadyShared = existingExercise.user_id == null;
+        Alert.alert(
+          "Exercise already exists",
+          alreadyShared
+            ? "That exercise is already available in the shared library."
+            : "You already have an exercise with this name. Try a different name or use the existing exercise in your list."
+        );
+        return;
+      }
 
-      const { error } = await supabase.schema('public').from("exercises").insert({
+      await createCustomExercise({
         exercise_name: name.trim(),
-        body_parts: bodyParts,                 // string[] -> body_part[]
-        workout_category: category || null,    // enum or null
+        body_parts: bodyParts,
+        workout_category: category || null,
         info: info.trim() || null,
-        user_id: userId,                       // 🔥 explicitly tie to this user
+        userId,
       });
-
-      if (error) {
-        // Unique constraint violation: (user_id, exercise_name) already exists
-        if (error.code === "23505") {
-          Alert.alert(
-            "Exercise already exists",
-            "You already have an exercise with this name. Try a different name or use the existing exercise in your list."
-          );
-          return;
-        }
-
-        throw error;
-      }
 
       Alert.alert("Success", "Exercise added successfully!");
       onSuccess();

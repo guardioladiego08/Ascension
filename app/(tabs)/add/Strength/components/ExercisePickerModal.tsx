@@ -12,48 +12,20 @@ import {
   Pressable,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import CustomExerciseModal from './CustomExerciseModal';
-
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import {
+  fetchVisibleExercises,
+  getAuthenticatedUserId,
+  getExerciseBodyParts,
+  isCustomExercise,
+  type ExerciseRecord,
+} from '@/lib/strength/exercises';
 
 /* -------------------------------------------------------
    TYPES
 ------------------------------------------------------- */
-type ExerciseRow = {
-  id: string;
-  exercise_name: string;
-  info: string | null;
-  body_parts?: string[] | string;
-  workout_category?: string | null;
-};
-
-/* -------------------------------------------------------
-   HELPERS
-------------------------------------------------------- */
-const getBodyParts = (ex: ExerciseRow): string[] => {
-  const raw = ex.body_parts;
-  if (!raw) return [];
-
-  if (Array.isArray(raw)) return raw;
-
-  if (typeof raw === 'string') {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return raw.split(',').map(s => s.trim());
-    }
-  }
-
-  return [];
-};
-
-const getCategory = (ex: ExerciseRow): string | null => {
-  return ex.workout_category || null;
-};
+type ExerciseRow = ExerciseRecord;
 
 /* -------------------------------------------------------
    COMPONENT
@@ -65,8 +37,6 @@ type Props = {
   tableName?: string;
 };
 
-const PAGE_SIZE = 1000;
-
 const ExercisePickerModal: React.FC<Props> = ({
   visible,
   onPick,
@@ -76,6 +46,7 @@ const ExercisePickerModal: React.FC<Props> = ({
   const [allItems, setAllItems] = useState<ExerciseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [query, setQuery] = useState('');
   const [showCustomModal, setShowCustomModal] = useState(false);
@@ -93,7 +64,11 @@ const ExercisePickerModal: React.FC<Props> = ({
     setAllItems([]);
     setLoading(false);
     setFetchError(null);
+    setUserId(null);
     setQuery('');
+    setSelectedBodyParts([]);
+    setSelectedCategory(null);
+    setSortDir('asc');
   }, []);
 
   const fetchAllExercises = useCallback(async () => {
@@ -101,39 +76,17 @@ const ExercisePickerModal: React.FC<Props> = ({
     setFetchError(null);
 
     try {
-      // 1) Get current user
-      const {
-        data,
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !data?.user) {
-        throw userError || new Error('Not signed in.');
+      if (tableName !== 'exercises') {
+        throw new Error(`Unsupported exercise source: ${tableName}`);
       }
 
-      const user = data.user;
-
-      const rows: ExerciseRow[] = [];
-      let offset = 0;
-
-      while (true) {
-        const { data: batchData, error } = await supabase
-          .from(tableName)
-          .select('*')
-          // show global + this user's custom exercises
-          .or(`user_id.is.null,user_id.eq.${user.id}`)
-          .order('exercise_name', { ascending: true })
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (error) throw error;
-
-        const batch = (batchData ?? []) as ExerciseRow[];
-        rows.push(...batch);
-
-        if (batch.length < PAGE_SIZE) break;
-        offset += PAGE_SIZE;
+      const currentUserId = await getAuthenticatedUserId();
+      if (!currentUserId) {
+        throw new Error('Not signed in.');
       }
 
+      setUserId(currentUserId);
+      const rows = await fetchVisibleExercises(currentUserId);
       setAllItems(rows);
     } catch (e: any) {
       console.warn('Error fetching exercises', e);
@@ -159,7 +112,7 @@ const ExercisePickerModal: React.FC<Props> = ({
   const allBodyParts = useMemo(() => {
     const set = new Set<string>();
     allItems.forEach(ex => {
-      getBodyParts(ex).forEach(bp => set.add(bp));
+      getExerciseBodyParts(ex).forEach(bp => set.add(bp));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [allItems]);
@@ -167,7 +120,7 @@ const ExercisePickerModal: React.FC<Props> = ({
   const allCategories = useMemo(() => {
     const set = new Set<string>();
     allItems.forEach(ex => {
-      const cat = getCategory(ex);
+      const cat = ex.workout_category || null;
       if (cat) set.add(cat);
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
@@ -194,13 +147,13 @@ const ExercisePickerModal: React.FC<Props> = ({
 
     if (selectedBodyParts.length > 0) {
       list = list.filter(ex => {
-        const parts = getBodyParts(ex);
+        const parts = getExerciseBodyParts(ex);
         return parts.some(p => selectedBodyParts.includes(p));
       });
     }
 
     if (selectedCategory) {
-      list = list.filter(ex => getCategory(ex) === selectedCategory);
+      list = list.filter(ex => ex.workout_category === selectedCategory);
     }
 
     list.sort((a, b) => {
@@ -227,7 +180,14 @@ const ExercisePickerModal: React.FC<Props> = ({
         style={styles.rowMain}
         onPress={() => onPick({ id: item.id, exercise_name: item.exercise_name })}
       >
-        <Text style={styles.rowText}>{item.exercise_name}</Text>
+        <View>
+          <Text style={styles.rowText}>{item.exercise_name}</Text>
+          {userId ? (
+            <Text style={styles.rowMeta}>
+              {isCustomExercise(item, userId) ? 'Your exercise' : 'Shared exercise'}
+            </Text>
+          ) : null}
+        </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => showInfo(item)} style={styles.infoBtn}>
         <MaterialIcons name="info-outline" size={20} color="#fff" />
@@ -522,6 +482,11 @@ const styles = StyleSheet.create({
   rowText: {
     color: '#fff',
     fontSize: 14,
+  },
+  rowMeta: {
+    marginTop: 2,
+    color: '#9DA4C4',
+    fontSize: 11,
   },
   infoBtn: {
     paddingHorizontal: 8,

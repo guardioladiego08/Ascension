@@ -10,6 +10,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
+import { fetchVisibleExerciseCount } from '@/lib/strength/exercises';
 
 type StrengthWorkoutRow = {
   started_at: string;
@@ -32,8 +33,15 @@ type WeeklyRunWalkRow = {
   total_distance_run_walk_m: number | null;
 };
 
+type NutritionDayMetricRow = {
+  date: string;
+  goal_hit: boolean | null;
+};
+
 type Props = {
   onExercisesPress?: () => void;
+  rangeStart: Date;
+  rangeEnd: Date;
 };
 
 const M_PER_MI = 1609.344;
@@ -61,7 +69,7 @@ function isRunWalk(type: string) {
   return v.includes('run') || v.includes('walk');
 }
 
-const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
+const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEnd }) => {
   const { distanceUnit } = useUnits();
   const [weightsSessions, setWeightsSessions] = useState(0);
   const [weightsHours, setWeightsHours] = useState(0);
@@ -73,10 +81,18 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
   const [runningDistanceM, setRunningDistanceM] = useState(0);
   const [runningSessions, setRunningSessions] = useState(0);
   const [loadingRunning, setLoadingRunning] = useState(true);
+  const [nutritionTrackedDays, setNutritionTrackedDays] = useState(0);
+  const [nutritionGoalHitDays, setNutritionGoalHitDays] = useState(0);
+  const [loadingNutrition, setLoadingNutrition] = useState(true);
 
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
+        setLoadingWeights(true);
+        setLoadingExercises(true);
+        setLoadingRunning(true);
+        setLoadingNutrition(true);
+
         const {
           data: { user },
           error: userError,
@@ -89,15 +105,18 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
           setExerciseCount(0);
           setRunningDistanceM(0);
           setRunningSessions(0);
+          setNutritionTrackedDays(0);
+          setNutritionGoalHitDays(0);
           return;
         }
 
-        const end = new Date();
-        const start = new Date();
-        start.setDate(end.getDate() - 6);
-        const weekStartISO = getWeekStartMondayISO(end);
+        const start = new Date(rangeStart);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(rangeEnd);
+        end.setHours(23, 59, 59, 999);
+        const weekStartISO = getWeekStartMondayISO(start);
 
-        // ---- Weights (last 7 days) ----
+        // ---- Weights (selected week) ----
         const { data: weightData, error: weightError } = await supabase
           .schema('strength')
           .from('strength_workouts')
@@ -124,15 +143,9 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
         setWeightsHours(Number(totalHours.toFixed(1)));
 
         // ---- Exercises (total count) ----
-        const { data: exerciseData, error: exerciseError } = await supabase
-          .from('exercises')
-          .select('id')
-          .or(`user_id.is.null,user_id.eq.${user.id}`);
+        setExerciseCount(await fetchVisibleExerciseCount(user.id));
 
-        if (exerciseError) throw exerciseError;
-        setExerciseCount((exerciseData ?? []).length);
-
-        // ---- Running (indoor + outdoor run/walk, last 7 days) ----
+        // ---- Running (selected week) ----
         const indoorPromise = supabase
           .schema('run_walk')
           .from('sessions')
@@ -159,15 +172,25 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
           .eq('week_start', weekStartISO)
           .maybeSingle();
 
-        const [indoorRes, outdoorRes, weeklyRes] = await Promise.all([
+        const nutritionPromise = supabase
+          .schema('nutrition')
+          .from('diary_days')
+          .select('date, goal_hit')
+          .eq('user_id', user.id)
+          .gte('date', toLocalISODate(start))
+          .lte('date', toLocalISODate(end));
+
+        const [indoorRes, outdoorRes, weeklyRes, nutritionRes] = await Promise.all([
           indoorPromise,
           outdoorPromise,
           weeklySummaryPromise,
+          nutritionPromise,
         ]);
 
         if (indoorRes.error) throw indoorRes.error;
         if (outdoorRes.error) throw outdoorRes.error;
         if (weeklyRes.error && weeklyRes.error.code !== '42703') throw weeklyRes.error;
+        if (nutritionRes.error) throw nutritionRes.error;
 
         const indoorRows = (indoorRes.data ?? []) as IndoorRunWalkRow[];
         const outdoorRows = (outdoorRes.data ?? []) as OutdoorRunWalkRow[];
@@ -234,28 +257,43 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
             { sessions: 0, distanceM: 0 }
           );
 
-        setRunningSessions(indoorTotals.sessions + outdoorTotals.sessions);
-        const fallbackDistanceM = indoorTotals.distanceM + outdoorTotals.distanceM;
-        const weeklyDistanceM =
+        const sessionDistanceM = indoorTotals.distanceM + outdoorTotals.distanceM;
+        const summaryDistanceM =
           Number(weeklyRow?.total_distance_run_walk_m ?? NaN) ||
           (Number(weeklyRow?.total_distance_ran_m ?? 0) +
             Number(weeklyRow?.total_distance_walked_m ?? 0));
         const finalDistanceM =
-          Number.isFinite(weeklyDistanceM) && weeklyDistanceM > 0
-            ? weeklyDistanceM
-            : fallbackDistanceM;
+          Number.isFinite(summaryDistanceM) && summaryDistanceM > 0
+            ? summaryDistanceM
+            : sessionDistanceM;
+
+        setRunningSessions(indoorTotals.sessions + outdoorTotals.sessions);
         setRunningDistanceM(finalDistanceM);
+
+        const nutritionRows = (nutritionRes.data ?? []) as NutritionDayMetricRow[];
+        setNutritionTrackedDays(nutritionRows.length);
+        setNutritionGoalHitDays(
+          nutritionRows.filter((row) => Boolean(row.goal_hit)).length
+        );
       } catch (err) {
         console.warn('Error loading top metrics', err);
+        setWeightsSessions(0);
+        setWeightsHours(0);
+        setExerciseCount(0);
+        setRunningDistanceM(0);
+        setRunningSessions(0);
+        setNutritionTrackedDays(0);
+        setNutritionGoalHitDays(0);
       } finally {
         setLoadingWeights(false);
         setLoadingExercises(false);
         setLoadingRunning(false);
+        setLoadingNutrition(false);
       }
     };
 
     fetchMetrics();
-  }, []);
+  }, [rangeEnd, rangeStart]);
 
   const weightsSubtitle = loadingWeights
     ? 'Loading...'
@@ -273,6 +311,16 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
   const runningSubtitle = loadingRunning
     ? 'Loading...'
     : `${runningUnitLabel} · ${runningSessions} session${runningSessions === 1 ? '' : 's'}`;
+  const totalDisplayedDays = Math.max(
+    1,
+    Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
+  );
+  const nutritionValue = loadingNutrition ? '—' : `${nutritionTrackedDays}/${totalDisplayedDays}`;
+  const nutritionSubtitle = loadingNutrition
+    ? 'Loading...'
+    : nutritionGoalHitDays > 0
+      ? `${nutritionGoalHitDays} goal hit${nutritionGoalHitDays === 1 ? '' : 's'}`
+      : 'days tracked';
 
   return (
     <View style={styles.metricGrid}>
@@ -320,7 +368,7 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
         <Text style={styles.metricSub}>{exercisesSubtitle}</Text>
       </TouchableOpacity>
 
-      {/* Nutrition (dummy) */}
+      {/* Nutrition */}
       <View style={styles.metricCard}>
         <View style={styles.metricHeaderRow}>
           <View style={[styles.metricIcon, styles.nutritionIcon]}>
@@ -332,8 +380,8 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress }) => {
           </View>
           <Text style={styles.metricLabel}>NUTRITION</Text>
         </View>
-        <Text style={styles.metricValue}>6/7</Text>
-        <Text style={styles.metricSub}>days tracked</Text>
+        <Text style={styles.metricValue}>{nutritionValue}</Text>
+        <Text style={styles.metricSub}>{nutritionSubtitle}</Text>
       </View>
     </View>
   );

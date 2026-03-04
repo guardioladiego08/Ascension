@@ -10,29 +10,34 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
-
-type ExerciseRow = {
-  id: string;
-  primary_name?: string | null;
-  secondary_name?: string | null;
-  alias?: string | null;
-  body_part?: string[] | null;
-  category?: string | null;
-};
+import {
+  fetchVisibleExerciseById,
+  getAuthenticatedUserId,
+  getExerciseBodyParts,
+  type ExerciseRecord,
+} from '@/lib/strength/exercises';
 
 type StrengthSetRow = {
   id: string;
   exercise_id: string;
-  weight_kg?: number | null;
+  strength_workout_id: string;
+  weight?: number | null;
+  weight_unit_csv?: string | null;
   reps?: number | null;
+  est_1rm?: number | null;
   created_at: string;
-  // may contain strength_workout_id or workout_id (depends on your schema)
-  [key: string]: any;
+};
+
+type ExerciseSummaryRow = {
+  strength_workout_id: string;
+  vol: number | null;
+  best_est_1rm: number | null;
 };
 
 type WorkoutRow = {
@@ -42,6 +47,7 @@ type WorkoutRow = {
 };
 
 const LB_PER_KG = 2.20462;
+const BG = Colors.dark.background;
 
 function formatMassFromKg(valueKg: number, unit: 'kg' | 'lb') {
   if (unit === 'kg') return `${Math.round(valueKg)} kg`;
@@ -52,7 +58,8 @@ const ExerciseDetailScreen: React.FC = () => {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
   const { weightUnit } = useUnits();
 
-  const [exercise, setExercise] = useState<ExerciseRow | null>(null);
+  const [exercise, setExercise] = useState<ExerciseRecord | null>(null);
+  const [summaries, setSummaries] = useState<ExerciseSummaryRow[]>([]);
   const [sets, setSets] = useState<StrengthSetRow[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,61 +74,83 @@ const ExerciseDetailScreen: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       if (!id || Array.isArray(id)) {
+        setExercise(null);
+        setSummaries([]);
+        setSets([]);
+        setWorkouts([]);
         setLoading(false);
         setErrorMsg('No exercise ID provided.');
         return;
       }
 
       try {
+        setExercise(null);
+        setSummaries([]);
+        setSets([]);
+        setWorkouts([]);
         setErrorMsg(null);
 
-        // 1) Exercise metadata
-        const { data: exData, error: exErr } = await supabase
-          .schema('strength')
-          .from('exercises')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
+        const userId = await getAuthenticatedUserId();
+        if (!userId) {
+          setErrorMsg('Not signed in.');
+          setLoading(false);
+          return;
+        }
 
-        if (exErr) throw exErr;
+        // 1) Exercise metadata scoped to shared + current user's exercises.
+        const exData = await fetchVisibleExerciseById(userId, id);
         if (!exData) {
           setErrorMsg('Exercise not found.');
           setLoading(false);
           return;
         }
-        setExercise(exData as ExerciseRow);
+        setExercise(exData);
 
-        // 2) All sets for this exercise
-        const { data: setData, error: setErr } = await supabase
+        // 2) User-scoped summaries avoid pulling every user's sets for shared exercises.
+        const { data: summaryData, error: summaryErr } = await supabase
           .schema('strength')
-          .from('strength_sets')
-          .select('*')
+          .from('exercise_summary')
+          .select('strength_workout_id, vol, best_est_1rm')
+          .eq('user_id', userId)
           .eq('exercise_id', id);
 
-        if (setErr) throw setErr;
+        if (summaryErr) throw summaryErr;
 
-        const rows = (setData ?? []) as StrengthSetRow[];
-        setSets(rows);
+        const summaryRows = (summaryData ?? []) as ExerciseSummaryRow[];
+        setSummaries(summaryRows);
 
-        // 3) Pull the workouts that contain this exercise (for total time)
         const workoutIds = Array.from(
-          new Set(
-            rows
-              .map(r => (r as any).strength_workout_id ?? (r as any).workout_id)
-              .filter(Boolean)
-          )
-        ) as string[];
+          new Set(summaryRows.map((row) => row.strength_workout_id).filter(Boolean))
+        );
 
-        if (workoutIds.length) {
-          const { data: wkData, error: wkErr } = await supabase
-            .schema('strength')
-            .from('strength_workouts')
-            .select('id, started_at, ended_at')
-            .in('id', workoutIds);
-
-          if (wkErr) throw wkErr;
-          setWorkouts((wkData ?? []) as WorkoutRow[]);
+        if (workoutIds.length === 0) {
+          setSets([]);
+          setWorkouts([]);
+          return;
         }
+
+        const [{ data: setData, error: setErr }, { data: wkData, error: wkErr }] =
+          await Promise.all([
+            supabase
+              .schema('strength')
+              .from('strength_sets')
+              .select('id, exercise_id, strength_workout_id, weight, weight_unit_csv, reps, est_1rm, created_at')
+              .eq('exercise_id', id)
+              .in('strength_workout_id', workoutIds)
+              .order('created_at', { ascending: true }),
+            supabase
+              .schema('strength')
+              .from('strength_workouts')
+              .select('id, started_at, ended_at')
+              .eq('user_id', userId)
+              .in('id', workoutIds),
+          ]);
+
+        if (setErr) throw setErr;
+        if (wkErr) throw wkErr;
+
+        setSets((setData ?? []) as StrengthSetRow[]);
+        setWorkouts((wkData ?? []) as WorkoutRow[]);
       } catch (err: any) {
         console.warn('Error loading exercise detail', err);
         setErrorMsg('Error loading exercise details.');
@@ -139,16 +168,11 @@ const ExerciseDetailScreen: React.FC = () => {
     if (typeof name === 'string' && name.length) return name;
     if (!exercise) return 'Exercise';
 
-    return (
-      exercise.primary_name ||
-      exercise.secondary_name ||
-      exercise.alias ||
-      'Exercise'
-    );
+    return exercise.exercise_name || 'Exercise';
   }, [name, exercise]);
 
   const metrics = useMemo(() => {
-    if (!sets.length) {
+    if (!summaries.length && !sets.length) {
       return {
         totalSessions: 0,
         totalTimeMins: 0,
@@ -159,28 +183,17 @@ const ExerciseDetailScreen: React.FC = () => {
     }
 
     // Sessions = distinct workouts that used this exercise
-    const workoutKeySet = new Set(
-      sets
-        .map(r => (r as any).strength_workout_id ?? (r as any).workout_id)
-        .filter(Boolean)
+    const totalSessions = summaries.length;
+    const totalVolume = summaries.reduce((sum, row) => sum + Number(row.vol ?? 0), 0);
+    const bestOneRm = summaries.reduce(
+      (best, row) => Math.max(best, Number(row.best_est_1rm ?? 0)),
+      0
     );
-    const totalSessions = workoutKeySet.size;
-
-    let totalVolume = 0;
     let totalReps = 0;
-    let bestOneRm = 0;
 
     for (const s of sets) {
-      const w = s.weight_kg ?? 0;
       const r = s.reps ?? 0;
-      totalVolume += w * r;
       totalReps += r;
-
-      // Epley formula for estimated 1RM
-      if (w > 0 && r > 0) {
-        const est = w * (1 + r / 30);
-        if (est > bestOneRm) bestOneRm = est;
-      }
     }
 
     // total time = sum of durations of any workout that contained this exercise
@@ -205,7 +218,7 @@ const ExerciseDetailScreen: React.FC = () => {
       avgReps,
       bestOneRm,
     };
-  }, [sets, workouts]);
+  }, [sets, summaries, workouts]);
 
   // ------------------------ SMALL SUBCOMPONENTS ------------------------------
 
@@ -217,7 +230,7 @@ const ExerciseDetailScreen: React.FC = () => {
   );
 
   const renderChartBody = () => {
-    if (!sets.length) {
+    if (!summaries.length) {
       return (
         <View style={styles.chartEmpty}>
           <Text style={styles.chartEmptyText}>No data yet for this exercise.</Text>
@@ -267,167 +280,182 @@ const ExerciseDetailScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <View style={[GlobalStyles.container, styles.centered]}>
-        <ActivityIndicator size="small" color={Colors.dark.highlight1} />
-        <Text style={styles.muted}>Loading exercise…</Text>
-      </View>
+      <LinearGradient
+        colors={['#3a3a3bff', '#1e1e1eff', BG]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={{ flex: 1 }}
+      >
+        <View style={[GlobalStyles.container, styles.screen, styles.centered]}>
+          <ActivityIndicator size="small" color={Colors.dark.highlight1} />
+          <Text style={styles.muted}>Loading exercise…</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   if (errorMsg) {
     return (
-      <View style={[GlobalStyles.container, styles.centered]}>
-        <Text style={styles.errorText}>{errorMsg}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
-          <Text style={styles.retryText}>Go back</Text>
-        </TouchableOpacity>
-      </View>
+      <LinearGradient
+        colors={['#3a3a3bff', '#1e1e1eff', BG]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={{ flex: 1 }}
+      >
+        <View style={[GlobalStyles.container, styles.screen, styles.centered]}>
+          <Text style={styles.errorText}>{errorMsg}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
+            <Text style={styles.retryText}>Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
     );
   }
 
   // ------------------------ MAIN RENDER -------------------------------------
 
   return (
-    <View style={GlobalStyles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#E5E7F5" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={2}>
-            {title}
-          </Text>
-          <View style={{ width: 32 }} />
-        </View>
+    <LinearGradient
+      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={{ flex: 1 }}
+    >
+      <View style={[GlobalStyles.container, styles.screen]}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={20} color="#E5E7F5" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle} numberOfLines={2}>
+              {title}
+            </Text>
+            <View style={{ width: 32 }} />
+          </View>
 
-        {/* Meta pills */}
-        {exercise && (
-          <View style={styles.metaRow}>
-            {exercise.category && (
-              <View style={styles.metaPill}>
-                <Text style={styles.metaPillText}>{exercise.category}</Text>
-              </View>
-            )}
-            {Array.isArray(exercise.body_part) &&
-              exercise.body_part.map(bp => (
+          {exercise && (
+            <View style={styles.metaRow}>
+              {exercise.workout_category && (
+                <View style={styles.metaPill}>
+                  <Text style={styles.metaPillText}>{exercise.workout_category}</Text>
+                </View>
+              )}
+              {getExerciseBodyParts(exercise).map(bp => (
                 <View key={bp} style={styles.metaPill}>
                   <Text style={styles.metaPillText}>{bp}</Text>
                 </View>
               ))}
-          </View>
-        )}
+            </View>
+          )}
 
-        {/* Metric cards */}
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>SESSIONS</Text>
-            <Text style={styles.metricValue}>{metrics.totalSessions}</Text>
-            <Text style={styles.metricSub}>times completed</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>TIME</Text>
-            <Text style={styles.metricValue}>
-              {metrics.totalTimeMins > 0
-                ? `${Math.round(metrics.totalTimeMins)} min`
-                : '—'}
-            </Text>
-            <Text style={styles.metricSub}>total time</Text>
-          </View>
-        </View>
-
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>VOLUME</Text>
-            <Text style={styles.metricValue}>
-              {metrics.totalVolume > 0 ? formatMassFromKg(metrics.totalVolume, weightUnit) : '—'}
-            </Text>
-            <Text style={styles.metricSub}>all time</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>BEST 1RM</Text>
-            <Text style={styles.metricValue}>
-              {metrics.bestOneRm > 0 ? formatMassFromKg(metrics.bestOneRm, weightUnit) : '—'}
-            </Text>
-            <Text style={styles.metricSub}>estimated</Text>
-          </View>
-        </View>
-
-        {/* Quick stats */}
-        <View style={styles.statRow}>
-          <StatChip value={sets.length.toString()} label="Total sets" />
-          <StatChip
-            value={metrics.avgReps > 0 ? metrics.avgReps.toFixed(1) : '—'}
-            label="Avg reps / set"
-          />
-        </View>
-
-        {/* Charts / progression */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>PROGRESSION</Text>
-          </View>
-
-          <View style={styles.segmentRow}>
-            <TouchableOpacity
-              style={[
-                styles.segmentChip,
-                selectedStat === 'sessions' && styles.segmentChipActive,
-              ]}
-              onPress={() => setSelectedStat('sessions')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  selectedStat === 'sessions' && styles.segmentTextActive,
-                ]}
-              >
-                Sessions
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>SESSIONS</Text>
+              <Text style={styles.metricValue}>{metrics.totalSessions}</Text>
+              <Text style={styles.metricSub}>times completed</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>TIME</Text>
+              <Text style={styles.metricValue}>
+                {metrics.totalTimeMins > 0
+                  ? `${Math.round(metrics.totalTimeMins)} min`
+                  : '—'}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.segmentChip,
-                selectedStat === 'volume' && styles.segmentChipActive,
-              ]}
-              onPress={() => setSelectedStat('volume')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  selectedStat === 'volume' && styles.segmentTextActive,
-                ]}
-              >
-                Volume
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.segmentChip,
-                selectedStat === 'oneRM' && styles.segmentChipActive,
-              ]}
-              onPress={() => setSelectedStat('oneRM')}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  selectedStat === 'oneRM' && styles.segmentTextActive,
-                ]}
-              >
-                1RM
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.metricSub}>total time</Text>
+            </View>
           </View>
 
-          {renderChartBody()}
-        </View>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>VOLUME</Text>
+              <Text style={styles.metricValue}>
+                {metrics.totalVolume > 0 ? formatMassFromKg(metrics.totalVolume, weightUnit) : '—'}
+              </Text>
+              <Text style={styles.metricSub}>all time</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>BEST 1RM</Text>
+              <Text style={styles.metricValue}>
+                {metrics.bestOneRm > 0 ? formatMassFromKg(metrics.bestOneRm, weightUnit) : '—'}
+              </Text>
+              <Text style={styles.metricSub}>estimated</Text>
+            </View>
+          </View>
 
-        <View style={{ height: 32 }} />
-      </ScrollView>
-    </View>
+          <View style={styles.statRow}>
+            <StatChip value={sets.length.toString()} label="Total sets" />
+            <StatChip
+              value={metrics.avgReps > 0 ? metrics.avgReps.toFixed(1) : '—'}
+              label="Avg reps / set"
+            />
+          </View>
+
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>PROGRESSION</Text>
+            </View>
+
+            <View style={styles.segmentRow}>
+              <TouchableOpacity
+                style={[
+                  styles.segmentChip,
+                  selectedStat === 'sessions' && styles.segmentChipActive,
+                ]}
+                onPress={() => setSelectedStat('sessions')}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    selectedStat === 'sessions' && styles.segmentTextActive,
+                  ]}
+                >
+                  Sessions
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.segmentChip,
+                  selectedStat === 'volume' && styles.segmentChipActive,
+                ]}
+                onPress={() => setSelectedStat('volume')}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    selectedStat === 'volume' && styles.segmentTextActive,
+                  ]}
+                >
+                  Volume
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.segmentChip,
+                  selectedStat === 'oneRM' && styles.segmentChipActive,
+                ]}
+                onPress={() => setSelectedStat('oneRM')}
+              >
+                <Text
+                  style={[
+                    styles.segmentText,
+                    selectedStat === 'oneRM' && styles.segmentTextActive,
+                  ]}
+                >
+                  1RM
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {renderChartBody()}
+          </View>
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 };
 
@@ -436,9 +464,12 @@ export default ExerciseDetailScreen;
 // ----------------------------- STYLES ----------------------------------------
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingHorizontal: 4,
+    paddingTop: 12,
     paddingBottom: 16,
   },
   centered: {
@@ -476,7 +507,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: Colors.dark.card,
+    backgroundColor: Colors.dark.card2,
   },
   metaPillText: {
     fontSize: 11,
@@ -550,7 +581,7 @@ const styles = StyleSheet.create({
   },
   segmentRow: {
     flexDirection: 'row',
-    backgroundColor: '#111827',
+    backgroundColor: Colors.dark.offset1,
     borderRadius: 999,
     padding: 4,
     marginTop: 4,
@@ -563,7 +594,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   segmentChipActive: {
-    backgroundColor: '#6366F1',
+    backgroundColor: Colors.dark.highlight1,
   },
   segmentText: {
     fontSize: 11,
@@ -597,12 +628,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 10,
     borderRadius: 999,
-    backgroundColor: '#111827',
+    backgroundColor: Colors.dark.offset1,
     overflow: 'hidden',
     marginHorizontal: 8,
   },
   chartBarFill: {
-    backgroundColor: '#6366F1',
+    backgroundColor: Colors.dark.highlight1,
     borderRadius: 999,
   },
   chartRowValue: {
@@ -627,7 +658,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#4B5563',
+    backgroundColor: Colors.dark.card,
   },
   retryText: {
     color: '#E5E7F5',
