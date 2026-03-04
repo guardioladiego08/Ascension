@@ -1,4 +1,3 @@
-// lib/stats/strengthStats.ts
 import { supabase } from '@/lib/supabase';
 
 function pad2(n: number) {
@@ -19,8 +18,8 @@ export function getDeviceTimezone(): string | null {
 }
 
 export async function updateWeeklyAndLifetimeFromStrengthWorkout(opts: {
-  endedAt: Date;              // when the workout ended
-  durationSeconds: number;    // your session timer seconds
+  endedAt: Date;
+  durationSeconds: number;
   totalWeightLiftedKg: number;
 }) {
   const p_date = toLocalISODate(opts.endedAt);
@@ -37,10 +36,6 @@ export async function updateWeeklyAndLifetimeFromStrengthWorkout(opts: {
 
   if (!error) return;
 
-  // Backward-compatibility guard:
-  // Some deployed DB functions still reference legacy columns (e.g. total_miles_biked).
-  // We do not block workout save in that case; instead we log a clear message so
-  // the migration can be applied server-side.
   const msg = String(error?.message ?? '').toLowerCase();
   const overloadError =
     error?.code === 'PGRST203' &&

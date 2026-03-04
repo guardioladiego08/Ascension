@@ -21,21 +21,16 @@ export default function RootLayout() {
   return (
     <UnitsProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-       <SafeAreaProvider>
-         <BottomSheetModalProvider>
-           <SupabaseProvider>
-             <ActiveRunWalkProvider>
-               <Stack screenOptions={{ headerShown: false }}>
-                 <Stack.Screen name="(tabs)" />
-                 <Stack.Screen name="SignInLogin" />
-                 <Stack.Screen name="onboarding" />
-                 <Stack.Screen name="auth" />
-               </Stack>
-             </ActiveRunWalkProvider>
-             <StatusBar style="light" />
-           </SupabaseProvider>
-         </BottomSheetModalProvider>
-       </SafeAreaProvider>
+        <SafeAreaProvider>
+          <BottomSheetModalProvider>
+            <SupabaseProvider>
+              <ActiveRunWalkProvider>
+                <Stack screenOptions={{ headerShown: false }} />
+              </ActiveRunWalkProvider>
+              <StatusBar style="light" />
+            </SupabaseProvider>
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </UnitsProvider>
   );

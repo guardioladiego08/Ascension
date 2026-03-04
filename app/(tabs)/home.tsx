@@ -332,6 +332,25 @@ export default function BlankHome() {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.sectionTitle}>DEBUG</Text>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.card}
+            onPress={() => router.push('/home/heart-rate-test')}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Ionicons name="pulse-outline" size={18} color="#FF7A7A" />
+                <Text style={styles.cardHeaderTitle}>Heart Rate Test Page</Text>
+              </View>
+              <Text style={styles.link}>Open</Text>
+            </View>
+            <Text style={styles.listSubtitle}>
+              Query Apple Health for the last 3 hours and inspect raw heart-rate samples without
+              finishing a workout.
+            </Text>
+          </TouchableOpacity>
+
           {/* Social */}
           <Text style={styles.sectionTitle}>SOCIAL</Text>
 

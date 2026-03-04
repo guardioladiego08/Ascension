@@ -2,6 +2,11 @@
 import 'dotenv/config';
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 
+const IOS_HEALTH_SHARE_USAGE_DESCRIPTION =
+  'Ascension reads your Apple Health heart rate data to attach Apple Watch heart-rate samples to completed strength workouts.';
+const IOS_HEALTH_UPDATE_USAGE_DESCRIPTION =
+  'Ascension uses Apple Health permissions to support heart-rate syncing for completed strength workouts.';
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -54,6 +59,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         // Optional (improves activity context)
         NSMotionUsageDescription:
           'Tensr uses motion data to improve the accuracy of outdoor session tracking.',
+        NSHealthShareUsageDescription: IOS_HEALTH_SHARE_USAGE_DESCRIPTION,
+        NSHealthUpdateUsageDescription: IOS_HEALTH_UPDATE_USAGE_DESCRIPTION,
       },
     },
 
@@ -95,6 +102,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
       // Mapbox
       '@rnmapbox/maps',
+
+      [
+        '@kingstinct/react-native-healthkit',
+        {
+          NSHealthShareUsageDescription: IOS_HEALTH_SHARE_USAGE_DESCRIPTION,
+          NSHealthUpdateUsageDescription: IOS_HEALTH_UPDATE_USAGE_DESCRIPTION,
+          background: false,
+        },
+      ],
 
       // Build properties (keep Mapbox maven + your SDK targets)
       [

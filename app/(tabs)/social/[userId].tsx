@@ -1,7 +1,6 @@
 // app/(tabs)/social/[userId].tsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   FlatList,
   View,
@@ -15,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import dayjs, { Dayjs } from 'dayjs';
 import Svg, { Circle } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';

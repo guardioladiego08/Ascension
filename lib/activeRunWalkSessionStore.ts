@@ -44,6 +44,7 @@ export type ActiveStrengthSession = {
   phase: ActiveSessionPhase;
   workoutId: string;
   userId: string | null;
+  startedAtISO: string | null;
   seconds: number;
   exercises: ExerciseDraft[];
 };

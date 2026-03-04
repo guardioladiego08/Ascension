@@ -59,11 +59,14 @@ export function UnitsProvider({ children }: { children: React.ReactNode }) {
   const [weightSaveError, setWeightSaveError] = useState<string | null>(null);
 
   const upsertUnits = useCallback(async (partial: Partial<Record<typeof DIST_COL | typeof WEIGHT_COL, string>>) => {
-    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    const {
+      data: { session },
+      error: authErr,
+    } = await supabase.auth.getSession();
     if (authErr) throw authErr;
-    if (!auth?.user) throw new Error('Not signed in');
+    if (!session?.user) throw new Error('Not signed in');
 
-    const payload = { user_id: auth.user.id, ...partial };
+    const payload = { user_id: session.user.id, ...partial };
     const { error } = await supabase
       .schema(SCHEMA)
       .from(TABLE)
@@ -73,18 +76,21 @@ export function UnitsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshUnits = useCallback(async () => {
-    const { data: auth, error: authErr } = await supabase.auth.getUser();
+    const {
+      data: { session },
+      error: authErr,
+    } = await supabase.auth.getSession();
     if (authErr) {
-      console.warn('[UnitsContext] getUser failed:', authErr);
+      console.warn('[UnitsContext] getSession failed:', authErr);
       return;
     }
-    if (!auth?.user) return;
+    if (!session?.user) return;
 
     const { data, error } = await supabase
       .schema(SCHEMA)
       .from(TABLE)
       .select(`${DIST_COL}, ${WEIGHT_COL}`)
-      .eq('user_id', auth.user.id)
+      .eq('user_id', session.user.id)
       .maybeSingle();
 
     if (error) {

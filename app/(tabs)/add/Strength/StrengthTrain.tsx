@@ -25,6 +25,7 @@ import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import { syncStrengthWorkoutHeartRateSamples } from '@/lib/health/syncStrengthWorkoutHeartRate';
 import type { ExerciseDraft, UnitMass } from '@/lib/strength/types';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
@@ -57,6 +58,65 @@ async function ensureAuthedUserId(): Promise<string> {
   return uid;
 }
 
+async function resolveStrengthWorkoutStartedAtISO(
+  workoutId: string,
+  fallbackStartedAtISO: string | null
+): Promise<string | null> {
+  if (fallbackStartedAtISO) return fallbackStartedAtISO;
+
+  const { data, error } = await supabase
+    .schema('strength')
+    .from('strength_workouts')
+    .select('started_at')
+    .eq('id', workoutId)
+    .maybeSingle<{ started_at: string | null }>();
+
+  if (error) throw error;
+  return data?.started_at ?? null;
+}
+
+type StrengthWorkoutRow = {
+  id: string;
+  user_id: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+};
+
+async function getStrengthWorkoutRow(workoutId: string) {
+  const { data, error } = await supabase
+    .schema('strength')
+    .from('strength_workouts')
+    .select('id,user_id,started_at,ended_at')
+    .eq('id', workoutId)
+    .maybeSingle<StrengthWorkoutRow>();
+
+  if (error) throw error;
+  return data;
+}
+
+async function createStrengthWorkoutRow(params: {
+  userId: string;
+  startedAtISO?: string | null;
+}) {
+  const payload: { user_id: string; started_at?: string } = {
+    user_id: params.userId,
+  };
+
+  if (params.startedAtISO) {
+    payload.started_at = params.startedAtISO;
+  }
+
+  const { data, error } = await supabase
+    .schema('strength')
+    .from('strength_workouts')
+    .insert(payload)
+    .select('id, user_id, started_at, ended_at')
+    .single<StrengthWorkoutRow>();
+
+  if (error) throw error;
+  return data;
+}
+
 export default function StrengthTrain() {
   const { weightUnit } = useUnits();
   const {
@@ -67,6 +127,7 @@ export default function StrengthTrain() {
   } = useActiveRunWalk();
   const [workoutId, setWorkoutId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null); // convenience / UI state
+  const [startedAtISO, setStartedAtISO] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [exercises, setExercises] = useState<ExerciseDraft[]>([]);
@@ -117,32 +178,45 @@ export default function StrengthTrain() {
         }
 
         if (activeSession?.kind === 'strength') {
+          const resumedWorkout = await getStrengthWorkoutRow(activeSession.workoutId);
           if (!mounted) return;
 
-          setWorkoutId(activeSession.workoutId);
-          setUserId(activeSession.userId);
-          setExercises(activeSession.exercises);
-          setPaused(activeSession.phase === 'paused');
-          setSeconds(activeSession.seconds);
-          setLoading(false);
-          return;
+          if (
+            resumedWorkout &&
+            resumedWorkout.user_id === activeSession.userId &&
+            resumedWorkout.ended_at == null
+          ) {
+            console.log('[HealthDebug] resuming existing strength session', {
+              workoutId: resumedWorkout.id,
+              startedAtISO: resumedWorkout.started_at,
+            });
+
+            setWorkoutId(activeSession.workoutId);
+            setUserId(activeSession.userId);
+            setStartedAtISO(activeSession.startedAtISO ?? resumedWorkout.started_at ?? null);
+            setExercises(activeSession.exercises);
+            setPaused(activeSession.phase === 'paused');
+            setSeconds(activeSession.seconds);
+            setLoading(false);
+            return;
+          }
+
+          console.warn('[HealthDebug] stale strength session found locally, creating replacement row', {
+            localWorkoutId: activeSession.workoutId,
+            resumedWorkout: resumedWorkout ?? null,
+          });
+          clearActiveSession();
         }
 
         const uid = await ensureAuthedUserId();
         if (!mounted) return;
         setUserId(uid);
 
-        const { data, error } = await supabase
-          .schema('strength')
-          .from('strength_workouts')
-          .insert({ user_id: uid })
-          .select('id')
-          .single();
-
-        if (error) throw error;
+        const data = await createStrengthWorkoutRow({ userId: uid });
         if (!mounted) return;
 
         setWorkoutId(data.id);
+        setStartedAtISO(data.started_at ?? null);
         setLoading(false);
       } catch (err: any) {
         console.error('[StrengthTrain] start workout failed', err);
@@ -168,6 +242,7 @@ export default function StrengthTrain() {
       phase: paused ? 'paused' : 'running',
       workoutId,
       userId,
+      startedAtISO,
       seconds,
       exercises,
     });
@@ -177,6 +252,7 @@ export default function StrengthTrain() {
     paused,
     seconds,
     setActiveSession,
+    startedAtISO,
     userId,
     workoutId,
   ]);
@@ -252,15 +328,38 @@ export default function StrengthTrain() {
       const uid = await ensureAuthedUserId();
       if (uid !== userId) setUserId(uid);
 
-      // Ownership sanity check (optional but very helpful)
-      const { data: wRow, error: wCheckErr } = await supabase
-        .schema('strength')
-        .from('strength_workouts')
-        .select('id,user_id')
-        .eq('id', workoutId)
-        .single();
+      let effectiveWorkoutId = workoutId;
+      let effectiveStartedAtISO = startedAtISO;
 
-      if (wCheckErr) throw wCheckErr;
+      // Ownership sanity check (optional but very helpful)
+      let wRow = await getStrengthWorkoutRow(effectiveWorkoutId);
+      console.log('[HealthDebug] strength workout ownership check', {
+        workoutId: effectiveWorkoutId,
+        uid,
+        wRow: wRow ?? null,
+      });
+      if (!wRow) {
+        console.warn('[HealthDebug] workout row missing before save, creating replacement row', {
+          workoutId: effectiveWorkoutId,
+          startedAtISO: effectiveStartedAtISO,
+        });
+
+        wRow = await createStrengthWorkoutRow({
+          userId: uid,
+          startedAtISO: effectiveStartedAtISO,
+        });
+
+        effectiveWorkoutId = wRow.id;
+        effectiveStartedAtISO = wRow.started_at ?? effectiveStartedAtISO ?? null;
+
+        setWorkoutId(effectiveWorkoutId);
+        setStartedAtISO(effectiveStartedAtISO);
+
+        console.log('[HealthDebug] replacement workout row created', {
+          workoutId: effectiveWorkoutId,
+          startedAtISO: effectiveStartedAtISO,
+        });
+      }
       if (!wRow?.user_id || wRow.user_id !== uid) {
         throw new Error('Workout ownership mismatch. Please sign in again.');
       }
@@ -269,7 +368,7 @@ export default function StrengthTrain() {
       const setPayload = exercises.flatMap(ex =>
         ex.sets.map(s => ({
           exercise_id: ex.exercise_id,
-          strength_workout_id: workoutId,
+          strength_workout_id: effectiveWorkoutId,
           set_index: s.set_index,
           set_type: s.set_type,
           superset_group: s.superset_group ?? null,
@@ -325,7 +424,7 @@ export default function StrengthTrain() {
       const summaryPayload = summaries.map(sm => ({
         user_id: uid, // use fresh uid
         exercise_id: sm.exercise_id,
-        strength_workout_id: workoutId,
+        strength_workout_id: effectiveWorkoutId,
         vol: sm.vol,
         strongest_set: sm.strongest_set,
         best_est_1rm: sm.best_est_1rm,
@@ -349,13 +448,53 @@ export default function StrengthTrain() {
         .schema('strength')
         .from('strength_workouts')
         .update({ ended_at: endedAt.toISOString(), total_vol: totalVol })
-        .eq('id', workoutId);
+        .eq('id', effectiveWorkoutId);
 
       if (wErr) throw wErr;
 
+      try {
+        const workoutStartedAtISO = await resolveStrengthWorkoutStartedAtISO(
+          effectiveWorkoutId,
+          effectiveStartedAtISO
+        );
+
+        if (workoutStartedAtISO) {
+          console.log('[HealthDebug] strength workout finished, starting heart rate sync', {
+            workoutId: effectiveWorkoutId,
+            userId: uid,
+            startedAtISO: workoutStartedAtISO,
+            endedAtISO: endedAt.toISOString(),
+            totalVol,
+            exerciseCount: exercises.length,
+          });
+
+          const heartRateSyncResult = await syncStrengthWorkoutHeartRateSamples({
+            userId: uid,
+            workoutId: effectiveWorkoutId,
+            startedAtISO: workoutStartedAtISO,
+            endedAtISO: endedAt.toISOString(),
+          });
+
+          console.log('[HealthDebug] strength heart rate sync result', {
+            workoutId: effectiveWorkoutId,
+            heartRateSyncResult,
+          });
+
+          if (heartRateSyncResult.status === 'failed') {
+            console.warn('[StrengthTrain] heart rate sync failed', heartRateSyncResult.reason);
+          }
+        } else {
+          console.warn('[StrengthTrain] missing started_at, skipping heart rate sync', {
+            workoutId: effectiveWorkoutId,
+          });
+        }
+      } catch (heartRateError) {
+        console.warn('[StrengthTrain] heart rate sync failed', heartRateError);
+      }
+
       stopPersistingStrengthSession();
-      console.log('✅ workout saved', { workoutId });
-      router.replace(`/(tabs)/add/Strength/${workoutId}`);
+      console.log('✅ workout saved', { workoutId: effectiveWorkoutId });
+      router.replace(`/(tabs)/add/Strength/${effectiveWorkoutId}`);
     } catch (err: any) {
       console.error('[StrengthTrain] finish failed', err);
 
@@ -468,6 +607,7 @@ export default function StrengthTrain() {
 
             stopPersistingStrengthSession();
             setExercises([]);
+            setStartedAtISO(null);
             setSeconds(0);
             setPaused(false);
 

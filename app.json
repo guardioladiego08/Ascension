@@ -52,7 +52,12 @@
         {
           "RNMapboxMapsVersion": "11.16.0"
         }
-      ]
+      ],
+      ["@kingstinct/react-native-healthkit", {
+        "NSHealthShareUsageDescription": "Tensr reads your heart rate to show workout analytics and training insights.",
+        "NSHealthUpdateUsageDescription": "Tensr can write workouts you log to Apple Health (optional).",
+        "background": false
+      }]
     ],
     "experiments": {
       "typedRoutes": true

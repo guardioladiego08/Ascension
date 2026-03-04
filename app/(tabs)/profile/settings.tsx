@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   View,
   Text,
@@ -10,10 +9,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { Colors } from '@/constants/Colors';
 import { clearAllRunWalkLocalState } from '@/lib/runWalkSessionCleanup';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
+import {
+  getAppleHealthPreferences,
+  getAppleHealthStatusLabel,
+} from '@/lib/health/preferences';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
@@ -35,6 +40,23 @@ export default function SettingsScreen() {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showDistanceModal, setShowDistanceModal] = useState(false);
   const [showProfileDetailsModal, setShowProfileDetailsModal] = useState(false);
+  const [appleHealthStatus, setAppleHealthStatus] = useState('Not connected');
+
+  const loadAppleHealthStatus = useCallback(async () => {
+    try {
+      const prefs = await getAppleHealthPreferences();
+      setAppleHealthStatus(getAppleHealthStatusLabel(prefs));
+    } catch (error) {
+      console.warn('[Settings] failed to load Apple Health status', error);
+      setAppleHealthStatus('Unavailable');
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAppleHealthStatus();
+    }, [loadAppleHealthStatus])
+  );
 
   const handleComingSoon = (label: string) => {
     // placeholder until you wire actual popups
@@ -236,6 +258,21 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data</Text>
           <View style={styles.card}>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              onPress={() => router.push('/profile/settings/health')}
+            >
+              <Text style={styles.rowLabel}>Apple Health</Text>
+              <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>{appleHealthStatus}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={TEXT_MUTED}
+                />
+              </View>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
               onPress={() => handleComingSoon('Export strength workouts')}
