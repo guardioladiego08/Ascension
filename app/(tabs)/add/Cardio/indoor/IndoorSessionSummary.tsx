@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,14 @@ import {
 
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import DeleteDraftConfirmModal from './indoor/DeleteDraftConfirmModal';
+import {
+  formatAppleHealthError,
+  getAppleHealthUnavailableMessage,
+  getAppleHeartRateSamplesForRange,
+  isAppleHealthKitAvailable,
+  type AppleHeartRateSample,
+} from '@/lib/health/appleHealthKit';
+import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -46,6 +54,8 @@ const FT_PER_M = 3.28084;
 
 const MPH_PER_MPS = 2.236936;
 const KMH_PER_MPS = 3.6;
+const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
+const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 
 function formatClock(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
@@ -86,6 +96,14 @@ function formatShareErr(err: any): string {
   return code ? `${message} (${code})` : message;
 }
 
+type HeartRateSyncState =
+  | 'idle'
+  | 'scheduled'
+  | 'syncing'
+  | 'synced'
+  | 'skipped'
+  | 'failed';
+
 export default function IndoorSessionSummary() {
   const router = useRouter();
   const { distanceUnit } = useUnits();
@@ -99,6 +117,13 @@ export default function IndoorSessionSummary() {
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
   const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
+  const [heartRateSamples, setHeartRateSamples] = useState<AppleHeartRateSample[]>([]);
+  const [heartRateSyncState, setHeartRateSyncState] = useState<HeartRateSyncState>('idle');
+  const [heartRateSyncMessage, setHeartRateSyncMessage] = useState<string | null>(null);
+  const [heartRateSyncing, setHeartRateSyncing] = useState(false);
+  const [heartRateLoaded, setHeartRateLoaded] = useState(false);
+  const autoHeartRateRetryRef = useRef(false);
+  const activeHeartRateSyncTokenRef = useRef(0);
 
   // ✅ Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -166,6 +191,121 @@ export default function IndoorSessionSummary() {
     distUnit
   );
   const avgPaceText = formatPace(avgPaceForUnit, distUnit === 'mi' ? '/mi' : '/km');
+  const workoutStartISO = draft?.created_at ?? null;
+  const workoutEndISO = draft?.ended_at ?? null;
+
+  const runHeartRateSync = useCallback(
+    async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
+      if (!workoutStartISO || !workoutEndISO) {
+        setHeartRateSyncState('skipped');
+        setHeartRateSyncMessage('Workout timestamps are missing, so heart-rate sync was skipped.');
+        return;
+      }
+
+      const delayMs = Math.max(0, opts?.delayMs ?? 0);
+      const reason = opts?.reason ?? 'manual';
+      const syncToken = Date.now();
+      activeHeartRateSyncTokenRef.current = syncToken;
+
+      if (delayMs > 0) {
+        setHeartRateSyncState('scheduled');
+        setHeartRateSyncMessage(
+          `${reason === 'auto' ? 'Auto retry' : 'Retry'} in ${Math.round(
+            delayMs / 1000
+          )} seconds before re-checking Apple Health.`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      if (activeHeartRateSyncTokenRef.current !== syncToken) {
+        return;
+      }
+
+      try {
+        setHeartRateSyncing(true);
+        setHeartRateSyncState('syncing');
+        setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
+
+        if (!isAppleHealthKitAvailable()) {
+          throw new Error(getAppleHealthUnavailableMessage());
+        }
+
+        const samples = await getAppleHeartRateSamplesForRange({
+          startDate: workoutStartISO,
+          endDate: workoutEndISO,
+        });
+
+        if (activeHeartRateSyncTokenRef.current !== syncToken) {
+          return;
+        }
+
+        setHeartRateSamples(samples);
+        setHeartRateLoaded(true);
+        setHeartRateSyncState('synced');
+
+        if (samples.length === 0) {
+          setHeartRateSyncMessage(
+            'Apple Health returned no samples for this session yet. Retry after a short delay.'
+          );
+        } else {
+          setHeartRateSyncMessage(
+            `Loaded ${samples.length} heart-rate samples from Apple Health.`
+          );
+        }
+      } catch (error: any) {
+        console.warn('[IndoorSessionSummary] Apple Health load failed', error);
+        setHeartRateLoaded(true);
+        setHeartRateSyncState('failed');
+        setHeartRateSyncMessage(formatAppleHealthError(error));
+      } finally {
+        setHeartRateSyncing(false);
+      }
+    },
+    [workoutEndISO, workoutStartISO]
+  );
+
+  useEffect(() => {
+    autoHeartRateRetryRef.current = false;
+    activeHeartRateSyncTokenRef.current = 0;
+    setHeartRateSamples([]);
+    setHeartRateLoaded(false);
+    setHeartRateSyncState('idle');
+    setHeartRateSyncMessage(null);
+    setHeartRateSyncing(false);
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!draft?.created_at || !draft?.ended_at) return;
+    if (heartRateLoaded || heartRateSyncing) return;
+    void runHeartRateSync({ reason: 'manual' });
+  }, [
+    draft?.created_at,
+    draft?.ended_at,
+    heartRateLoaded,
+    heartRateSyncing,
+    runHeartRateSync,
+  ]);
+
+  useEffect(() => {
+    if (!draft?.created_at || !draft?.ended_at) return;
+    if (!heartRateLoaded) return;
+    if (heartRateSamples.length > 0) return;
+    if (heartRateSyncState !== 'synced') return;
+    if (autoHeartRateRetryRef.current) return;
+
+    autoHeartRateRetryRef.current = true;
+    void runHeartRateSync({
+      delayMs: HEART_RATE_AUTO_RETRY_DELAY_MS,
+      reason: 'auto',
+    });
+  }, [
+    draft?.created_at,
+    draft?.ended_at,
+    heartRateLoaded,
+    heartRateSamples.length,
+    heartRateSyncState,
+    runHeartRateSync,
+  ]);
 
   // -----------------------------
   // Charts: build series from draft.samples (before saving)
@@ -212,6 +352,42 @@ export default function IndoorSessionSummary() {
       .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.incline_deg) }));
   }, [draft?.samples]);
 
+  const heartRateSummary = useMemo(() => {
+    if (heartRateSamples.length === 0) return null;
+
+    let minBpm = heartRateSamples[0].bpm;
+    let maxBpm = heartRateSamples[0].bpm;
+    let sumBpm = 0;
+
+    for (const sample of heartRateSamples) {
+      const bpm = Number(sample.bpm);
+      if (bpm < minBpm) minBpm = bpm;
+      if (bpm > maxBpm) maxBpm = bpm;
+      sumBpm += bpm;
+    }
+
+    return {
+      avgBpm: Math.round((sumBpm / heartRateSamples.length) * 10) / 10,
+      minBpm: Math.round(minBpm),
+      maxBpm: Math.round(maxBpm),
+      sampleCount: heartRateSamples.length,
+    };
+  }, [heartRateSamples]);
+
+  const heartRatePoints: SamplePoint[] = useMemo(() => {
+    return buildHeartRateTimelinePoints({
+      samples: heartRateSamples,
+      workoutStartISO,
+      workoutEndISO,
+    });
+  }, [heartRateSamples, workoutEndISO, workoutStartISO]);
+
+  const heartRateSourceLabel = useMemo(() => {
+    if (heartRateSamples.length === 0) return null;
+    const first = heartRateSamples[0];
+    return first.sourceName ?? first.deviceName ?? 'Apple Health';
+  }, [heartRateSamples]);
+
   const paceFormatter = useMemo(() => {
     const suffix = distUnit === 'mi' ? '/mi' : '/km';
     return (v: number) => {
@@ -247,9 +423,13 @@ export default function IndoorSessionSummary() {
 
     try {
       setSaving(true);
+      const fallbackStartedAt = new Date(
+        new Date(draft.ended_at).getTime() - Math.max(0, draft.total_time_s) * 1000
+      ).toISOString();
 
       const sessionPayload = {
         status: 'completed',
+        started_at: draft.created_at ?? fallbackStartedAt,
         ended_at: draft.ended_at,
         total_time_s: draft.total_time_s,
         total_distance_m: draft.total_distance_m,
@@ -444,6 +624,103 @@ export default function IndoorSessionSummary() {
             value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
           />
           <Row label="Avg Pace" value={avgPaceText} />
+        </View>
+
+        <View style={styles.heartRateCard}>
+          <View style={styles.heartRateHeaderRow}>
+            <Text style={styles.heartRateTitle}>Heart Rate</Text>
+            {heartRateSyncing ? (
+              <ActivityIndicator size="small" color={Colors.dark.highlight1} />
+            ) : null}
+          </View>
+
+          {heartRateSummary ? (
+            <>
+              <Text style={styles.heartRateAvgLabel}>Avg. Heart Rate</Text>
+              <Text style={styles.heartRateAvgValue}>{heartRateSummary.avgBpm} BPM</Text>
+
+              <View style={styles.heartRateStatsRow}>
+                <View style={styles.heartRateStat}>
+                  <Text style={styles.heartRateStatLabel}>Min</Text>
+                  <Text style={styles.heartRateStatValue}>{heartRateSummary.minBpm}</Text>
+                </View>
+                <View style={styles.heartRateStat}>
+                  <Text style={styles.heartRateStatLabel}>Max</Text>
+                  <Text style={styles.heartRateStatValue}>{heartRateSummary.maxBpm}</Text>
+                </View>
+                <View style={styles.heartRateStat}>
+                  <Text style={styles.heartRateStatLabel}>Samples</Text>
+                  <Text style={styles.heartRateStatValue}>{heartRateSummary.sampleCount}</Text>
+                </View>
+              </View>
+
+              <MetricChart
+                title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
+                color="#FF4D4F"
+                points={heartRatePoints}
+                cardBg="rgba(5, 8, 22, 0.45)"
+                textColor={TEXT}
+                valueFormatter={(v) => `${Math.round(v)}`}
+                xLabelFormatter={elapsedLabel}
+                yClampMin={40}
+                yClampMax={220}
+                yAxisSuffix=" bpm"
+                unitSuffix="bpm"
+                showGrid
+                showYAxisIndices={false}
+                showXAxisIndices={false}
+                hideDataPoints
+              />
+            </>
+          ) : (
+            <Text style={styles.heartRateEmpty}>
+              No Apple Health heart-rate samples found yet for this session window.
+            </Text>
+          )}
+
+          {heartRateSyncMessage ? (
+            <Text
+              style={[
+                styles.heartRateStatusText,
+                heartRateSyncState === 'failed' ? styles.heartRateStatusTextError : null,
+              ]}
+            >
+              {heartRateSyncMessage}
+            </Text>
+          ) : null}
+
+          <View style={styles.heartRateActionsRow}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[
+                styles.heartRateActionBtn,
+                styles.heartRateActionBtnPrimary,
+                heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+              ]}
+              disabled={heartRateSyncing}
+              onPress={() =>
+                runHeartRateSync({ delayMs: HEART_RATE_MANUAL_DELAY_MS, reason: 'manual' })
+              }
+            >
+              <Text style={styles.heartRateActionBtnPrimaryText}>
+                {heartRateSyncing
+                  ? 'Syncing…'
+                  : `Retry (${Math.round(HEART_RATE_MANUAL_DELAY_MS / 1000)}s delay)`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[
+                styles.heartRateActionBtn,
+                heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+              ]}
+              disabled={heartRateSyncing}
+              onPress={() => runHeartRateSync({ reason: 'manual' })}
+            >
+              <Text style={styles.heartRateActionBtnText}>Sync now</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {savedSessionId && saveStatusText ? (
@@ -685,6 +962,114 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 14,
     fontWeight: '900',
+  },
+  heartRateCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: CARD,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  heartRateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  heartRateTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  heartRateAvgLabel: {
+    color: '#c6d0ea',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  heartRateAvgValue: {
+    color: '#FF4D4F',
+    fontSize: 40,
+    fontWeight: '900',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  heartRateStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 10,
+  },
+  heartRateStat: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: 'rgba(5,8,22,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  heartRateStatLabel: {
+    color: '#9aa4bf',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  heartRateStatValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  heartRateEmpty: {
+    color: '#9aa4bf',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  heartRateStatusText: {
+    color: '#A3B2D5',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 10,
+  },
+  heartRateStatusTextError: {
+    color: '#FCA5A5',
+  },
+  heartRateActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  heartRateActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.highlight1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+  },
+  heartRateActionBtnPrimary: {
+    backgroundColor: Colors.dark.highlight1,
+  },
+  heartRateActionBtnText: {
+    color: Colors.dark.highlight1,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  heartRateActionBtnPrimaryText: {
+    color: '#0D1320',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  heartRateActionBtnDisabled: {
+    opacity: 0.65,
   },
 
   chartsWrap: {

@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -25,9 +26,20 @@ import {
   isGoalCategoryClosed,
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
+import MetricLineChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
+import {
+  formatAppleHealthError,
+  getAppleHealthUnavailableMessage,
+  getAppleHeartRateSamplesForRange,
+  isAppleHealthKitAvailable,
+  type AppleHeartRateSample,
+} from '@/lib/health/appleHealthKit';
+import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
 
 const BG = Colors.dark.background;
 const PRIMARY = Colors.dark.highlight1;
+const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
+const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 
 const LB_PER_KG = 2.20462;
 
@@ -93,8 +105,27 @@ type ExerciseSummaryRow = {
   avg_set: number | null;
 };
 
+type HeartRateSyncState =
+  | 'idle'
+  | 'scheduled'
+  | 'syncing'
+  | 'synced'
+  | 'skipped'
+  | 'failed';
+
+function formatTimelineLabel(totalSeconds: number): string {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(seconds / 60);
+  const rem = seconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
 export default function StrengthSummaryPage() {
-  const { id, postId } = useLocalSearchParams<{ id?: string; postId?: string }>(); // workout ID
+  const { id, postId, autoHeartRateSync } = useLocalSearchParams<{
+    id?: string;
+    postId?: string;
+    autoHeartRateSync?: string;
+  }>(); // workout ID
 
   const [loading, setLoading] = React.useState(true);
   const [workout, setWorkout] = React.useState<any>(null);
@@ -104,8 +135,91 @@ export default function StrengthSummaryPage() {
   const [shareToFeed, setShareToFeed] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
   const [goalResult, setGoalResult] = React.useState<DailyGoalResults | null>(null);
+  const [heartRateSamples, setHeartRateSamples] = React.useState<AppleHeartRateSample[]>([]);
+  const [heartRateSyncState, setHeartRateSyncState] = React.useState<HeartRateSyncState>('idle');
+  const [heartRateSyncMessage, setHeartRateSyncMessage] = React.useState<string | null>(null);
+  const [heartRateSyncing, setHeartRateSyncing] = React.useState(false);
+  const [heartRateLoaded, setHeartRateLoaded] = React.useState(false);
+  const autoSyncScheduledRef = React.useRef(false);
+  const activeSyncTokenRef = React.useRef(0);
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
+  const shouldAutoHeartRateSync = autoHeartRateSync === '1';
+
+  const runHeartRateSync = React.useCallback(
+    async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
+      if (!id || !canDelete) {
+        setHeartRateSyncState('skipped');
+        setHeartRateSyncMessage('Heart-rate sync is available only for your own workouts.');
+        return;
+      }
+
+      if (!workout?.started_at || !workout?.ended_at) {
+        setHeartRateSyncState('skipped');
+        setHeartRateSyncMessage('Workout time range is missing, so heart-rate sync was skipped.');
+        return;
+      }
+
+      const delayMs = Math.max(0, opts?.delayMs ?? 0);
+      const reason = opts?.reason ?? 'manual';
+      const syncToken = Date.now();
+      activeSyncTokenRef.current = syncToken;
+
+      if (delayMs > 0) {
+        setHeartRateSyncState('scheduled');
+        setHeartRateSyncMessage(
+          `${reason === 'auto' ? 'Auto retry' : 'Retry'} in ${Math.round(
+            delayMs / 1000
+          )} seconds before re-checking Apple Health.`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+
+      if (activeSyncTokenRef.current !== syncToken) {
+        return;
+      }
+
+      try {
+        setHeartRateSyncing(true);
+        setHeartRateSyncState('syncing');
+        setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
+
+        if (!isAppleHealthKitAvailable()) {
+          throw new Error(getAppleHealthUnavailableMessage());
+        }
+
+        const samples = await getAppleHeartRateSamplesForRange({
+          startDate: workout.started_at,
+          endDate: workout.ended_at,
+        });
+
+        if (activeSyncTokenRef.current !== syncToken) {
+          return;
+        }
+
+        setHeartRateSamples(samples);
+        setHeartRateLoaded(true);
+        setHeartRateSyncState('synced');
+        if (samples.length === 0) {
+          setHeartRateSyncMessage(
+            'Apple Health returned no samples for this workout yet. Retry after a short delay.'
+          );
+        } else {
+          setHeartRateSyncMessage(
+            `Loaded ${samples.length} heart-rate samples from Apple Health.`
+          );
+        }
+      } catch (error: any) {
+        console.warn('[StrengthSummary] Apple Health load failed', error);
+        setHeartRateLoaded(true);
+        setHeartRateSyncState('failed');
+        setHeartRateSyncMessage(formatAppleHealthError(error));
+      } finally {
+        setHeartRateSyncing(false);
+      }
+    },
+    [canDelete, id, workout?.ended_at, workout?.started_at]
+  );
 
   React.useEffect(() => {
     if (!id) return;
@@ -267,6 +381,59 @@ export default function StrengthSummaryPage() {
     })();
   }, [id, postId]);
 
+  React.useEffect(() => {
+    autoSyncScheduledRef.current = false;
+    activeSyncTokenRef.current = 0;
+    setHeartRateSamples([]);
+    setHeartRateLoaded(false);
+    setHeartRateSyncState('idle');
+    setHeartRateSyncMessage(null);
+    setHeartRateSyncing(false);
+  }, [id]);
+
+  React.useEffect(() => {
+    if (!id || !canDelete || !workout?.started_at || !workout?.ended_at) return;
+    if (heartRateLoaded) return;
+    if (heartRateSyncing) return;
+
+    void runHeartRateSync({ reason: 'manual' });
+  }, [
+    canDelete,
+    heartRateLoaded,
+    heartRateSyncing,
+    id,
+    runHeartRateSync,
+    workout?.ended_at,
+    workout?.started_at,
+  ]);
+
+  React.useEffect(() => {
+    if (!shouldAutoHeartRateSync) return;
+    if (!id || !canDelete || !workout?.started_at || !workout?.ended_at) return;
+    if (!heartRateLoaded) return;
+    if (heartRateSamples.length > 0) return;
+    if (heartRateSyncState !== 'synced') return;
+    if (heartRateSyncing) return;
+    if (autoSyncScheduledRef.current) return;
+
+    autoSyncScheduledRef.current = true;
+    void runHeartRateSync({
+      delayMs: HEART_RATE_AUTO_RETRY_DELAY_MS,
+      reason: 'auto',
+    });
+  }, [
+    canDelete,
+    heartRateLoaded,
+    heartRateSamples.length,
+    heartRateSyncState,
+    heartRateSyncing,
+    id,
+    shouldAutoHeartRateSync,
+    runHeartRateSync,
+    workout?.ended_at,
+    workout?.started_at,
+  ]);
+
   // ---------- DELETE WORKOUT & RELATED DATA ----------
   const handleDeleteWorkout = () => {
     if (!canDelete) return;
@@ -331,6 +498,43 @@ export default function StrengthSummaryPage() {
       ]
     );
   };
+
+  const heartRateSummary = React.useMemo(() => {
+    if (heartRateSamples.length === 0) return null;
+
+    let minBpm = heartRateSamples[0].bpm;
+    let maxBpm = heartRateSamples[0].bpm;
+    let sumBpm = 0;
+
+    for (const sample of heartRateSamples) {
+      const bpm = Number(sample.bpm);
+      if (bpm < minBpm) minBpm = bpm;
+      if (bpm > maxBpm) maxBpm = bpm;
+      sumBpm += bpm;
+    }
+
+    const avgBpm = sumBpm / heartRateSamples.length;
+    return {
+      avgBpm: Math.round(avgBpm * 10) / 10,
+      minBpm: Math.round(minBpm),
+      maxBpm: Math.round(maxBpm),
+      sampleCount: heartRateSamples.length,
+    };
+  }, [heartRateSamples]);
+
+  const heartRateChartPoints = React.useMemo<SamplePoint[]>(() => {
+    return buildHeartRateTimelinePoints({
+      samples: heartRateSamples,
+      workoutStartISO: workout?.started_at ?? null,
+      workoutEndISO: workout?.ended_at ?? null,
+    });
+  }, [heartRateSamples, workout?.ended_at, workout?.started_at]);
+
+  const heartRateSourceLabel = React.useMemo(() => {
+    if (heartRateSamples.length === 0) return null;
+    const first = heartRateSamples[0];
+    return first.sourceName ?? first.deviceName ?? 'Apple Health';
+  }, [heartRateSamples]);
 
   if (loading) {
     return (
@@ -423,6 +627,105 @@ export default function StrengthSummaryPage() {
           <Text style={styles.totalVol}>
             Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
           </Text>
+
+          {canDelete && workout?.ended_at ? (
+            <View style={styles.heartRateCard}>
+              <View style={styles.heartRateHeaderRow}>
+                <Text style={styles.heartRateTitle}>Heart Rate</Text>
+                {heartRateSyncing ? (
+                  <ActivityIndicator size="small" color={Colors.dark.highlight1} />
+                ) : null}
+              </View>
+
+              {heartRateSummary ? (
+                <>
+                  <Text style={styles.heartRateAvgLabel}>Avg. Heart Rate</Text>
+                  <Text style={styles.heartRateAvgValue}>{heartRateSummary.avgBpm} BPM</Text>
+
+                  <View style={styles.heartRateStatsRow}>
+                    <View style={styles.heartRateStat}>
+                      <Text style={styles.heartRateStatLabel}>Min</Text>
+                      <Text style={styles.heartRateStatValue}>{heartRateSummary.minBpm}</Text>
+                    </View>
+                    <View style={styles.heartRateStat}>
+                      <Text style={styles.heartRateStatLabel}>Max</Text>
+                      <Text style={styles.heartRateStatValue}>{heartRateSummary.maxBpm}</Text>
+                    </View>
+                    <View style={styles.heartRateStat}>
+                      <Text style={styles.heartRateStatLabel}>Samples</Text>
+                      <Text style={styles.heartRateStatValue}>{heartRateSummary.sampleCount}</Text>
+                    </View>
+                  </View>
+
+                  <MetricLineChart
+                    title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
+                    color="#FF4D4F"
+                    points={heartRateChartPoints}
+                    cardBg="rgba(5, 8, 22, 0.45)"
+                    textColor="#EAF2FF"
+                    height={180}
+                    yClampMin={40}
+                    yClampMax={220}
+                    noOfSections={4}
+                    showGrid
+                    valueFormatter={(v) => `${Math.round(v)}`}
+                    xLabelFormatter={formatTimelineLabel}
+                    yAxisSuffix=" bpm"
+                    unitSuffix="bpm"
+                  />
+                </>
+              ) : (
+                <Text style={styles.heartRateEmpty}>
+                  No Apple Health heart-rate samples found yet for this workout window. Data can
+                  appear with a short delay after completion.
+                </Text>
+              )}
+
+              {heartRateSyncMessage ? (
+                <Text
+                  style={[
+                    styles.heartRateStatusText,
+                    heartRateSyncState === 'failed' ? styles.heartRateStatusTextError : null,
+                  ]}
+                >
+                  {heartRateSyncMessage}
+                </Text>
+              ) : null}
+
+              <View style={styles.heartRateActionsRow}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[
+                    styles.heartRateActionBtn,
+                    styles.heartRateActionBtnPrimary,
+                    heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+                  ]}
+                  disabled={heartRateSyncing}
+                  onPress={() =>
+                    runHeartRateSync({ delayMs: HEART_RATE_MANUAL_DELAY_MS, reason: 'manual' })
+                  }
+                >
+                  <Text style={styles.heartRateActionBtnPrimaryText}>
+                    {heartRateSyncing
+                      ? 'Syncing…'
+                      : `Retry (${Math.round(HEART_RATE_MANUAL_DELAY_MS / 1000)}s delay)`}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[
+                    styles.heartRateActionBtn,
+                    heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+                  ]}
+                  disabled={heartRateSyncing}
+                  onPress={() => runHeartRateSync({ reason: 'manual' })}
+                >
+                  <Text style={styles.heartRateActionBtnText}>Sync now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
 
           {goalResult && isGoalCategoryClosed(goalResult, 'strength') ? (
             <View style={styles.goalCardWrap}>
@@ -576,6 +879,113 @@ const styles = StyleSheet.create({
   },
   goalCardWrap: {
     marginBottom: 18,
+  },
+  heartRateCard: {
+    borderRadius: 16,
+    backgroundColor: Colors.dark.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  heartRateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  heartRateTitle: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  heartRateAvgLabel: {
+    color: '#c6d0ea',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  heartRateAvgValue: {
+    color: '#FF4D4F',
+    fontSize: 40,
+    fontWeight: '900',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  heartRateStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 10,
+  },
+  heartRateStat: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: 'rgba(5,8,22,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  heartRateStatLabel: {
+    color: '#9aa4bf',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  heartRateStatValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  heartRateEmpty: {
+    color: '#9aa4bf',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  heartRateStatusText: {
+    color: '#A3B2D5',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 10,
+  },
+  heartRateStatusTextError: {
+    color: '#FCA5A5',
+  },
+  heartRateActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  heartRateActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.highlight1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+  },
+  heartRateActionBtnPrimary: {
+    backgroundColor: Colors.dark.highlight1,
+  },
+  heartRateActionBtnText: {
+    color: Colors.dark.highlight1,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  heartRateActionBtnPrimaryText: {
+    color: '#0D1320',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  heartRateActionBtnDisabled: {
+    opacity: 0.65,
   },
 
   shareCard: {

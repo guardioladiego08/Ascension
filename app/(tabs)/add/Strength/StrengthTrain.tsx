@@ -25,7 +25,6 @@ import FinishConfirmModal from './components/FinishConfirmModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
-import { syncStrengthWorkoutHeartRateSamples } from '@/lib/health/syncStrengthWorkoutHeartRate';
 import type { ExerciseDraft, UnitMass } from '@/lib/strength/types';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
@@ -56,23 +55,6 @@ async function ensureAuthedUserId(): Promise<string> {
     throw new Error('Session expired. Please sign in again.');
   }
   return uid;
-}
-
-async function resolveStrengthWorkoutStartedAtISO(
-  workoutId: string,
-  fallbackStartedAtISO: string | null
-): Promise<string | null> {
-  if (fallbackStartedAtISO) return fallbackStartedAtISO;
-
-  const { data, error } = await supabase
-    .schema('strength')
-    .from('strength_workouts')
-    .select('started_at')
-    .eq('id', workoutId)
-    .maybeSingle<{ started_at: string | null }>();
-
-  if (error) throw error;
-  return data?.started_at ?? null;
 }
 
 type StrengthWorkoutRow = {
@@ -452,49 +434,9 @@ export default function StrengthTrain() {
 
       if (wErr) throw wErr;
 
-      try {
-        const workoutStartedAtISO = await resolveStrengthWorkoutStartedAtISO(
-          effectiveWorkoutId,
-          effectiveStartedAtISO
-        );
-
-        if (workoutStartedAtISO) {
-          console.log('[HealthDebug] strength workout finished, starting heart rate sync', {
-            workoutId: effectiveWorkoutId,
-            userId: uid,
-            startedAtISO: workoutStartedAtISO,
-            endedAtISO: endedAt.toISOString(),
-            totalVol,
-            exerciseCount: exercises.length,
-          });
-
-          const heartRateSyncResult = await syncStrengthWorkoutHeartRateSamples({
-            userId: uid,
-            workoutId: effectiveWorkoutId,
-            startedAtISO: workoutStartedAtISO,
-            endedAtISO: endedAt.toISOString(),
-          });
-
-          console.log('[HealthDebug] strength heart rate sync result', {
-            workoutId: effectiveWorkoutId,
-            heartRateSyncResult,
-          });
-
-          if (heartRateSyncResult.status === 'failed') {
-            console.warn('[StrengthTrain] heart rate sync failed', heartRateSyncResult.reason);
-          }
-        } else {
-          console.warn('[StrengthTrain] missing started_at, skipping heart rate sync', {
-            workoutId: effectiveWorkoutId,
-          });
-        }
-      } catch (heartRateError) {
-        console.warn('[StrengthTrain] heart rate sync failed', heartRateError);
-      }
-
       stopPersistingStrengthSession();
       console.log('✅ workout saved', { workoutId: effectiveWorkoutId });
-      router.replace(`/(tabs)/add/Strength/${effectiveWorkoutId}`);
+      router.replace(`/(tabs)/add/Strength/${effectiveWorkoutId}?autoHeartRateSync=1`);
     } catch (err: any) {
       console.error('[StrengthTrain] finish failed', err);
 

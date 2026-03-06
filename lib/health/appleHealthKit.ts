@@ -1,8 +1,3 @@
-import {
-  isHealthDataAvailable,
-  queryQuantitySamples,
-  requestAuthorization,
-} from '@kingstinct/react-native-healthkit';
 import { Platform } from 'react-native';
 
 import type { AppleHealthAuthorizationStatus } from '@/lib/health/preferences';
@@ -28,11 +23,72 @@ const HEART_RATE_IDENTIFIER = 'HKQuantityTypeIdentifierHeartRate';
 const HEART_RATE_UNIT = 'count/min';
 const HEALTH_DEBUG_PREFIX = '[HealthDebug]';
 const HEART_RATE_QUERY_BUFFER_MS = 2 * 60 * 1000;
+let healthKitLoadLogged = false;
+let healthKitLoadErrorMessage: string | null = null;
+
+type HealthKitQuantitySample = {
+  uuid?: unknown;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  quantity?: unknown;
+  sourceRevision?: {
+    source?: {
+      name?: unknown;
+      bundleIdentifier?: unknown;
+    } | null;
+  } | null;
+  device?: {
+    name?: unknown;
+    model?: unknown;
+  } | null;
+  metadata?: unknown;
+};
+
+type HealthKitModule = {
+  isHealthDataAvailable: () => boolean;
+  requestAuthorization: (params: { toRead?: string[]; toShare?: string[] }) => Promise<boolean>;
+  queryQuantitySamples: (
+    identifier: string,
+    options: {
+      unit?: string;
+      limit?: number;
+      ascending?: boolean;
+      filter?: {
+        date?: {
+          startDate?: Date;
+          endDate?: Date;
+        };
+      };
+    }
+  ) => Promise<HealthKitQuantitySample[]>;
+};
 
 function asStringOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const next = value.trim();
   return next.length > 0 ? next : null;
+}
+
+function getHealthKitModule(): HealthKitModule | null {
+  if (Platform.OS !== 'ios') return null;
+
+  try {
+    healthKitLoadErrorMessage = null;
+    return require('@kingstinct/react-native-healthkit') as HealthKitModule;
+  } catch (error) {
+    const asErrString = asStringOrNull(
+      error && typeof error === 'object' && 'message' in error
+        ? (error as { message?: unknown }).message
+        : error
+    );
+    healthKitLoadErrorMessage = asErrString ?? 'Native NitroModules were not found in this build.';
+
+    if (!healthKitLoadLogged) {
+      healthKitLoadLogged = true;
+      console.warn(`${HEALTH_DEBUG_PREFIX} native module load failed`, error);
+    }
+    return null;
+  }
 }
 
 function toJsonSafeValue(value: unknown): unknown {
@@ -87,10 +143,11 @@ function overlapsRange(
 }
 
 export function isAppleHealthKitAvailable(): boolean {
-  if (Platform.OS !== 'ios') return false;
+  const healthKit = getHealthKitModule();
+  if (!healthKit) return false;
 
   try {
-    return isHealthDataAvailable();
+    return healthKit.isHealthDataAvailable();
   } catch {
     return false;
   }
@@ -99,6 +156,10 @@ export function isAppleHealthKitAvailable(): boolean {
 export function getAppleHealthUnavailableMessage(): string {
   if (Platform.OS !== 'ios') {
     return 'Apple Health is available only on iPhone.';
+  }
+
+  if (healthKitLoadErrorMessage) {
+    return `${healthKitLoadErrorMessage} Rebuild the iOS dev client after prebuild so NitroModules and HealthKit are linked.`;
   }
 
   return 'Apple HealthKit is not available in this build yet. Create a new iOS dev build with the native HealthKit module enabled and try again.';
@@ -148,7 +209,8 @@ export function inferAppleHealthAuthorizationStatusFromError(
 }
 
 export async function requestAppleHeartRateAuthorization(): Promise<AppleHealthAuthorizationResult> {
-  if (!isAppleHealthKitAvailable()) {
+  const healthKit = getHealthKitModule();
+  if (!healthKit || !isAppleHealthKitAvailable()) {
     console.log(`${HEALTH_DEBUG_PREFIX} request auth skipped: unavailable`);
     return {
       status: 'unavailable',
@@ -161,7 +223,7 @@ export async function requestAppleHeartRateAuthorization(): Promise<AppleHealthA
       identifier: HEART_RATE_IDENTIFIER,
     });
 
-    const granted = await requestAuthorization({
+    const granted = await healthKit.requestAuthorization({
       toRead: [HEART_RATE_IDENTIFIER],
     });
 
@@ -193,25 +255,45 @@ export async function getAppleHeartRateSamplesForRange(params: {
   startDate: string;
   endDate: string;
 }): Promise<AppleHeartRateSample[]> {
-  if (!isAppleHealthKitAvailable()) {
+  const healthKit = getHealthKitModule();
+  if (!healthKit || !isAppleHealthKitAvailable()) {
     throw new Error(getAppleHealthUnavailableMessage());
   }
 
-  const exactStart = new Date(params.startDate);
-  const exactEnd = new Date(params.endDate);
+  const requestedStart = new Date(params.startDate);
+  const requestedEnd = new Date(params.endDate);
+  if (
+    Number.isNaN(requestedStart.getTime()) ||
+    Number.isNaN(requestedEnd.getTime())
+  ) {
+    throw new Error('Invalid workout time window. Start/end timestamps are not valid ISO dates.');
+  }
+
+  const needsSwap = requestedStart.getTime() > requestedEnd.getTime();
+  const exactStart = needsSwap ? requestedEnd : requestedStart;
+  const exactEnd = needsSwap ? requestedStart : requestedEnd;
   const bufferedStart = clampDateWithBuffer(exactStart, -HEART_RATE_QUERY_BUFFER_MS);
   const bufferedEnd = clampDateWithBuffer(exactEnd, HEART_RATE_QUERY_BUFFER_MS);
 
+  if (needsSwap) {
+    console.warn(`${HEALTH_DEBUG_PREFIX} heart rate range was inverted; swapped start/end`, {
+      requestedStartDate: params.startDate,
+      requestedEndDate: params.endDate,
+      resolvedStartDate: exactStart.toISOString(),
+      resolvedEndDate: exactEnd.toISOString(),
+    });
+  }
+
   console.log(`${HEALTH_DEBUG_PREFIX} querying heart rate samples`, {
-    startDate: params.startDate,
-    endDate: params.endDate,
+    startDate: exactStart.toISOString(),
+    endDate: exactEnd.toISOString(),
     bufferedStartDate: bufferedStart.toISOString(),
     bufferedEndDate: bufferedEnd.toISOString(),
     identifier: HEART_RATE_IDENTIFIER,
     unit: HEART_RATE_UNIT,
   });
 
-  const rawSamples = await queryQuantitySamples(HEART_RATE_IDENTIFIER, {
+  const rawSamples = await healthKit.queryQuantitySamples(HEART_RATE_IDENTIFIER, {
     unit: HEART_RATE_UNIT,
     limit: 0,
     ascending: true,
@@ -227,8 +309,9 @@ export async function getAppleHeartRateSamplesForRange(params: {
     .map((sample) => {
       const sampleStartAt = asIsoString(sample.startDate);
       const sampleEndAt = asIsoString(sample.endDate);
+      const quantity = Number(sample.quantity);
 
-      if (!sampleStartAt || !sampleEndAt || !Number.isFinite(sample.quantity)) {
+      if (!sampleStartAt || !sampleEndAt || !Number.isFinite(quantity)) {
         return null;
       }
 
@@ -236,7 +319,7 @@ export async function getAppleHeartRateSamplesForRange(params: {
         sampleUuid: asStringOrNull(sample.uuid),
         sampleStartAt,
         sampleEndAt,
-        bpm: Number(sample.quantity.toFixed(2)),
+        bpm: Number(quantity.toFixed(2)),
         sourceName: asStringOrNull(sample.sourceRevision?.source?.name),
         sourceBundleId: asStringOrNull(sample.sourceRevision?.source?.bundleIdentifier),
         deviceName: asStringOrNull(sample.device?.name),

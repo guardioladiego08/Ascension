@@ -386,6 +386,9 @@ export default function IndoorSession() {
 
     const endedAt = new Date().toISOString();
     const totalTimeS = elapsedRef.current;
+    const startedAt = new Date(
+      new Date(endedAt).getTime() - totalTimeS * 1000
+    ).toISOString();
     const totalDistM = distanceRef.current;
     const totalElevM = elevRef.current;
 
@@ -397,7 +400,7 @@ export default function IndoorSession() {
 
     const draft: RunWalkDraft = {
       id: draftId,
-      created_at: endedAt,
+      created_at: startedAt,
       ended_at: endedAt,
       exercise_type: mode,
       distance_unit: distanceUnit,
