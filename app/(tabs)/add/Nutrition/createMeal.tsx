@@ -325,7 +325,7 @@ export default function CreateMeal() {
       style={{ flex: 1 }}
     >
       <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
         <View style={styles.main}>
           {/* Header */}
           <View style={styles.headerRow}>

@@ -256,7 +256,7 @@ export default function DailyNutritionSummary() {
 
   return (
     <SafeAreaView style={GlobalStyles.safeArea}>
-      <LogoHeader showBackButton />
+      <LogoHeader showBackButton usePreviousRoute />
       <View style={styles.main}>
         <View style={styles.headerRow}>
           <Text style={GlobalStyles.header}>Daily Nutrition</Text>

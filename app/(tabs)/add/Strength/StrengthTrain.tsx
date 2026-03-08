@@ -472,7 +472,7 @@ export default function StrengthTrain() {
       style={{ flex: 1 }}
     >
       <View style={[GlobalStyles.container, { flex: 1 }]}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
 
         <SessionHeader
           key={workoutId}

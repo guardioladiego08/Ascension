@@ -205,7 +205,7 @@ const ExercisesScreen: React.FC = () => {
       style={{ flex: 1 }}
     >
       <View style={[GlobalStyles.container, styles.screen]}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
         <View style={styles.headerRow}>
           <Text style={GlobalStyles.title}>Exercises</Text>
           <View style={{ width: 32 }} />

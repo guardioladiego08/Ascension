@@ -94,7 +94,7 @@ export default function HeartRateTestScreen() {
       style={styles.screen}
     >
       <SafeAreaView style={styles.safeArea}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
 
         <View style={styles.header}>
           <Text style={styles.title}>Heart Rate Test</Text>

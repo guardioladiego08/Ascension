@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   TextInput,
   Animated,
-  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -63,7 +62,7 @@ export default function LogMeal() {
       style={{ flex: 1 }}
     >
       <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
         <View style={styles.main}>
           {/* Header */}
           <View style={styles.headerRow}>
@@ -130,12 +129,7 @@ export default function LogMeal() {
               <TouchableOpacity
                 style={styles.actionBtnSecondary}
                 activeOpacity={0.9}
-                onPress={() =>
-                  Alert.alert(
-                    'Coming soon',
-                    'Barcode scanning will be available in a future update.'
-                  )
-                }
+                onPress={() => router.push('./scanFood')}
               >
                 <MaterialCommunityIcons
                   name="barcode-scan"

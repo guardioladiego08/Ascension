@@ -234,7 +234,7 @@ export default function AllNutritionDaysScreen() {
       style={{ flex: 1 }}
     >
       <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
 
         <FlatList
           data={filteredDays}

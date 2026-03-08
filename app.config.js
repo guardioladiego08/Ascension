@@ -6,6 +6,8 @@ const IOS_HEALTH_SHARE_USAGE_DESCRIPTION =
   'Ascension reads your Apple Health heart rate data to attach Apple Watch heart-rate samples to completed strength workouts.';
 const IOS_HEALTH_UPDATE_USAGE_DESCRIPTION =
   'Ascension uses Apple Health permissions to support heart-rate syncing for completed strength workouts.';
+const IOS_CAMERA_USAGE_DESCRIPTION =
+  'Ascension uses your camera to scan food barcodes and match nutrition data.';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -59,6 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         // Optional (improves activity context)
         NSMotionUsageDescription:
           'Tensr uses motion data to improve the accuracy of outdoor session tracking.',
+        NSCameraUsageDescription: IOS_CAMERA_USAGE_DESCRIPTION,
         NSHealthShareUsageDescription: IOS_HEALTH_SHARE_USAGE_DESCRIPTION,
         NSHealthUpdateUsageDescription: IOS_HEALTH_UPDATE_USAGE_DESCRIPTION,
       },
@@ -74,6 +77,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       },
 
       permissions: [
+        'CAMERA',
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'ACCESS_BACKGROUND_LOCATION',
@@ -95,6 +99,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
       // WebBrowser (safe)
       'expo-web-browser',
+
+      // Barcode scanner camera access
+      'expo-camera',
 
       // Location modules (ensures config plugin runs during prebuild)
       'expo-location',

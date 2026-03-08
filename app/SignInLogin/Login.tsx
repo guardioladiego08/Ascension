@@ -245,7 +245,7 @@ export default function Login() {
       style={{ flex: 1 }}
     >
       <View style={styles.container}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Log In</Text>
           <View style={{ width: 24 }} />

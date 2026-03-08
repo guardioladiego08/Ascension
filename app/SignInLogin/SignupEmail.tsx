@@ -253,7 +253,7 @@ export default function SignupEmail() {
       style={{ flex: 1 }}
     >
       <View style={styles.container}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
 
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Create an account</Text>

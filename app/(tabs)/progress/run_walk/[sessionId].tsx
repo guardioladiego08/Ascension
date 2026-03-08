@@ -483,7 +483,7 @@ export default function RunWalkSessionSummary() {
       style={{ flex: 1 }}
     >
       <View style={styles.safe}>
-        <LogoHeader showBackButton />
+        <LogoHeader showBackButton usePreviousRoute />
         {/* Header */}
         <View style={styles.header}>
 
