@@ -1,19 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
+import AppPopup from '@/components/ui/AppPopup';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
@@ -36,134 +32,78 @@ export default function DeleteDraftConfirmModal({
   onCancel,
   onConfirm,
 }: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal
+    <AppPopup
       visible={visible}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={onCancel}
+      onClose={onCancel}
+      eyebrow="Delete draft"
+      title={title}
+      subtitle={message}
     >
-      <Pressable style={styles.backdrop} onPress={onCancel}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
-            <View style={styles.iconWrap}>
-              <Ionicons name="warning-outline" size={20} color="#e04b4b" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.message}>{message}</Text>
-            </View>
-          </View>
+      <View style={styles.row}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonSecondary, styles.button, isBusy ? styles.busy : null]}
+          onPress={onCancel}
+          disabled={isBusy}
+        >
+          <Text style={globalStyles.buttonTextSecondary}>{cancelText}</Text>
+        </TouchableOpacity>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.cancelBtn, isBusy && { opacity: 0.6 }]}
-              onPress={onCancel}
-              disabled={isBusy}
-            >
-              <Text style={styles.cancelText}>{cancelText}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.deleteBtn, isBusy && { opacity: 0.6 }]}
-              onPress={onConfirm}
-              disabled={isBusy}
-            >
-              {isBusy ? (
-                <ActivityIndicator />
-              ) : (
-                <>
-                  <Ionicons name="trash-outline" size={18} color="#0E151F" />
-                  <Text style={styles.deleteText}>{confirmText}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[styles.deleteBtn, styles.button, isBusy ? styles.busy : null]}
+          onPress={onConfirm}
+          disabled={isBusy}
+        >
+          {isBusy ? (
+            <ActivityIndicator size="small" color={colors.blkText} />
+          ) : (
+            <>
+              <Ionicons name="trash-outline" size={18} color={colors.blkText} />
+              <Text style={styles.deleteText}>{confirmText}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    padding: 16,
-    justifyContent: 'center',
-  },
-  sheet: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  header: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(224,75,75,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  title: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  message: {
-    marginTop: 6,
-    color: TEXT,
-    opacity: 0.75,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  actions: {
-    marginTop: 14,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: {
-    color: TEXT,
-    opacity: 0.9,
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  deleteBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#e04b4b',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  deleteText: {
-    color: '#0E151F',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 18,
+    },
+    button: {
+      flex: 1,
+    },
+    deleteBtn: {
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: colors.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+    },
+    deleteText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    busy: {
+      opacity: 0.7,
+    },
+  });
+}

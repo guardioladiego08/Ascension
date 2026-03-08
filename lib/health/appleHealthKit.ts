@@ -25,6 +25,7 @@ const HEALTH_DEBUG_PREFIX = '[HealthDebug]';
 const HEART_RATE_QUERY_BUFFER_MS = 2 * 60 * 1000;
 let healthKitLoadLogged = false;
 let healthKitLoadErrorMessage: string | null = null;
+let healthKitLoadFailed = false;
 
 type HealthKitQuantitySample = {
   uuid?: unknown;
@@ -71,11 +72,26 @@ function asStringOrNull(value: unknown): string | null {
 
 function getHealthKitModule(): HealthKitModule | null {
   if (Platform.OS !== 'ios') return null;
+  if (healthKitLoadFailed) return null;
+
+  const turboModuleProxy = (
+    globalThis as typeof globalThis & {
+      __turboModuleProxy?: unknown;
+    }
+  ).__turboModuleProxy;
+
+  if (typeof turboModuleProxy !== 'function') {
+    healthKitLoadFailed = true;
+    healthKitLoadErrorMessage =
+      'This iOS build does not include the Nitro/TurboModules runtime required for Apple Health.';
+    return null;
+  }
 
   try {
     healthKitLoadErrorMessage = null;
     return require('@kingstinct/react-native-healthkit') as HealthKitModule;
   } catch (error) {
+    healthKitLoadFailed = true;
     const asErrString = asStringOrNull(
       error && typeof error === 'object' && 'message' in error
         ? (error as { message?: unknown }).message
@@ -85,7 +101,9 @@ function getHealthKitModule(): HealthKitModule | null {
 
     if (!healthKitLoadLogged) {
       healthKitLoadLogged = true;
-      console.warn(`${HEALTH_DEBUG_PREFIX} native module load failed`, error);
+      console.warn(
+        `${HEALTH_DEBUG_PREFIX} native module load failed: ${healthKitLoadErrorMessage}`
+      );
     }
     return null;
   }

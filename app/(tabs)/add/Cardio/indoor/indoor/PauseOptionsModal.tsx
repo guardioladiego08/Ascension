@@ -1,19 +1,13 @@
-import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Pressable,
-} from 'react-native';
-import { Colors } from '@/constants/Colors';
+import React, { useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+import AppPopup from '@/components/ui/AppPopup';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
   title?: string;
   subtitle?: string;
-
   onResume: () => void;
   onFinish: () => void;
   onCancel: () => void;
@@ -22,91 +16,86 @@ type Props = {
 export default function PauseOptionsModal({
   visible,
   title = 'Paused',
-  subtitle = 'Resume when you’re ready, or finish/cancel this session.',
+  subtitle = 'Resume when you’re ready, or finish or cancel this session.',
   onResume,
   onFinish,
   onCancel,
 }: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.backdrop} onPress={onResume}>
-        <Pressable style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+    <AppPopup
+      visible={visible}
+      onClose={onResume}
+      eyebrow="Paused"
+      title={title}
+      subtitle={subtitle}
+    >
+      <View style={styles.column}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonPrimary, styles.primaryBtn]}
+          onPress={onResume}
+        >
+          <Text style={globalStyles.buttonTextPrimary}>Resume</Text>
+        </TouchableOpacity>
 
-          <View style={styles.btnCol}>
-            <TouchableOpacity style={styles.primaryBtn} onPress={onResume}>
-              <Text style={styles.primaryText}>Resume</Text>
-            </TouchableOpacity>
+        <View style={styles.row}>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[globalStyles.buttonSecondary, styles.button]}
+            onPress={onFinish}
+          >
+            <Text style={globalStyles.buttonTextSecondary}>Finish</Text>
+          </TouchableOpacity>
 
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={styles.keepBtn} onPress={onFinish}>
-                <Text style={styles.keepText}>Finish</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.discardBtn} onPress={onCancel}>
-                <Text style={styles.discardText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[styles.cancelBtn, styles.button]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: Colors.dark.popUpCard,
-    borderRadius: 16,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-  },
-  title: {
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    marginBottom: 18,
-  },
-  btnCol: { gap: 12 },
-  primaryBtn: {
-    borderRadius: 12,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.card,
-  },
-  primaryText: { color: Colors.dark.text, fontSize: 15, fontWeight: '800' },
-
-  btnRow: { flexDirection: 'row', gap: 12 },
-  keepBtn: {
-    flex: 1,
-    borderRadius: 12,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  keepText: { color: Colors.dark.text, fontSize: 15, fontWeight: '800' },
-
-  discardBtn: {
-    flex: 1,
-    borderRadius: 12,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  discardText: { color: '#e04b4b', fontSize: 15, fontWeight: '800' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    column: {
+      gap: 12,
+      marginTop: 18,
+    },
+    primaryBtn: {
+      minHeight: 48,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    button: {
+      flex: 1,
+    },
+    cancelBtn: {
+      height: 48,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cancelText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+  });
+}

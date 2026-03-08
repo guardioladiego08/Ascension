@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,20 +17,16 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
 import { findFoodByBarcode } from '@/lib/nutrition/foodLookup';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
 
 export default function ScanFood() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [paused, setPaused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -93,35 +89,47 @@ export default function ScanFood() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.safeArea}>
+      <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
+
         <View style={styles.main}>
-          <Text style={GlobalStyles.header}>Scan Food</Text>
+          <View style={styles.hero}>
+            <Text style={globalStyles.eyebrow}>Barcode Scanner</Text>
+            <Text style={globalStyles.header}>Scan food</Text>
+            <Text style={styles.heroText}>
+              Scan packaged items and jump straight into the nutrition record if a
+              match exists in your food database.
+            </Text>
+          </View>
 
           <View style={styles.cameraCard}>
             {!permission ? (
               <View style={styles.centeredState}>
-                <ActivityIndicator color={PRIMARY} />
+                <ActivityIndicator color={colors.highlight1} />
                 <Text style={styles.stateText}>Checking camera permission...</Text>
               </View>
             ) : !permission.granted ? (
               <View style={styles.centeredState}>
-                <MaterialCommunityIcons name="barcode-scan" size={28} color={TEXT_PRIMARY} />
+                <MaterialCommunityIcons
+                  name="barcode-scan"
+                  size={30}
+                  color={colors.text}
+                />
                 <Text style={styles.stateTitle}>Camera access is required</Text>
                 <Text style={styles.stateText}>
                   Allow camera access to scan product barcodes and match foods.
                 </Text>
                 <TouchableOpacity
-                  style={styles.primaryButton}
+                  style={[globalStyles.buttonPrimary, styles.permissionButton]}
                   activeOpacity={0.9}
                   onPress={() => requestPermission()}
                 >
-                  <Text style={styles.primaryButtonText}>Enable Camera</Text>
+                  <Text style={globalStyles.buttonTextPrimary}>Enable Camera</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -134,6 +142,7 @@ export default function ScanFood() {
                 />
                 <View pointerEvents="none" style={styles.scanFrame}>
                   <View style={styles.scanCorners} />
+                  <Text style={styles.scanHint}>Align barcode inside the frame</Text>
                 </View>
               </View>
             )}
@@ -142,14 +151,14 @@ export default function ScanFood() {
           <View style={styles.statusCard}>
             {isSearching ? (
               <View style={styles.statusRow}>
-                <ActivityIndicator color={PRIMARY} />
+                <ActivityIndicator color={colors.highlight1} />
                 <Text style={styles.statusText}>Matching barcode with your foods database...</Text>
               </View>
             ) : null}
 
             {notFoundCode ? (
               <Text style={styles.statusText}>
-                No match found for barcode <Text style={styles.statusCode}>{notFoundCode}</Text>.
+                No match found for <Text style={styles.statusCode}>{notFoundCode}</Text>.
               </Text>
             ) : null}
 
@@ -162,27 +171,28 @@ export default function ScanFood() {
             ) : null}
 
             <Text style={styles.hintText}>
-              Place the barcode inside the frame and hold steady.
+              For loose ingredients or unpackaged items, switch to manual search.
             </Text>
           </View>
 
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[globalStyles.buttonSecondary, styles.actionButton]}
               activeOpacity={0.9}
               onPress={handleScanAgain}
               disabled={isSearching}
             >
-              <Ionicons name="refresh" size={16} color={TEXT_PRIMARY} />
-              <Text style={styles.secondaryButtonText}>Scan Again</Text>
+              <Ionicons name="refresh" size={16} color={colors.text} />
+              <Text style={globalStyles.buttonTextSecondary}>Scan Again</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={[globalStyles.buttonSecondary, styles.actionButton]}
               activeOpacity={0.9}
               onPress={() => router.push('./addIngredient')}
             >
-              <Ionicons name="search" size={16} color={TEXT_PRIMARY} />
-              <Text style={styles.secondaryButtonText}>Search Manually</Text>
+              <Ionicons name="search" size={16} color={colors.text} />
+              <Text style={globalStyles.buttonTextSecondary}>Search Manually</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -191,130 +201,135 @@ export default function ScanFood() {
   );
 }
 
-const styles = StyleSheet.create({
-  main: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-  },
-  cameraCard: {
-    marginTop: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#26324A',
-    backgroundColor: CARD,
-    overflow: 'hidden',
-    minHeight: 340,
-  },
-  cameraWrap: {
-    position: 'relative',
-    width: '100%',
-    height: 340,
-  },
-  camera: {
-    flex: 1,
-  },
-  scanFrame: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scanCorners: {
-    width: '74%',
-    height: '34%',
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.85)',
-  },
-  centeredState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-  },
-  stateTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  stateText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 18,
-  },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    color: '#05101F',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  statusCard: {
-    marginTop: 14,
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1F2A3A',
-    padding: 14,
-    gap: 8,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  hintText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  statusCode: {
-    color: PRIMARY,
-    fontWeight: '800',
-  },
-  errorText: {
-    color: '#FF6B81',
-    fontSize: 13,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 14,
-    gap: 10,
-  },
-  secondaryButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#26324A',
-    backgroundColor: CARD,
-    gap: 6,
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '700',
-    fontSize: 13,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    main: {
+      flex: 1,
+      paddingTop: 8,
+      gap: 14,
+    },
+    hero: {
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 20,
+      gap: 8,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    cameraCard: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      overflow: 'hidden',
+      minHeight: 340,
+    },
+    cameraWrap: {
+      position: 'relative',
+      width: '100%',
+      height: 340,
+    },
+    camera: {
+      flex: 1,
+    },
+    scanFrame: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scanCorners: {
+      width: '74%',
+      height: '34%',
+      borderRadius: 18,
+      borderWidth: 2,
+      borderColor: colors.highlight1,
+      backgroundColor: 'rgba(0,0,0,0.14)',
+    },
+    scanHint: {
+      marginTop: 16,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    centeredState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      paddingVertical: 28,
+    },
+    stateTitle: {
+      marginTop: 12,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+      textAlign: 'center',
+    },
+    stateText: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    permissionButton: {
+      marginTop: 16,
+      minWidth: 160,
+    },
+    statusCard: {
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 16,
+      gap: 8,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    statusText: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    statusCode: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    hintText: {
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    actionButton: {
+      flex: 1,
+      gap: 8,
+    },
+  });
+}

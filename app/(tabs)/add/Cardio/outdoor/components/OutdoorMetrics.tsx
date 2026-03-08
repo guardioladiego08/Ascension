@@ -1,7 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/Colors';
-import { formatDuration, formatDistance, formatPaceForUnit, type DistanceUnit } from '@/lib/OutdoorSession/outdoorUtils';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
+import {
+  formatDuration,
+  formatDistance,
+  formatPaceForUnit,
+  type DistanceUnit,
+} from '@/lib/OutdoorSession/outdoorUtils';
 
 type Props = {
   elapsedSeconds: number;
@@ -10,25 +16,41 @@ type Props = {
   distanceUnit: DistanceUnit;
 };
 
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-
 export default function OutdoorMetrics({
   elapsedSeconds,
   distanceMeters,
   currentPaceSecPerKm,
   distanceUnit,
 }: Props) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
     <View style={styles.wrap}>
-      <StatBox label="DISTANCE" value={formatDistance(distanceMeters, distanceUnit)} />
-      <StatBox label="TIME" value={formatDuration(elapsedSeconds)} />
-      <StatBox label="PACE" value={formatPaceForUnit(currentPaceSecPerKm, distanceUnit)} />
+      <StatBox
+        label="Distance"
+        value={formatDistance(distanceMeters, distanceUnit)}
+        styles={styles}
+      />
+      <StatBox label="Time" value={formatDuration(elapsedSeconds)} styles={styles} />
+      <StatBox
+        label="Pace"
+        value={formatPaceForUnit(currentPaceSecPerKm, distanceUnit)}
+        styles={styles}
+      />
     </View>
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.statBox}>
       <Text style={styles.statLabel} numberOfLines={1} ellipsizeMode="tail">
@@ -47,37 +69,46 @@ function StatBox({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  statBox: {
-    flex: 1,
-    minWidth: 0, // critical: lets the card actually shrink
-    backgroundColor: CARD,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    marginBottom: 6,
-    width: '100%',
-    textAlign: 'center',
-  },
-  statValue: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '900',
-    width: '100%',
-    textAlign: 'center',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    wrap: {
+      flexDirection: 'row',
+      gap: 10,
+      width: '100%',
+    },
+    statBox: {
+      flex: 1,
+      minWidth: 0,
+      backgroundColor: colors.card2,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 1,
+      marginBottom: 6,
+      width: '100%',
+      textAlign: 'center',
+      textTransform: 'uppercase',
+    },
+    statValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+      width: '100%',
+      textAlign: 'center',
+    },
+  });
+}

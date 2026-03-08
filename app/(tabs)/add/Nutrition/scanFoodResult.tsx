@@ -13,8 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
 import {
   fetchFoodById,
   findFoodByBarcode,
@@ -29,12 +27,7 @@ import {
   syncAndFetchMyDailyGoalResult,
   toLocalISODate,
 } from '@/lib/goals/client';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type AddMode = 'snack' | 'meal';
 
@@ -45,6 +38,9 @@ function firstParam(value: string | string[] | undefined) {
 
 export default function ScanFoodResult() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const params = useLocalSearchParams<{
     foodId?: string | string[];
     barcode?: string | string[];
@@ -76,7 +72,7 @@ export default function ScanFoodResult() {
         if (!nextFood) {
           if (isMounted) {
             setErrorText(
-              'No matching food was found in your database. Try scanning again or search manually.'
+              'No matching food was found. Try scanning again or use manual search.'
             );
           }
           return;
@@ -166,12 +162,9 @@ export default function ScanFoodResult() {
       };
 
       let diaryItemError = await insertDiaryItem(mealType);
-
-      // Some existing schemas only support generic meal values.
       if (diaryItemError && mode === 'snack') {
         diaryItemError = await insertDiaryItem('other');
       }
-
       if (diaryItemError) throw diaryItemError;
 
       try {
@@ -194,115 +187,135 @@ export default function ScanFoodResult() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.safeArea}>
+      <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
+
         <View style={styles.main}>
-          <Text style={GlobalStyles.header}>Scanned Food</Text>
+          <View style={styles.hero}>
+            <Text style={globalStyles.eyebrow}>Scan Result</Text>
+            <Text style={globalStyles.header}>Review food</Text>
+            <Text style={styles.heroText}>
+              Confirm the serving and macros before adding this product into your
+              nutrition diary.
+            </Text>
+          </View>
 
           {loading ? (
-            <View style={styles.centeredState}>
-              <ActivityIndicator color={PRIMARY} />
+            <View style={[globalStyles.panelSoft, styles.centeredState]}>
+              <ActivityIndicator color={colors.highlight1} />
               <Text style={styles.stateText}>Loading food data...</Text>
             </View>
           ) : errorText ? (
-            <View style={styles.centeredState}>
-              <Ionicons name="alert-circle-outline" size={26} color="#FF6B81" />
+            <View style={[globalStyles.panelSoft, styles.centeredState]}>
+              <Ionicons name="alert-circle-outline" size={26} color={colors.danger} />
               <Text style={styles.stateText}>{errorText}</Text>
               <TouchableOpacity
-                style={styles.secondaryButton}
+                style={[globalStyles.buttonSecondary, styles.retryButton]}
                 activeOpacity={0.9}
                 onPress={() => router.replace('./scanFood')}
               >
-                <Text style={styles.secondaryButtonText}>Scan Again</Text>
+                <Text style={globalStyles.buttonTextSecondary}>Scan Again</Text>
               </TouchableOpacity>
             </View>
           ) : food && nutrition100g && defaultServing && servingNutrition ? (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.card}>
-                <Text style={styles.foodName}>{food.name || 'Unnamed food'}</Text>
-                <Text style={styles.foodMeta}>
-                  {[food.type, food.ean_13].filter(Boolean).join(' | ') || 'No metadata available'}
-                </Text>
-                {food.description ? (
-                  <Text style={styles.foodDescription}>{food.description}</Text>
+            <>
+              <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.content}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.infoCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderCopy}>
+                      <Text style={styles.foodName}>{food.name || 'Unnamed food'}</Text>
+                      <Text style={styles.foodMeta}>
+                        {[food.type, food.ean_13].filter(Boolean).join(' • ') ||
+                          'No metadata available'}
+                      </Text>
+                    </View>
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>Scanned</Text>
+                    </View>
+                  </View>
+                  {food.description ? (
+                    <Text style={styles.foodDescription}>{food.description}</Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.metricSection}>
+                  <SectionTitle title="Nutrition per 100g" subtitle="Reference values from the food database." />
+                  <View style={styles.metricGrid}>
+                    <MetricPill label="Calories" value={`${nutrition100g.calories} kcal`} styles={styles} />
+                    <MetricPill label="Protein" value={`${nutrition100g.protein} g`} styles={styles} />
+                    <MetricPill label="Carbs" value={`${nutrition100g.carbs} g`} styles={styles} />
+                    <MetricPill label="Fat" value={`${nutrition100g.fat} g`} styles={styles} />
+                  </View>
+                </View>
+
+                <View style={styles.metricSection}>
+                  <SectionTitle
+                    title="Default serving"
+                    subtitle={`${defaultServing.quantity} ${defaultServing.unitLabel} (~${defaultServing.grams} g)`}
+                  />
+                  <View style={styles.metricGrid}>
+                    <MetricPill label="Calories" value={`${servingNutrition.calories} kcal`} styles={styles} />
+                    <MetricPill label="Protein" value={`${servingNutrition.protein} g`} styles={styles} />
+                    <MetricPill label="Carbs" value={`${servingNutrition.carbs} g`} styles={styles} />
+                    <MetricPill label="Fat" value={`${servingNutrition.fat} g`} styles={styles} />
+                  </View>
+                </View>
+
+                {food.ingredients ? (
+                  <View style={styles.infoCard}>
+                    <SectionTitle title="Ingredients" subtitle="Parsed from the product entry." />
+                    <Text style={styles.foodDescription}>{food.ingredients}</Text>
+                  </View>
                 ) : null}
+              </ScrollView>
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[globalStyles.buttonPrimary, styles.actionButton]}
+                  activeOpacity={0.9}
+                  disabled={savingAs != null}
+                  onPress={() => handleAddToDiary('snack')}
+                >
+                  {savingAs === 'snack' ? (
+                    <ActivityIndicator color={colors.blkText} />
+                  ) : (
+                    <>
+                      <Ionicons name="cafe-outline" size={17} color={colors.blkText} />
+                      <Text style={globalStyles.buttonTextPrimary}>Add as Snack</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[globalStyles.buttonSecondary, styles.actionButton]}
+                  activeOpacity={0.9}
+                  disabled={savingAs != null}
+                  onPress={() => handleAddToDiary('meal')}
+                >
+                  {savingAs === 'meal' ? (
+                    <ActivityIndicator color={colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="restaurant-outline"
+                        size={17}
+                        color={colors.text}
+                      />
+                      <Text style={globalStyles.buttonTextSecondary}>Add as Meal</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
-
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Nutrition (per 100g)</Text>
-                <View style={styles.metricGrid}>
-                  <MetricPill label="Calories" value={`${nutrition100g.calories} kcal`} />
-                  <MetricPill label="Protein" value={`${nutrition100g.protein} g`} />
-                  <MetricPill label="Carbs" value={`${nutrition100g.carbs} g`} />
-                  <MetricPill label="Fat" value={`${nutrition100g.fat} g`} />
-                </View>
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Default Add Portion</Text>
-                <Text style={styles.foodMeta}>
-                  {defaultServing.quantity} {defaultServing.unitLabel} (~{defaultServing.grams} g)
-                </Text>
-                <View style={styles.metricGrid}>
-                  <MetricPill label="Calories" value={`${servingNutrition.calories} kcal`} />
-                  <MetricPill label="Protein" value={`${servingNutrition.protein} g`} />
-                  <MetricPill label="Carbs" value={`${servingNutrition.carbs} g`} />
-                  <MetricPill label="Fat" value={`${servingNutrition.fat} g`} />
-                </View>
-              </View>
-
-              {food.ingredients ? (
-                <View style={styles.card}>
-                  <Text style={styles.cardTitle}>Ingredients</Text>
-                  <Text style={styles.foodDescription}>{food.ingredients}</Text>
-                </View>
-              ) : null}
-            </ScrollView>
-          ) : null}
-
-          {!loading && !errorText && food ? (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={0.9}
-                disabled={savingAs != null}
-                onPress={() => handleAddToDiary('snack')}
-              >
-                {savingAs === 'snack' ? (
-                  <ActivityIndicator color="#05101F" />
-                ) : (
-                  <>
-                    <Ionicons name="cafe-outline" size={17} color="#05101F" />
-                    <Text style={styles.primaryButtonText}>Add as Snack</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                activeOpacity={0.9}
-                disabled={savingAs != null}
-                onPress={() => handleAddToDiary('meal')}
-              >
-                {savingAs === 'meal' ? (
-                  <ActivityIndicator color={TEXT_PRIMARY} />
-                ) : (
-                  <>
-                    <Ionicons name="restaurant-outline" size={17} color={TEXT_PRIMARY} />
-                    <Text style={styles.secondaryButtonText}>Add as Meal</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
+            </>
           ) : null}
         </View>
       </View>
@@ -310,12 +323,45 @@ export default function ScanFoodResult() {
   );
 }
 
-type MetricPillProps = {
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        title: {
+          color: colors.text,
+          fontFamily: fonts.heading,
+          fontSize: 17,
+          lineHeight: 21,
+        },
+        subtitle: {
+          marginTop: 4,
+          color: colors.textMuted,
+          fontFamily: fonts.body,
+          fontSize: 13,
+          lineHeight: 18,
+        },
+      }),
+    [colors, fonts]
+  );
+
+  return (
+    <View>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+function MetricPill({
+  label,
+  value,
+  styles,
+}: {
   label: string;
   value: string;
-};
-
-function MetricPill({ label, value }: MetricPillProps) {
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.metricPill}>
       <Text style={styles.metricLabel}>{label}</Text>
@@ -324,130 +370,149 @@ function MetricPill({ label, value }: MetricPillProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  main: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-  },
-  centeredState: {
-    marginTop: 20,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: '#1F2A3A',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stateText: {
-    color: TEXT_PRIMARY,
-    textAlign: 'center',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  scroll: {
-    flex: 1,
-    marginTop: 10,
-  },
-  scrollContent: {
-    paddingBottom: 18,
-    gap: 10,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#1F2A3A',
-    padding: 14,
-    gap: 8,
-  },
-  cardTitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
-  },
-  foodName: {
-    color: TEXT_PRIMARY,
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  foodMeta: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  foodDescription: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  metricGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metricPill: {
-    width: '48%',
-    backgroundColor: Colors.dark.card2,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#26324A',
-  },
-  metricLabel: {
-    color: TEXT_MUTED,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  metricValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    marginBottom: 12,
-    gap: 10,
-  },
-  primaryButton: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
-    backgroundColor: PRIMARY,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  primaryButtonText: {
-    color: '#05101F',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  secondaryButton: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: '#26324A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingHorizontal: 14,
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    main: {
+      flex: 1,
+      paddingTop: 8,
+      gap: 14,
+    },
+    hero: {
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 20,
+      gap: 8,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    centeredState: {
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 28,
+    },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    retryButton: {
+      minWidth: 140,
+      marginTop: 4,
+    },
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingBottom: 18,
+      gap: 12,
+    },
+    infoCard: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 16,
+      gap: 10,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    cardHeaderCopy: {
+      flex: 1,
+    },
+    tag: {
+      borderRadius: 999,
+      backgroundColor: colors.accentSoft,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    tagText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.35,
+      textTransform: 'uppercase',
+    },
+    foodName: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 24,
+      lineHeight: 28,
+      letterSpacing: -0.6,
+    },
+    foodMeta: {
+      marginTop: 6,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    foodDescription: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    metricSection: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 16,
+      gap: 14,
+    },
+    metricGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    metricPill: {
+      width: '48%',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card3,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+    },
+    metricLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.45,
+      textTransform: 'uppercase',
+    },
+    metricValue: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingBottom: 12,
+    },
+    actionButton: {
+      flex: 1,
+      gap: 8,
+    },
+  });
+}

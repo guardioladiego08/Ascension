@@ -9,12 +9,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import FinishConfirmModal from './indoor/FinishConfirmModal';
 import RunWalkCancelConfirmModal from './indoor/RunWalkCancelConfirmModal';
@@ -34,10 +32,6 @@ import {
   type RunWalkMode,
 } from '@/lib/runWalkSessionLock';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
-
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-const BG = Colors.dark.background;
 
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
@@ -84,6 +78,8 @@ function makeId() {
 
 export default function IndoorSession() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const params = useLocalSearchParams<{ mode?: string }>();
   const { distanceUnit } = useUnits();
   const {
@@ -449,68 +445,76 @@ export default function IndoorSession() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
     >
-      <View style={styles.safe}>
-        <View style={styles.logoWrap}>
-          <LogoHeader />
+      <View style={[globalStyles.container, styles.safe]}>
+        <LogoHeader />
+
+        <View style={[globalStyles.panel, styles.heroCard]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </TouchableOpacity>
+
+            <View style={styles.headerCenter}>
+              <Text style={globalStyles.eyebrow}>Indoor cardio</Text>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.heroSubtitle}>
+                Treadmill-style controls, live pace, and a cleaner finish flow.
+              </Text>
+            </View>
+
+            <View style={[styles.statusPill, isRunning ? styles.statusActive : styles.statusPaused]}>
+              <View style={[styles.statusDot, isRunning ? styles.statusDotActive : styles.statusDotPaused]} />
+              <Text style={[styles.statusText, isRunning ? styles.statusTextActive : styles.statusTextPaused]}>
+                {isRunning ? 'Running' : 'Paused'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Distance</Text>
+              <Text style={styles.statValue}>
+                {displayDistance.toFixed(2)}
+                <Text style={styles.statUnit}> {distLabelUnit}</Text>
+              </Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Time</Text>
+              <Text style={styles.statValue}>{formatClock(elapsedS)}</Text>
+            </View>
+
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Avg speed</Text>
+              <Text style={styles.statValue}>
+                {avgSpeedDisplay.toFixed(1)}
+                <Text style={styles.statUnit}> {speedLabelUnit}</Text>
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
-            <Ionicons name="chevron-back" size={20} color={TEXT} />
-          </TouchableOpacity>
-
-          <View style={styles.headerCenter}>
-            <Text style={styles.currentLabel}>CURRENT</Text>
-            <Text style={styles.title}>{title}</Text>
-          </View>
-
-          <View style={styles.iconBtnSpacer} />
-        </View>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>DISTANCE</Text>
-            <Text style={styles.statValue}>
-              {displayDistance.toFixed(2)}
-              <Text style={styles.statUnit}>{distLabelUnit}</Text>
-            </Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>TIME</Text>
-            <Text style={styles.statValue}>{formatClock(elapsedS)}</Text>
-          </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>AVG SPEED</Text>
-            <Text style={styles.statValue}>
-              {avgSpeedDisplay.toFixed(1)}
-              <Text style={styles.statUnit}>{speedLabelUnit}</Text>
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.centerBlock}>
+        <View style={[globalStyles.panelSoft, styles.centerBlock]}>
           <Text style={styles.centerBig}>
             {displayDistance.toFixed(2)}
-            <Text style={styles.centerUnit}>{distLabelUnit}</Text>
+            <Text style={styles.centerUnit}> {distLabelUnit}</Text>
           </Text>
-          <Text style={styles.centerLabel}>TOTAL DISTANCE</Text>
+          <Text style={styles.centerLabel}>Total distance</Text>
 
           <View style={styles.centerRow}>
             <View style={styles.centerMini}>
               <Text style={styles.centerMiniValue}>{currentPace}</Text>
-              <Text style={styles.centerMiniLabel}>CURRENT PACE</Text>
+              <Text style={styles.centerMiniLabel}>Current pace</Text>
             </View>
 
             <View style={styles.centerMini}>
               <Text style={styles.centerMiniValue}>{avgPace}</Text>
-              <Text style={styles.centerMiniLabel}>AVG PACE</Text>
+              <Text style={styles.centerMiniLabel}>Average pace</Text>
             </View>
           </View>
         </View>
@@ -522,15 +526,15 @@ export default function IndoorSession() {
               onPress={() => setSpeed((v) => clamp(Number((v - speedStep).toFixed(1)), 0, 25))}
               disabled={!isRunning}
             >
-              <Ionicons name="remove" size={20} color={TEXT} />
+              <Ionicons name="remove" size={20} color={colors.text} />
             </Pressable>
 
             <View style={styles.controlCenter}>
               <Text style={styles.controlValue}>
                 {speed.toFixed(1)}
-                <Text style={styles.controlUnit}>{speedLabelUnit}</Text>
+                <Text style={styles.controlUnit}> {speedLabelUnit}</Text>
               </Text>
-              <Text style={styles.controlLabel}>CURRENT SPEED</Text>
+              <Text style={styles.controlLabel}>Current speed</Text>
             </View>
 
             <Pressable
@@ -538,17 +542,17 @@ export default function IndoorSession() {
               onPress={() => setSpeed((v) => clamp(Number((v + speedStep).toFixed(1)), 0, 25))}
               disabled={!isRunning}
             >
-              <Ionicons name="add" size={20} color={TEXT} />
+              <Ionicons name="add" size={20} color={colors.text} />
             </Pressable>
           </View>
 
-          <View style={[styles.controlRow, { marginTop: 10 }]}>
+          <View style={[styles.controlRow, styles.controlRowSpaced]}>
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
               onPress={() => setInclineDeg((v) => clamp(Number((v - inclineStep).toFixed(1)), 0, 20))}
               disabled={!isRunning}
             >
-              <Ionicons name="remove" size={20} color={TEXT} />
+              <Ionicons name="remove" size={20} color={colors.text} />
             </Pressable>
 
             <View style={styles.controlCenter}>
@@ -556,7 +560,7 @@ export default function IndoorSession() {
                 {inclineDeg.toFixed(1)}
                 <Text style={styles.controlUnit}>°</Text>
               </Text>
-              <Text style={styles.controlLabel}>INCLINE</Text>
+              <Text style={styles.controlLabel}>Incline</Text>
             </View>
 
             <Pressable
@@ -564,34 +568,44 @@ export default function IndoorSession() {
               onPress={() => setInclineDeg((v) => clamp(Number((v + inclineStep).toFixed(1)), 0, 20))}
               disabled={!isRunning}
             >
-              <Ionicons name="add" size={20} color={TEXT} />
+              <Ionicons name="add" size={20} color={colors.text} />
             </Pressable>
           </View>
         </View>
 
         <View style={styles.bottom}>
-          <TouchableOpacity style={styles.pauseBtn} onPress={togglePause}>
-            <Ionicons name={isRunning ? 'pause' : 'play'} size={18} color={TEXT} />
-            <Text style={styles.pauseText}>{isRunning ? 'Pause' : 'Resume'}</Text>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[isRunning ? globalStyles.buttonSecondary : globalStyles.buttonPrimary, styles.pauseBtn]}
+            onPress={togglePause}
+          >
+            <Ionicons
+              name={isRunning ? 'pause' : 'play'}
+              size={18}
+              color={isRunning ? colors.text : colors.blkText}
+            />
+            <Text style={isRunning ? globalStyles.buttonTextSecondary : globalStyles.buttonTextPrimary}>
+              {isRunning ? 'Pause' : 'Resume'}
+            </Text>
           </TouchableOpacity>
 
           {!isRunning && (
             <View style={styles.pausedActionsRow}>
               <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.finishBtn}
+                activeOpacity={0.92}
+                style={[globalStyles.buttonPrimary, styles.actionButton]}
                 onPress={() => setShowFinishConfirm(true)}
               >
-                <Ionicons name="checkmark" size={18} color={TEXT} />
-                <Text style={styles.finishText}>Finish</Text>
+                <Ionicons name="checkmark" size={18} color={colors.blkText} />
+                <Text style={globalStyles.buttonTextPrimary}>Finish</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                activeOpacity={0.9}
+                activeOpacity={0.92}
                 style={styles.cancelBtn}
                 onPress={requestCancel}
               >
-                <Ionicons name="close" size={18} color="#e04b4b" />
+                <Ionicons name="close" size={18} color={colors.danger} />
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -614,163 +628,275 @@ export default function IndoorSession() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, },
-
-  logoWrap: {
-    paddingTop: 6,
-    paddingHorizontal: 16,
-    marginBottom: 2,
-  },
-
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    justifyContent: 'space-between',
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: CARD,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconBtnSpacer: { width: 44, height: 44 },
-  headerCenter: { alignItems: 'center' },
-  currentLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  title: {
-    color: Colors.dark.highlight1,
-    fontSize: 28,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 14,
-    gap: 10,
-    marginTop: 2,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  statLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  statValue: { color: TEXT, fontSize: 17, fontWeight: '900' },
-  statUnit: { color: TEXT, opacity: 0.8, fontSize: 12, fontWeight: '900' },
-
-  centerBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  centerBig: { color: TEXT, fontSize: 62, fontWeight: '900', letterSpacing: 1 },
-  centerUnit: { color: TEXT, fontSize: 24, fontWeight: '900', opacity: 0.9 },
-  centerLabel: {
-    color: TEXT,
-    opacity: 0.75,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginTop: 6,
-  },
-  centerRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  centerMini: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    minWidth: 140,
-  },
-  centerMiniValue: { color: TEXT, fontSize: 14, fontWeight: '900' },
-  centerMiniLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginTop: 5,
-  },
-
-  controls: { paddingHorizontal: 16, paddingBottom: 8 },
-  controlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 10,
-  },
-  controlBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  disabled: { opacity: 0.45 },
-  controlCenter: { flex: 1, alignItems: 'center' },
-  controlValue: { color: TEXT, fontSize: 20, fontWeight: '900' },
-  controlUnit: { color: TEXT, opacity: 0.85, fontSize: 12, fontWeight: '900' },
-  controlLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginTop: 4,
-  },
-
-  bottom: { paddingHorizontal: 16, paddingBottom: 12 },
-  pauseBtn: {
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pauseText: { color: TEXT, fontSize: 16, fontWeight: '900' },
-
-  pausedActionsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
-  finishBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  finishText: { color: TEXT, fontSize: 15, fontWeight: '900' },
-
-  cancelBtn: {
-    flex: 1,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  cancelText: { color: '#e04b4b', fontSize: 15, fontWeight: '900' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safe: { flex: 1 },
+    heroCard: {
+      marginTop: 8,
+      paddingBottom: 18,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    iconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerCenter: {
+      flex: 1,
+      alignItems: 'center',
+      paddingTop: 2,
+    },
+    title: {
+      marginTop: 8,
+      color: colors.highlight1,
+      fontFamily: fonts.display,
+      fontSize: 28,
+      lineHeight: 32,
+      letterSpacing: -0.8,
+      textAlign: 'center',
+    },
+    heroSubtitle: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+      maxWidth: 230,
+    },
+    statusPill: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minWidth: 90,
+      justifyContent: 'center',
+    },
+    statusActive: {
+      backgroundColor: colors.accentSoft,
+      borderColor: colors.glowPrimary,
+    },
+    statusPaused: {
+      backgroundColor: colors.accentTertiarySoft,
+      borderColor: colors.glowTertiary,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+    },
+    statusDotActive: {
+      backgroundColor: colors.success,
+    },
+    statusDotPaused: {
+      backgroundColor: colors.warning,
+    },
+    statusText: {
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    statusTextActive: {
+      color: colors.highlight1,
+    },
+    statusTextPaused: {
+      color: colors.highlight3,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 18,
+    },
+    statBox: {
+      flex: 1,
+      backgroundColor: colors.card2,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    statLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 1,
+      marginBottom: 6,
+      textTransform: 'uppercase',
+    },
+    statValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 17,
+      lineHeight: 21,
+    },
+    statUnit: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    centerBlock: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 14,
+      paddingVertical: 24,
+    },
+    centerBig: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 58,
+      lineHeight: 62,
+      letterSpacing: -1.2,
+    },
+    centerUnit: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 20,
+      lineHeight: 24,
+    },
+    centerLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      marginTop: 6,
+      textTransform: 'uppercase',
+    },
+    centerRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 14,
+    },
+    centerMini: {
+      backgroundColor: colors.card3,
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      minWidth: 140,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    centerMiniValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    centerMiniLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 0.8,
+      marginTop: 5,
+      textTransform: 'uppercase',
+    },
+    controls: {
+      paddingTop: 14,
+      gap: 10,
+    },
+    controlRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card2,
+      borderRadius: 20,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    controlRowSpaced: {
+      marginTop: 0,
+    },
+    controlBtn: {
+      width: 52,
+      height: 52,
+      borderRadius: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.card3,
+    },
+    disabled: { opacity: 0.45 },
+    controlCenter: { flex: 1, alignItems: 'center' },
+    controlValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 20,
+      lineHeight: 24,
+    },
+    controlUnit: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    controlLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      marginTop: 4,
+      textTransform: 'uppercase',
+    },
+    bottom: {
+      paddingTop: 14,
+      paddingBottom: 12,
+    },
+    pauseBtn: {
+      minHeight: 56,
+      gap: 10,
+    },
+    pausedActionsRow: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 10,
+    },
+    actionButton: {
+      flex: 1,
+      minHeight: 52,
+      gap: 8,
+    },
+    cancelBtn: {
+      flex: 1,
+      minHeight: 52,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 14,
+    },
+    cancelText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+  });
+}

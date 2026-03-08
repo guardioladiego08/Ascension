@@ -152,7 +152,7 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.row}
-              onPress={() => handleComingSoon('Advanced')}
+              onPress={() => router.push('/profile/settings/advanced')}
             >
               <Text style={styles.rowLabel}>Advanced</Text>
               <Ionicons

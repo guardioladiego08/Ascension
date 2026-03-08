@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 import { getAuthenticatedUserId } from '@/lib/progress/history';
@@ -61,9 +61,6 @@ type WeeklyOverviewMetrics = {
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const STRENGTH_COLOR = '#7C83FF';
-const CARDIO_COLOR = '#2DD4BF';
-const NUTRITION_COLOR = '#F59E0B';
 
 function toLocalISODate(date: Date) {
   const year = date.getFullYear();
@@ -132,6 +129,8 @@ export default function WeeklyOverviewDashboard({
   rangeStart,
   rangeEnd,
 }: Props) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState<WeeklyOverviewMetrics>(EMPTY_METRICS);
@@ -236,6 +235,7 @@ export default function WeeklyOverviewDashboard({
             Number(row.total_distance_m ?? 0) > 0
               ? Number(row.total_distance_m ?? 0)
               : Number(row.total_time_s ?? 0);
+
           cardioByDay[key] = (cardioByDay[key] ?? 0) + intensity;
           cardioDistanceM += Number(row.total_distance_m ?? 0);
           cardioMinutes += Number(row.total_time_s ?? 0) / 60;
@@ -248,6 +248,7 @@ export default function WeeklyOverviewDashboard({
             Number(row.distance_m ?? 0) > 0
               ? Number(row.distance_m ?? 0)
               : Number(row.duration_s ?? 0);
+
           cardioByDay[key] = (cardioByDay[key] ?? 0) + intensity;
           cardioDistanceM += Number(row.distance_m ?? 0);
           cardioMinutes += Number(row.duration_s ?? 0) / 60;
@@ -300,8 +301,8 @@ export default function WeeklyOverviewDashboard({
           cardioByDay,
           nutritionByDay,
         });
-      } catch (err) {
-        console.warn('Error loading weekly overview', err);
+      } catch (error) {
+        console.warn('Error loading weekly overview', error);
         if (isActive) setMetrics(EMPTY_METRICS);
       } finally {
         if (isActive) setLoading(false);
@@ -325,11 +326,15 @@ export default function WeeklyOverviewDashboard({
     [metrics.cardioByDay]
   );
 
+  const strengthColor = colors.highlight1;
+  const cardioColor = colors.highlight2;
+  const nutritionColor = colors.highlight3;
+
   if (loading) {
     return (
       <View style={styles.card}>
         <View style={styles.loadingState}>
-          <ActivityIndicator size="small" color={Colors.dark.highlight1} />
+          <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.loadingText}>Building weekly overview…</Text>
         </View>
       </View>
@@ -360,37 +365,49 @@ export default function WeeklyOverviewDashboard({
           <Text style={styles.snapshotLabel}>goal hits</Text>
         </View>
         <View style={styles.snapshotCard}>
-          <Text style={styles.snapshotValue}>{Math.round((metrics.strengthMinutes + metrics.cardioMinutes) / 60)}</Text>
+          <Text style={styles.snapshotValue}>
+            {Math.round((metrics.strengthMinutes + metrics.cardioMinutes) / 60)}
+          </Text>
           <Text style={styles.snapshotLabel}>training hrs</Text>
         </View>
       </View>
 
       <View style={styles.matrixCard}>
         <View style={styles.legendRow}>
-          <LegendDot color={STRENGTH_COLOR} label="Strength" />
-          <LegendDot color={CARDIO_COLOR} label="Cardio" />
-          <LegendDot color={NUTRITION_COLOR} label="Nutrition" />
+          <LegendDot color={strengthColor} label="Strength" styles={styles} />
+          <LegendDot color={cardioColor} label="Cardio" styles={styles} />
+          <LegendDot color={nutritionColor} label="Nutrition" styles={styles} />
         </View>
 
         <View style={styles.matrixGrid}>
           {metrics.dayKeys.map((dayKey, index) => {
             const isToday = dayKey === todayKey;
+
             return (
               <View
                 key={dayKey}
                 style={[styles.dayColumn, isToday && styles.dayColumnToday]}
               >
                 <MetricCell
-                  color={STRENGTH_COLOR}
+                  color={strengthColor}
                   opacity={getCellOpacity(metrics.strengthByDay[dayKey] ?? 0, maxStrength)}
+                  styles={styles}
                 />
                 <MetricCell
-                  color={CARDIO_COLOR}
+                  color={cardioColor}
                   opacity={getCellOpacity(metrics.cardioByDay[dayKey] ?? 0, maxCardio)}
+                  styles={styles}
                 />
                 <MetricCell
-                  color={NUTRITION_COLOR}
-                  opacity={(metrics.nutritionByDay[dayKey] ?? 0) === 2 ? 1 : (metrics.nutritionByDay[dayKey] ?? 0) === 1 ? 0.45 : 0.12}
+                  color={nutritionColor}
+                  opacity={
+                    (metrics.nutritionByDay[dayKey] ?? 0) === 2
+                      ? 1
+                      : (metrics.nutritionByDay[dayKey] ?? 0) === 1
+                        ? 0.45
+                        : 0.12
+                  }
+                  styles={styles}
                 />
                 <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                   {DAY_LABELS[index] ?? ''}
@@ -403,32 +420,46 @@ export default function WeeklyOverviewDashboard({
 
       <View style={styles.domainRow}>
         <DomainSummary
-          color={STRENGTH_COLOR}
-          icon={<MaterialCommunityIcons name="dumbbell" size={16} color="#FFFFFF" />}
+          color={strengthColor}
+          iconBg={colors.accentSoft}
+          icon={<MaterialCommunityIcons name="dumbbell" size={16} color={strengthColor} />}
           label="Strength"
           primary={`${metrics.strengthSessions} session${metrics.strengthSessions === 1 ? '' : 's'}`}
           secondary={`${metrics.strengthVolumeKg.toLocaleString()} kg · ${formatHours(metrics.strengthMinutes)}`}
+          styles={styles}
         />
         <DomainSummary
-          color={CARDIO_COLOR}
-          icon={<Ionicons name="walk-outline" size={16} color="#062B2A" />}
+          color={cardioColor}
+          iconBg={colors.accentSecondarySoft}
+          icon={<Ionicons name="walk-outline" size={16} color={cardioColor} />}
           label="Cardio"
           primary={formatDistance(metrics.cardioDistanceM, distanceUnit)}
           secondary={`${metrics.cardioSessions} session${metrics.cardioSessions === 1 ? '' : 's'} · ${Math.round(metrics.cardioMinutes)} min`}
+          styles={styles}
         />
         <DomainSummary
-          color={NUTRITION_COLOR}
-          icon={<MaterialCommunityIcons name="food-apple-outline" size={16} color="#3F2100" />}
+          color={nutritionColor}
+          iconBg={colors.accentTertiarySoft}
+          icon={<MaterialCommunityIcons name="food-apple-outline" size={16} color={nutritionColor} />}
           label="Nutrition"
           primary={`${metrics.nutritionTrackedDays}/${metrics.dayKeys.length || 7} tracked`}
           secondary={`${metrics.nutritionCalories.toLocaleString()} kcal · ${metrics.nutritionAvgProtein.toFixed(0)}g avg protein`}
+          styles={styles}
         />
       </View>
     </View>
   );
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendDot({
+  color,
+  label,
+  styles,
+}: {
+  color: string;
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.legendItem}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
@@ -437,28 +468,40 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
-function MetricCell({ color, opacity }: { color: string; opacity: number }) {
+function MetricCell({
+  color,
+  opacity,
+  styles,
+}: {
+  color: string;
+  opacity: number;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return <View style={[styles.metricCell, { backgroundColor: color, opacity }]} />;
 }
 
 function DomainSummary({
   color,
+  iconBg,
   icon,
   label,
   primary,
   secondary,
+  styles,
 }: {
   color: string;
+  iconBg: string;
   icon: React.ReactNode;
   label: string;
   primary: string;
   secondary: string;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View style={styles.domainCard}>
       <View style={styles.domainHeader}>
-        <View style={[styles.domainIcon, { backgroundColor: color }]}>{icon}</View>
-        <Text style={styles.domainLabel}>{label}</Text>
+        <View style={[styles.domainIcon, { backgroundColor: iconBg }]}>{icon}</View>
+        <Text style={[styles.domainLabel, { color }]}>{label}</Text>
       </View>
       <Text style={styles.domainPrimary}>{primary}</Text>
       <Text style={styles.domainSecondary}>{secondary}</Text>
@@ -466,176 +509,210 @@ function DomainSummary({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  loadingState: {
-    minHeight: 240,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 8,
-    color: '#9DA4C4',
-    fontSize: 12,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  eyebrow: {
-    fontSize: 12,
-    letterSpacing: 0.8,
-    color: '#9DA4C4',
-  },
-  title: {
-    marginTop: 6,
-    maxWidth: 220,
-    fontSize: 16,
-    lineHeight: 22,
-    color: '#E5E7F5',
-    fontWeight: '600',
-  },
-  scorePill: {
-    minWidth: 78,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.card2,
-    alignItems: 'center',
-  },
-  scoreValue: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  scoreLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#9DA4C4',
-    textTransform: 'uppercase',
-  },
-  snapshotRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-  },
-  snapshotCard: {
-    flex: 1,
-    backgroundColor: Colors.dark.card2,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  snapshotValue: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  snapshotLabel: {
-    marginTop: 4,
-    color: '#9DA4C4',
-    fontSize: 11,
-  },
-  matrixCard: {
-    marginTop: 14,
-    backgroundColor: '#2E3033',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 14,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  legendText: {
-    color: '#B8C1DF',
-    fontSize: 11,
-  },
-  matrixGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  dayColumn: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: 14,
-    paddingVertical: 8,
-  },
-  dayColumnToday: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  metricCell: {
-    width: '100%',
-    maxWidth: 32,
-    height: 18,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  dayLabel: {
-    marginTop: 2,
-    color: '#7F88A6',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  dayLabelToday: {
-    color: '#FFFFFF',
-  },
-  domainRow: {
-    marginTop: 14,
-    gap: 10,
-  },
-  domainCard: {
-    backgroundColor: Colors.dark.card2,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  domainHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  domainIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  domainLabel: {
-    color: '#DCE3FF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  domainPrimary: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  domainSecondary: {
-    marginTop: 4,
-    color: '#9DA4C4',
-    fontSize: 12,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    loadingState: {
+      minHeight: 240,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    loadingText: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    eyebrow: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.8,
+    },
+    title: {
+      marginTop: 6,
+      maxWidth: 220,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 22,
+    },
+    scorePill: {
+      minWidth: 82,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 16,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      alignItems: 'center',
+    },
+    scoreValue: {
+      color: colors.highlight1,
+      fontFamily: fonts.display,
+      fontSize: 20,
+      lineHeight: 24,
+      letterSpacing: -0.7,
+    },
+    scoreLabel: {
+      marginTop: 2,
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 13,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    snapshotRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 16,
+    },
+    snapshotCard: {
+      flex: 1,
+      backgroundColor: colors.card2,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+    },
+    snapshotValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 19,
+      lineHeight: 23,
+      letterSpacing: -0.7,
+    },
+    snapshotLabel: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+    },
+    matrixCard: {
+      marginTop: 14,
+      backgroundColor: colors.cardDark,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    legendRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 14,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    legendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginRight: 6,
+    },
+    legendText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+    },
+    matrixGrid: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    dayColumn: {
+      flex: 1,
+      alignItems: 'center',
+      borderRadius: 14,
+      paddingVertical: 8,
+    },
+    dayColumnToday: {
+      backgroundColor: colors.card2,
+    },
+    metricCell: {
+      width: '100%',
+      maxWidth: 32,
+      height: 18,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+    dayLabel: {
+      marginTop: 2,
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    dayLabelToday: {
+      color: colors.text,
+    },
+    domainRow: {
+      marginTop: 14,
+      gap: 10,
+    },
+    domainCard: {
+      backgroundColor: colors.card2,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+    },
+    domainHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    domainIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 8,
+    },
+    domainLabel: {
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    domainPrimary: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    domainSecondary: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+  });
+}

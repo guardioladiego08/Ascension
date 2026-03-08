@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import {
   getAuthedUserId,
@@ -63,16 +63,12 @@ function formatSupabaseErr(err: any): string {
   return `${msg || 'Could not load activity.'}${code}`.trim();
 }
 
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const ACCENT = Colors.dark.highlight1;
-
 type Mode = 'notifications' | 'requests' | 'following';
 
 export default function ActivityTab() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [meId, setMeId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('notifications');
@@ -277,7 +273,7 @@ export default function ActivityTab() {
 
       {loading ? (
         <View style={styles.stateWrap}>
-          <ActivityIndicator size="small" color={ACCENT} />
+          <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.stateText}>Loading…</Text>
         </View>
       ) : (
@@ -365,6 +361,8 @@ function NotificationCard({
   row: NotificationRow;
   onPressProfile: (userId: string) => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const userLabel = row.user?.username ? `@${row.user.username}` : 'Someone';
   const sub = row.message?.trim() || notificationTitle(row.kind);
   return (
@@ -377,7 +375,7 @@ function NotificationCard({
         <Image source={{ uri: row.user.profile_image_url }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, styles.avatarFallback]}>
-          <Ionicons name="notifications-outline" size={18} color={MUTED} />
+          <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
         </View>
       )}
 
@@ -391,6 +389,8 @@ function NotificationCard({
 }
 
 function ModePill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -421,6 +421,8 @@ function RowCard({
   onDecline?: () => void;
   onCancel?: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const subtitle =
     kind === 'incoming'
       ? 'Requested to follow you'
@@ -434,7 +436,7 @@ function RowCard({
         <Image source={{ uri: user.profile_image_url }} style={styles.avatar} />
       ) : (
         <View style={[styles.avatar, styles.avatarFallback]}>
-          <Ionicons name="person" size={18} color={MUTED} />
+          <Ionicons name="person" size={18} color={colors.textMuted} />
         </View>
       )}
 
@@ -473,6 +475,8 @@ function InlineBtn({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -489,67 +493,118 @@ function InlineBtn({
   );
 }
 
-const styles = StyleSheet.create({
-  modeRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
-  modePill: {
-    flex: 1,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modePillActive: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  modeText: { color: MUTED, fontSize: 13, fontWeight: '800' },
-  modeTextActive: { color: TEXT },
-
-  stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 10 },
-  stateText: { color: MUTED, fontSize: 13 },
-  errorText: { color: '#FCA5A5', fontSize: 12, textAlign: 'center' },
-
-  row: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  unreadRow: {
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.06)' },
-  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-
-  username: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
-  subtitle: { color: MUTED, fontSize: 12, marginTop: 2 },
-
-  actionsInline: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-
-  inlineBtn: {
-    height: 30,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inlineBtnPrimary: { backgroundColor: ACCENT },
-  inlineBtnPrimaryText: { color: '#0B0F1A', fontWeight: '900', fontSize: 12 },
-  inlineBtnOutline: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
-  inlineBtnText: { color: TEXT, fontWeight: '900', fontSize: 12 },
-  timeText: { color: MUTED, fontSize: 11, fontWeight: '700' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    modeRow: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 12,
+    },
+    modePill: {
+      flex: 1,
+      height: 40,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modePillActive: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    modeText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+    modeTextActive: { color: colors.blkText },
+    stateWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 10 },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      textAlign: 'center',
+    },
+    row: {
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    unreadRow: {
+      borderColor: colors.glowPrimary,
+      backgroundColor: colors.card2,
+    },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.card2,
+    },
+    avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+    username: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13.5,
+      lineHeight: 17,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+    actionsInline: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    inlineBtn: {
+      height: 30,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    inlineBtnPrimary: { backgroundColor: colors.highlight1 },
+    inlineBtnPrimaryText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 15,
+    },
+    inlineBtnOutline: {
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+    },
+    inlineBtnText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 15,
+    },
+    timeText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+  });
+}

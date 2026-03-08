@@ -1,4 +1,3 @@
-// app/(tabs)/nutrition/createMeal.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -7,34 +6,27 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { GlobalStyles } from '@/constants/GlobalStyles';
-import { Colors } from '@/constants/Colors';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import LogoHeader from '@/components/my components/logoHeader';
 import MealSummaryCard from './components/MealSummaryCard';
 import IngredientsList from './components/IngredientsList';
+import AppPopup from '@/components/ui/AppPopup';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   getDeviceTimezone,
   syncAndFetchMyDailyGoalResult,
   toLocalISODate,
 } from '@/lib/goals/client';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
-const PRIMARY = Colors.dark.highlight1
-const DANGER_RED = '#FF6B81';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Ingredient = {
-  food_id: string;          // 👈 matches foods.id from CSV
+  food_id: string;
   description: string;
   baseKcal: number;
   baseProtein: number;
@@ -45,9 +37,10 @@ type Ingredient = {
   quantity: number;
 };
 
-
 export default function CreateMeal() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const params = useLocalSearchParams<{
     foodId?: string;
@@ -58,7 +51,7 @@ export default function CreateMeal() {
     fat?: string;
     serving_size?: string;
     serving_unit?: string;
-    quantity?: string;   // 👈 NEW
+    quantity?: string;
   }>();
 
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -67,8 +60,6 @@ export default function CreateMeal() {
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // 🔹 REAL user id from Supabase auth
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,22 +69,19 @@ export default function CreateMeal() {
         console.error('Error getting user in CreateMeal', error);
         return;
       }
-      if (data.user) {
-        setUserId(data.user.id);
-      }
+      if (data.user) setUserId(data.user.id);
     };
+
     loadUser();
   }, []);
 
-  // When returning from AddIngredient with a selected food, add it to ingredients
-  // When returning from AddIngredient with a selected food, add it to ingredients
   useEffect(() => {
     if (!params.foodId) return;
 
-    const foodId = params.foodId; // already a string like "fd_F2MYJuH8UsE9"
-    const qty = params.quantity ? Number(params.quantity) : 1;
+    const foodId = params.foodId;
+    const quantity = params.quantity ? Number(params.quantity) : 1;
 
-    setIngredients(prev => [
+    setIngredients((prev) => [
       ...prev,
       {
         food_id: foodId,
@@ -104,22 +92,29 @@ export default function CreateMeal() {
         baseFat: params.fat ? Number(params.fat) : 0,
         serving_size: params.serving_size ? Number(params.serving_size) : null,
         serving_unit: params.serving_unit ?? null,
-        quantity: Number.isNaN(qty) ? 1 : qty,
+        quantity: Number.isNaN(quantity) ? 1 : quantity,
       },
     ]);
-  }, [params.foodId, params.quantity]);
+  }, [
+    params.foodId,
+    params.description,
+    params.kcal,
+    params.protein,
+    params.carbs,
+    params.fat,
+    params.serving_size,
+    params.serving_unit,
+    params.quantity,
+  ]);
 
-
-
-  // Totals for meal summary (kcal + macros)
   const { totalKcal, totalProtein, totalCarbs, totalFat } = useMemo(() => {
     return ingredients.reduce(
-      (acc, ing) => {
-        const q = ing.quantity || 0;
-        acc.totalKcal += ing.baseKcal * q;
-        acc.totalProtein += ing.baseProtein * q;
-        acc.totalCarbs += ing.baseCarbs * q;
-        acc.totalFat += ing.baseFat * q;
+      (acc, ingredient) => {
+        const quantity = ingredient.quantity || 0;
+        acc.totalKcal += ingredient.baseKcal * quantity;
+        acc.totalProtein += ingredient.baseProtein * quantity;
+        acc.totalCarbs += ingredient.baseCarbs * quantity;
+        acc.totalFat += ingredient.baseFat * quantity;
         return acc;
       },
       {
@@ -131,20 +126,19 @@ export default function CreateMeal() {
     );
   }, [ingredients]);
 
-  // 🔹 Total grams for ONE portion of this recipe
-  // (sum of each ingredient's default serving_size in grams * quantity)
   const totalGrams = useMemo(() => {
-    return ingredients.reduce((acc, ing) => {
-      const q = ing.quantity || 0;
-      if (!ing.serving_size) return acc;
-      return acc + ing.serving_size * q;
+    return ingredients.reduce((acc, ingredient) => {
+      const quantity = ingredient.quantity || 0;
+      if (!ingredient.serving_size) return acc;
+      return acc + ingredient.serving_size * quantity;
     }, 0);
   }, [ingredients]);
 
   const handleQuantityChange = (index: number, value: string) => {
     const cleaned = value.replace(',', '.');
     const num = parseFloat(cleaned);
-    setIngredients(prev => {
+
+    setIngredients((prev) => {
       const copy = [...prev];
       copy[index] = {
         ...copy[index],
@@ -159,22 +153,20 @@ export default function CreateMeal() {
       Alert.alert('Name required', 'Please give your recipe a name.');
       return;
     }
+
     if (ingredients.length === 0) {
       Alert.alert('Add ingredients', 'Add at least one ingredient first.');
       return;
     }
+
     if (!userId) {
       Alert.alert('User missing', 'Please sign in again before saving.');
       return;
     }
+
     setShowSubmitConfirm(true);
   };
 
-  const handleCancelPress = () => {
-    setShowCancelConfirm(true);
-  };
-
-  /** Helper: create recipe in DB and return the inserted row */
   const createRecipeInDb = async () => {
     if (!userId) {
       Alert.alert('User missing', 'Please sign in again before saving.');
@@ -183,20 +175,17 @@ export default function CreateMeal() {
 
     setSaving(true);
 
-    const totalGramsRounded =
-      totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
-
-    // Build ingredients JSON payload
-    const ingredientsPayload = ingredients.map(ing => ({
-      food_id: ing.food_id,
-      description: ing.description,
-      quantity: ing.quantity,
-      serving_size: ing.serving_size,
-      serving_unit: ing.serving_unit,
-      base_kcal: ing.baseKcal,
-      base_protein: ing.baseProtein,
-      base_carbs: ing.baseCarbs,
-      base_fat: ing.baseFat,
+    const totalGramsRounded = totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
+    const ingredientsPayload = ingredients.map((ingredient) => ({
+      food_id: ingredient.food_id,
+      description: ingredient.description,
+      quantity: ingredient.quantity,
+      serving_size: ingredient.serving_size,
+      serving_unit: ingredient.serving_unit,
+      base_kcal: ingredient.baseKcal,
+      base_protein: ingredient.baseProtein,
+      base_carbs: ingredient.baseCarbs,
+      base_fat: ingredient.baseFat,
     }));
 
     const { data, error } = await supabase
@@ -205,7 +194,6 @@ export default function CreateMeal() {
       .insert({
         user_id: userId,
         name: recipeName.trim(),
-        // TODO: add a "description" column in recipes and store recipeDescription
         kcal: Math.round(totalKcal),
         protein: Number(totalProtein.toFixed(2)),
         carbs: Number(totalCarbs.toFixed(2)),
@@ -213,7 +201,7 @@ export default function CreateMeal() {
         fiber: null,
         sugar: null,
         sodium: null,
-        default_portion_grams: totalGramsRounded, // 🔹 save grams per portion
+        default_portion_grams: totalGramsRounded,
         ingredients: ingredientsPayload,
         is_private: true,
       })
@@ -228,10 +216,9 @@ export default function CreateMeal() {
       return null;
     }
 
-    return data; // recipe row (with id)
+    return data;
   };
 
-  /** Action for the "Submit" button: create recipe only */
   const handleSubmitRecipeOnly = async () => {
     setShowSubmitConfirm(false);
     const recipe = await createRecipeInDb();
@@ -239,16 +226,12 @@ export default function CreateMeal() {
     router.back();
   };
 
-  /** Action for "Create & Add": create recipe + add to diary for today */
   const handleCreateAndAdd = async () => {
     setShowSubmitConfirm(false);
     const recipe = await createRecipeInDb();
     if (!recipe || !userId) return;
 
-    const totalGramsRounded =
-      totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
-
-    // 1) Get or create today's diary_day
+    const totalGramsRounded = totalGrams > 0 ? Number(totalGrams.toFixed(2)) : 0;
     const todayStr = toLocalISODate();
     const timezoneStr = getDeviceTimezone();
 
@@ -272,16 +255,15 @@ export default function CreateMeal() {
       return;
     }
 
-    // 2) Insert diary_items row referencing the new recipe
     const { error: diaryItemError } = await supabase.schema('nutrition').from('diary_items').insert({
       user_id: userId,
       diary_day_id: diaryDay.id,
-      meal_type: 'other', // change if you pass in a specific meal_type
+      meal_type: 'other',
       food_id: null,
       recipe_id: recipe.id,
       quantity: 1,
       unit_label: 'portion',
-      grams: totalGramsRounded, // 🔹 NOT NULL now
+      grams: totalGramsRounded,
       kcal: Math.round(totalKcal),
       protein: Number(totalProtein.toFixed(2)),
       carbs: Number(totalCarbs.toFixed(2)),
@@ -319,344 +301,314 @@ export default function CreateMeal() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton usePreviousRoute />
-        <View style={styles.main}>
-          {/* Header */}
-          <View style={styles.headerRow}>
-            <Text style={GlobalStyles.header}>Create Meal</Text>
+      <View style={globalStyles.safeArea}>
+        <LogoHeader showBackButton />
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <Text style={globalStyles.eyebrow}>Recipe Builder</Text>
+            <Text style={globalStyles.header}>Create meal</Text>
+            <Text style={styles.heroText}>
+              Build a reusable meal, tune portions, and save it as a recipe or log it
+              into today&apos;s diary immediately.
+            </Text>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Recipe name input */}
+          <View style={styles.formCard}>
+            <Text style={styles.fieldLabel}>Recipe Name</Text>
             <TextInput
-              style={styles.nameInput}
-              placeholder="Name your recipe..."
-              placeholderTextColor={TEXT_MUTED}
+              style={styles.textInput}
+              placeholder="Name your recipe"
+              placeholderTextColor={colors.textOffSt}
               value={recipeName}
               onChangeText={setRecipeName}
             />
 
-            {/* Recipe description */}
+            <Text style={[styles.fieldLabel, styles.secondaryLabel]}>Description</Text>
             <TextInput
-              style={styles.descriptionInput}
+              style={[styles.textInput, styles.descriptionInput]}
               placeholder="Add a short description (optional)"
-              placeholderTextColor={TEXT_MUTED}
+              placeholderTextColor={colors.textOffSt}
               value={recipeDescription}
               onChangeText={setRecipeDescription}
               multiline
             />
+          </View>
 
-            {/* Meal summary with donut chart */}
-            <MealSummaryCard
-              totalKcal={totalKcal}
-              totalProtein={totalProtein}
-              totalCarbs={totalCarbs}
-              totalFat={totalFat}
-            />
+          <MealSummaryCard
+            totalKcal={totalKcal}
+            totalProtein={totalProtein}
+            totalCarbs={totalCarbs}
+            totalFat={totalFat}
+          />
 
-            {/* Ingredients */}
-            <Text style={[styles.sectionLabel, { marginTop: 18 }]}>INGREDIENTS</Text>
-
-            <View style={styles.ingredientsContainer}>
-              <IngredientsList
-                ingredients={ingredients}
-                onChangeQuantity={handleQuantityChange}
-              />
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={globalStyles.eyebrow}>Ingredients</Text>
+              <Text style={styles.sectionTitle}>Meal composition</Text>
             </View>
-          </ScrollView>
-
-          {/* Footer: Submit / Cancel + Add Ingredient */}
-          <View style={styles.footer}>
-            <View style={styles.footerButtonsRow}>
-              <TouchableOpacity
-                style={[styles.footerBtn, styles.cancelBtn]}
-                activeOpacity={0.9}
-                onPress={handleCancelPress}
-                disabled={saving}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.footerBtn, styles.submitBtn]}
-                activeOpacity={0.9}
-                onPress={handleSubmitPress}
-                disabled={saving}
-              >
-                <Text style={styles.submitBtnText}>
-                  {saving ? 'Saving...' : 'Save Recipe'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
             <TouchableOpacity
-              style={styles.addIngredientBtn}
+              style={[globalStyles.buttonSecondary, styles.inlineButton]}
               activeOpacity={0.9}
               onPress={() => router.push('./addIngredient')}
               disabled={saving}
             >
-              <Ionicons name="add" size={18} color="#05101F" />
-              <Text style={styles.addIngredientBtnText}>Add Ingredient</Text>
+              <Ionicons name="add" size={16} color={colors.text} />
+              <Text style={globalStyles.buttonTextSecondary}>Add Ingredient</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Submit confirm modal */}
-          <Modal
-            transparent
-            animationType="fade"
-            visible={showSubmitConfirm}
-            onRequestClose={() => setShowSubmitConfirm(false)}
+          <IngredientsList
+            ingredients={ingredients}
+            onChangeQuantity={handleQuantityChange}
+          />
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[globalStyles.buttonSecondary, styles.footerButton]}
+            activeOpacity={0.9}
+            onPress={() => setShowCancelConfirm(true)}
+            disabled={saving}
           >
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Create this recipe?</Text>
-                <Text style={styles.modalBody}>
-                  Choose whether to just save it, or save and add it to today&apos;s
-                  diary.
-                </Text>
+            <Text style={globalStyles.buttonTextSecondary}>Cancel</Text>
+          </TouchableOpacity>
 
-                <View style={styles.modalButtonsRowMulti}>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, styles.modalCancelBtn]}
-                    onPress={() => setShowSubmitConfirm(false)}
-                  >
-                    <Text style={styles.modalCancelText}>Go Back</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.modalBtn, styles.modalConfirmBtn]}
-                    onPress={handleSubmitRecipeOnly}
-                  >
-                    <Text style={styles.modalConfirmText}>Submit</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.modalBtn, styles.modalAltBtn]}
-                    onPress={handleCreateAndAdd}
-                  >
-                    <Text style={styles.modalAltText}>Create &amp; Add</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
-
-          {/* Cancel confirm modal */}
-          <Modal
-            transparent
-            animationType="fade"
-            visible={showCancelConfirm}
-            onRequestClose={() => setShowCancelConfirm(false)}
+          <TouchableOpacity
+            style={[globalStyles.buttonPrimary, styles.footerButton]}
+            activeOpacity={0.9}
+            onPress={handleSubmitPress}
+            disabled={saving}
           >
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Discard this recipe?</Text>
-                <Text style={styles.modalBody}>
-                  Any changes you&apos;ve made will be lost.
-                </Text>
-
-                <View style={styles.modalButtonsRow}>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, styles.modalCancelBtn]}
-                    onPress={() => setShowCancelConfirm(false)}
-                  >
-                    <Text style={styles.modalCancelText}>Keep Editing</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, styles.modalDangerBtn]}
-                    onPress={confirmCancel}
-                  >
-                    <Text style={styles.modalDangerText}>Discard</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </Modal>
+            {saving ? (
+              <ActivityIndicator color={colors.blkText} />
+            ) : (
+              <Text style={globalStyles.buttonTextPrimary}>Save Recipe</Text>
+            )}
+          </TouchableOpacity>
         </View>
+
+        <AppPopup
+          visible={showSubmitConfirm}
+          onClose={() => setShowSubmitConfirm(false)}
+          eyebrow="Save Recipe"
+          title="Create this recipe?"
+          subtitle="Choose whether to just save it or save and add it to today’s diary."
+          showCloseButton
+          footer={
+            <View style={styles.popupFooterStack}>
+              <TouchableOpacity
+                style={globalStyles.buttonSecondary}
+                onPress={() => setShowSubmitConfirm(false)}
+              >
+                <Text style={globalStyles.buttonTextSecondary}>Go Back</Text>
+              </TouchableOpacity>
+              <View style={styles.popupFooterRow}>
+                <TouchableOpacity
+                  style={[globalStyles.buttonSecondary, styles.popupFooterButton]}
+                  onPress={handleSubmitRecipeOnly}
+                >
+                  <Text style={globalStyles.buttonTextSecondary}>Save Only</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[globalStyles.buttonPrimary, styles.popupFooterButton]}
+                  onPress={handleCreateAndAdd}
+                >
+                  <Text style={globalStyles.buttonTextPrimary}>Create & Add</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          }
+        >
+          <View style={styles.popupBody}>
+            <View style={styles.popupMetric}>
+              <Text style={styles.popupMetricLabel}>Recipe</Text>
+              <Text style={styles.popupMetricValue}>{recipeName.trim() || 'Untitled recipe'}</Text>
+            </View>
+            <View style={styles.popupMetric}>
+              <Text style={styles.popupMetricLabel}>Ingredients</Text>
+              <Text style={styles.popupMetricValue}>{ingredients.length}</Text>
+            </View>
+          </View>
+        </AppPopup>
+
+        <AppPopup
+          visible={showCancelConfirm}
+          onClose={() => setShowCancelConfirm(false)}
+          eyebrow="Discard Changes"
+          title="Discard this recipe?"
+          subtitle="Any changes you made in the builder will be lost."
+          showCloseButton
+          footer={
+            <View style={styles.popupFooterRow}>
+              <TouchableOpacity
+                style={[globalStyles.buttonSecondary, styles.popupFooterButton]}
+                onPress={() => setShowCancelConfirm(false)}
+              >
+                <Text style={globalStyles.buttonTextSecondary}>Keep Editing</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[globalStyles.buttonPrimary, styles.popupFooterButton, styles.dangerButton]}
+                onPress={confirmCancel}
+              >
+                <Text style={globalStyles.buttonTextPrimary}>Discard</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        >
+          <Text style={styles.popupBodyText}>
+            Save the recipe first if you want it to appear in your meal library.
+          </Text>
+        </AppPopup>
       </View>
     </LinearGradient>
   );
 }
 
-const styles = StyleSheet.create({
-  main: {
-    flex: 1,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  nameInput: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  descriptionInput: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    minHeight: 70,
-    textAlignVertical: 'top',
-    marginBottom: 16,
-  },
-  sectionLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-  },
-  ingredientsContainer: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 14,
-    minHeight: 120,
-  },
-  footer: {
-    paddingBottom: 18,
-    paddingTop: 8,
-    backgroundColor: Colors.dark.background,
-  },
-  footerButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  footerBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: TEXT_MUTED,
-    marginRight: 8,
-  },
-  submitBtn: {
-    backgroundColor: PRIMARY,
-    marginLeft: 8,
-  },
-  cancelBtnText: {
-    color: TEXT_MUTED,
-    fontWeight: '600',
-  },
-  submitBtnText: {
-    color: '#05101F',
-    fontWeight: '700',
-  },
-  addIngredientBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderColor: '#fff',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    marginTop: 4,
-  },
-  addIngredientBtnText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '700',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  // Modals
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCard: {
-    width: '82%',
-    backgroundColor: Colors.dark.popUpCard,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-  },
-  modalTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  modalBody: {
-    color: TEXT_PRIMARY,
-    fontSize: 13,
-    marginBottom: 14,
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalButtonsRowMulti: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-  },
-  modalBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginLeft: 8,
-    marginTop: 4,
-  },
-  modalCancelBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: TEXT_PRIMARY,
-  },
-  modalConfirmBtn: {
-    backgroundColor: PRIMARY,
-  },
-  modalAltBtn: {
-    backgroundColor: '#3E8CFF',
-  },
-  modalDangerBtn: {
-    borderColor: DANGER_RED,
-    borderWidth: 1,
-    borderRadius: 10,
-  },
-  modalCancelText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '600',
-  },
-  modalConfirmText: {
-    color: '#05101F',
-    fontWeight: '700',
-  },
-  modalAltText: {
-    color: '#05101F',
-    fontWeight: '700',
-  },
-  modalDangerText: {
-    color: DANGER_RED,
-    fontWeight: '700',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingTop: 8,
+      paddingBottom: 124,
+      gap: 14,
+    },
+    hero: {
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 20,
+      gap: 8,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    formCard: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 16,
+    },
+    fieldLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 13,
+      letterSpacing: 0.45,
+      textTransform: 'uppercase',
+    },
+    secondaryLabel: {
+      marginTop: 14,
+    },
+    textInput: {
+      marginTop: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+      color: colors.text,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      fontFamily: fonts.body,
+      fontSize: 15,
+    },
+    descriptionInput: {
+      minHeight: 96,
+      textAlignVertical: 'top',
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    sectionTitle: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 24,
+      letterSpacing: -0.4,
+    },
+    inlineButton: {
+      paddingHorizontal: 14,
+      gap: 6,
+    },
+    footer: {
+      position: 'absolute',
+      left: 18,
+      right: 18,
+      bottom: 18,
+      flexDirection: 'row',
+      gap: 10,
+    },
+    footerButton: {
+      flex: 1,
+    },
+    popupBody: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    popupMetric: {
+      flex: 1,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 14,
+    },
+    popupMetricLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    popupMetricValue: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    popupFooterStack: {
+      gap: 10,
+    },
+    popupFooterRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    popupFooterButton: {
+      flex: 1,
+    },
+    popupBodyText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    dangerButton: {
+      backgroundColor: colors.danger,
+    },
+  });
+}

@@ -8,16 +8,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
+import { useAppTheme } from '@/providers/AppThemeProvider';
+
 import TopMetricCards from './progress/TopMetricCards';
 import ProgressDetailsSection from './progress/ProgressDetailsSection';
-import { LinearGradient } from 'expo-linear-gradient';
 import WeeklyOverviewDashboard from './progress/WeeklyOverviewDashboard';
-
-const BG = Colors.dark.background;
-/* ------------------ DATE HELPERS ------------------ */
 
 function getWeekRange(weekOffset: number) {
   const today = new Date();
@@ -25,7 +23,7 @@ function getWeekRange(weekOffset: number) {
   const base = new Date(today);
   base.setDate(base.getDate() + weekOffset * 7);
 
-  const day = base.getDay(); // 0 (Sun) - 6 (Sat)
+  const day = base.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
 
   const start = new Date(base);
@@ -49,42 +47,52 @@ function formatRange(start: Date, end: Date) {
   return `${startStr} - ${endStr}`;
 }
 
-/* ------------------ SCREEN ------------------ */
-
 const ProgressScreen: React.FC = () => {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [weekOffset, setWeekOffset] = useState(0);
 
-  const { start, end } = useMemo(
-    () => getWeekRange(weekOffset),
-    [weekOffset]
-  );
-
-  const dateLabel = useMemo(
-    () => formatRange(start, end),
-    [start, end]
+  const { start, end } = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
+  const dateLabel = useMemo(() => formatRange(start, end), [start, end]);
+  const visibleDays = useMemo(
+    () => Math.round((end.getTime() - start.getTime()) / 86400000) + 1,
+    [end, start]
   );
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.container}>
+      <ScrollView
+        contentContainerStyle={[globalStyles.container, styles.content]}
+        showsVerticalScrollIndicator={false}
+      >
         <LogoHeader />
 
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 90 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* HEADER */}
-          <View style={styles.header}>
-            <View>
+        <View style={[globalStyles.panel, styles.heroCard]}>
+          <View style={styles.heroHeaderRow}>
+            <View style={styles.heroCopy}>
+              <Text style={globalStyles.eyebrow}>Training archive</Text>
               <Text style={styles.title}>Progress</Text>
-              <View style={styles.dateRow}>
-                <Text style={styles.dateText}>{dateLabel}</Text>
-              </View>
+              <Text style={styles.subtitle}>
+                Weekly training volume, activity rhythm, and logged nutrition in
+                one focused view.
+              </Text>
+            </View>
+
+            <View style={styles.livePill}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveText}>Weekly view</Text>
+            </View>
+          </View>
+
+          <View style={styles.dateRow}>
+            <View style={styles.dateBlock}>
+              <Text style={styles.dateLabel}>Current range</Text>
+              <Text style={styles.dateText}>{dateLabel}</Text>
             </View>
 
             <View style={styles.weekNav}>
@@ -92,7 +100,7 @@ const ProgressScreen: React.FC = () => {
                 style={styles.navBtn}
                 onPress={() => setWeekOffset((prev) => prev - 1)}
               >
-                <Ionicons name="chevron-back" size={18} color="#9DA4C4" />
+                <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -106,85 +114,205 @@ const ProgressScreen: React.FC = () => {
                 <Ionicons
                   name="chevron-forward"
                   size={18}
-                  color={weekOffset < 0 ? '#9DA4C4' : '#4B5563'}
+                  color={weekOffset < 0 ? colors.textMuted : colors.textOffSt}
                 />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* TOP METRIC CARDS */}
-          <TopMetricCards
-            rangeStart={start}
-            rangeEnd={end}
-            onExercisesPress={() =>
-              router.push('/progress/strength/exercises')
-            }
-          />
+          <View style={styles.heroFooter}>
+            <View style={styles.heroStat}>
+              <Text style={styles.heroStatValue}>
+                {weekOffset === 0 ? 'Live' : `${Math.abs(weekOffset)}w`}
+              </Text>
+              <Text style={styles.heroStatLabel}>
+                {weekOffset === 0 ? 'this week' : 'offset'}
+              </Text>
+            </View>
 
-          {/* WEEKLY OVERVIEW */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>WEEKLY OVERVIEW</Text>
+            <View style={[styles.heroStat, styles.heroStatAccent]}>
+              <Text style={styles.heroStatValue}>{visibleDays}</Text>
+              <Text style={styles.heroStatLabel}>tracked days</Text>
+            </View>
           </View>
+        </View>
 
-          <WeeklyOverviewDashboard rangeStart={start} rangeEnd={end} />
+        <TopMetricCards
+          rangeStart={start}
+          rangeEnd={end}
+          onExercisesPress={() => router.push('/progress/strength/exercises')}
+        />
 
-          {/* VIEW DETAILS */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>VIEW DETAILS</Text>
-          </View>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={globalStyles.eyebrow}>Weekly overview</Text>
+          <View style={styles.sectionRule} />
+        </View>
 
-          <ProgressDetailsSection />
+        <WeeklyOverviewDashboard rangeStart={start} rangeEnd={end} />
 
-          <View style={{ height: 32 }} />
-        </ScrollView>
-      </View>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={globalStyles.eyebrow}>View details</Text>
+          <View style={styles.sectionRule} />
+        </View>
+
+        <ProgressDetailsSection />
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </LinearGradient>
   );
 };
 
-/* ------------------ STYLES ------------------ */
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  dateRow: {
-    marginTop: 6,
-  },
-  dateText: {
-    fontSize: 12,
-    color: '#9DA4C4',
-  },
-  weekNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  navBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  sectionHeaderRow: {
-    marginTop: 24,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    letterSpacing: 0.8,
-    color: '#9DA4C4',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    content: {
+      paddingBottom: 90,
+    },
+    heroCard: {
+      marginTop: 10,
+      paddingBottom: 18,
+    },
+    heroHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    heroCopy: {
+      flex: 1,
+    },
+    title: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 34,
+      lineHeight: 38,
+      letterSpacing: -1,
+    },
+    subtitle: {
+      marginTop: 10,
+      maxWidth: 280,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    livePill: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    liveDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.highlight1,
+    },
+    liveText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    dateRow: {
+      marginTop: 22,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 16,
+    },
+    dateBlock: {
+      flex: 1,
+    },
+    dateLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+    },
+    dateText: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    weekNav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    navBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroFooter: {
+      marginTop: 18,
+      flexDirection: 'row',
+      gap: 10,
+    },
+    heroStat: {
+      flex: 1,
+      borderRadius: 18,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    heroStatAccent: {
+      backgroundColor: colors.card3,
+      borderColor: colors.glowTertiary,
+    },
+    heroStatValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 22,
+      lineHeight: 26,
+      letterSpacing: -0.8,
+    },
+    heroStatLabel: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    sectionHeaderRow: {
+      marginTop: 24,
+      marginBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    sectionRule: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    bottomSpacer: {
+      height: 32,
+    },
+  });
+}
 
 export default ProgressScreen;

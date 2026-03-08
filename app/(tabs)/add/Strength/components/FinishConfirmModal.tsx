@@ -1,6 +1,8 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/Colors';
+import React, { useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
+import AppPopup from '@/components/ui/AppPopup';
 
 type Props = {
   visible: boolean;
@@ -8,80 +10,55 @@ type Props = {
   onCancel: () => void;
 };
 
-export default function FinishConfirmModal({ visible, onConfirm, onCancel }: Props) {
+export default function FinishConfirmModal({
+  visible,
+  onConfirm,
+  onCancel,
+}: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.box}>
-          <Text style={styles.title}>Finish Workout?</Text>
-          <Text style={styles.subtitle}>Are you sure you want to finish this workout?</Text>
+    <AppPopup
+      visible={visible}
+      onClose={onCancel}
+      eyebrow="Finish workout"
+      title="Wrap up this session?"
+      subtitle="The workout will be saved and you’ll move into the completion summary."
+    >
+      <View style={styles.row}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonSecondary, styles.button]}
+          onPress={onCancel}
+        >
+          <Text style={globalStyles.buttonTextSecondary}>Keep going</Text>
+        </TouchableOpacity>
 
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={onCancel}>
-              <Text style={styles.cancelText}>Keep Going</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.btn, styles.confirmBtn]} onPress={onConfirm}>
-              <Text style={styles.confirmText}>Finish</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonPrimary, styles.button]}
+          onPress={onConfirm}
+        >
+          <Text style={globalStyles.buttonTextPrimary}>Finish</Text>
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  box: {
-    width: '80%',
-    backgroundColor: Colors.dark.popUpCard,
-    padding: 24,
-    borderRadius: 20,
-  },
-  title: {
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    marginBottom: 24,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  btn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelBtn: {
-    borderColor: '#fff',
-    borderWidth: 1,
-    marginRight: 10,
-  },
-  confirmBtn: {
-    borderColor: '#fff',
-    borderWidth: 1,
-    marginLeft: 10,
-  },
-  cancelText: {
-    color: '#fff',
-    fontSize: 15,
-  },
-  confirmText: {
-    color: '#5c976eff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 18,
+    },
+    button: {
+      flex: 1,
+    },
+  });
+}

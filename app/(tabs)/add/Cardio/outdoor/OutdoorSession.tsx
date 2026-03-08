@@ -12,9 +12,9 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { LatLng } from 'react-native-maps';
 
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import OutdoorMetrics from './components/OutdoorMetrics';
 import OutdoorMapSlide from './components/OutdoorMapSlide';
@@ -36,11 +36,6 @@ import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 type Phase = 'idle' | 'running' | 'paused';
 type ActivityType = 'run' | 'walk' | 'bike' | 'hike' | 'other';
-
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
 
 function outdoorTitle(activityType?: string, fallback?: string) {
   const t = (activityType ?? '').toLowerCase();
@@ -66,6 +61,8 @@ function makeId() {
 
 export default function OutdoorSession() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{ title?: string; activityType?: string }>();
   const {
@@ -465,10 +462,10 @@ export default function OutdoorSession() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
     >
       <ConfirmCancelModal
         visible={cancelOpen}
@@ -476,32 +473,76 @@ export default function OutdoorSession() {
         onConfirmCancel={confirmCancel}
       />
 
-      <View style={styles.safe}>
-        <View style={styles.logoWrap}>
-          <LogoHeader />
-        </View>
+      <View style={[globalStyles.container, styles.safe]}>
+        <LogoHeader />
 
-        {/* HEADER */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
-            <Ionicons name="chevron-back" size={20} color={TEXT} />
-          </TouchableOpacity>
+        <View style={[globalStyles.panel, styles.heroCard]}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </TouchableOpacity>
 
-          <View style={styles.headerCenter}>
-            <Text style={styles.current}>CURRENT</Text>
-            <Text style={styles.title}>{title}</Text>
+            <View style={styles.headerCenter}>
+              <Text style={globalStyles.eyebrow}>Outdoor cardio</Text>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.heroSubtitle}>
+                GPS route, live distance, and a cleaner finish state for cardio sessions.
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.statusPill,
+                phase === 'running'
+                  ? styles.statusActive
+                  : phase === 'paused'
+                    ? styles.statusPaused
+                    : styles.statusIdle,
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  phase === 'running'
+                    ? styles.statusDotActive
+                    : phase === 'paused'
+                      ? styles.statusDotPaused
+                      : styles.statusDotIdle,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  phase === 'running'
+                    ? styles.statusTextActive
+                    : phase === 'paused'
+                      ? styles.statusTextPaused
+                      : styles.statusTextIdle,
+                ]}
+              >
+                {phase === 'idle' ? 'Ready' : phase}
+              </Text>
+            </View>
           </View>
-
-          <View style={styles.iconSpacer} />
         </View>
 
-        {/* CONTENT */}
         <View style={styles.content}>
           {isIdle ? (
-            <View style={styles.startWrap}>
-              <TouchableOpacity style={styles.startBtn} onPress={onStart}>
-                <Ionicons name="play" size={18} color="#0E151F" />
-                <Text style={styles.startText}>Start</Text>
+            <View style={[globalStyles.panelSoft, styles.startWrap]}>
+              <View style={styles.startIconWrap}>
+                <Ionicons name="navigate-outline" size={22} color={colors.highlight1} />
+              </View>
+              <Text style={styles.startTitle}>Ready to begin?</Text>
+              <Text style={styles.startBody}>
+                Start the session to begin collecting route points and live pace.
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                style={[globalStyles.buttonPrimary, styles.startBtn]}
+                onPress={onStart}
+              >
+                <Ionicons name="play" size={18} color={colors.blkText} />
+                <Text style={globalStyles.buttonTextPrimary}>Start</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -526,16 +567,34 @@ export default function OutdoorSession() {
         <View style={styles.bottom}>
           {!isIdle && (
             <View style={styles.controlsRow}>
-              <TouchableOpacity style={styles.controlBtn} onPress={isRunning ? onPause : onResume}>
-                <Ionicons name={isRunning ? 'pause' : 'play'} size={18} color={TEXT} />
-                <Text style={styles.controlText}>{isRunning ? 'Pause' : 'Resume'}</Text>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                style={[isRunning ? globalStyles.buttonSecondary : globalStyles.buttonPrimary, styles.controlBtn]}
+                onPress={isRunning ? onPause : onResume}
+              >
+                <Ionicons
+                  name={isRunning ? 'pause' : 'play'}
+                  size={18}
+                  color={isRunning ? colors.text : colors.blkText}
+                />
+                <Text style={isRunning ? globalStyles.buttonTextSecondary : globalStyles.buttonTextPrimary}>
+                  {isRunning ? 'Pause' : 'Resume'}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.endBtn} onPress={onEndWorkout}>
-                <Ionicons name="checkmark" size={18} color={TEXT} />
-                <Text style={styles.endText}>End</Text>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                style={[globalStyles.buttonPrimary, styles.endBtn]}
+                onPress={onEndWorkout}
+              >
+                <Ionicons name="checkmark" size={18} color={colors.blkText} />
+                <Text style={globalStyles.buttonTextPrimary}>End</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setCancelOpen(true)}>
-                <Ionicons name="close" size={18} color="#e04b4b" />
+              <TouchableOpacity
+                activeOpacity={0.92}
+                style={styles.cancelBtn}
+                onPress={() => setCancelOpen(true)}
+              >
+                <Ionicons name="close" size={18} color={colors.danger} />
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -546,108 +605,186 @@ export default function OutdoorSession() {
   );
 }
 
-/* -------------------- STYLES -------------------- */
-
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-
-  logoWrap: { paddingTop: 6, paddingHorizontal: 16 },
-
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    justifyContent: 'space-between',
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: CARD,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconSpacer: { width: 44 },
-
-  headerCenter: { alignItems: 'center' },
-  current: {
-    fontSize: 11,
-    letterSpacing: 2,
-    opacity: 0.7,
-    fontWeight: '700',
-    color: TEXT,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: PRIMARY,
-  },
-
-  content: { flex: 1, paddingHorizontal: 16 },
-
-  startWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  startBtn: {
-    height: 58,
-    paddingHorizontal: 20,
-    borderRadius: 18,
-    backgroundColor: PRIMARY,
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
-  startText: { fontWeight: '900', fontSize: 16, color: '#0E151F' },
-
-  sessionWrap: {
-    flex: 1,
-    gap: 14,
-  },
-  mapWrap: {
-    flex: 1,
-    minHeight: 260,
-  },
-  metricsBlock: {
-    paddingBottom: 6,
-  },
-
-  bottom: { paddingHorizontal: 16, paddingBottom: 12 },
-
-  controlsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  controlBtn: {
-    flex: 1,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlText: { fontSize: 16, fontWeight: '900', color: TEXT },
-  endBtn: {
-    flex: 1,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  endText: { fontWeight: '900', color: TEXT },
-
-  cancelBtn: {
-    flex: 1,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: CARD,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: { fontWeight: '900', color: '#e04b4b' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safe: { flex: 1 },
+    heroCard: {
+      marginTop: 8,
+      paddingBottom: 18,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    iconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    headerCenter: {
+      flex: 1,
+      alignItems: 'center',
+      paddingTop: 2,
+    },
+    title: {
+      marginTop: 8,
+      fontSize: 28,
+      lineHeight: 32,
+      fontFamily: fonts.display,
+      color: colors.highlight1,
+      letterSpacing: -0.8,
+      textAlign: 'center',
+    },
+    heroSubtitle: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+      maxWidth: 250,
+    },
+    statusPill: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minWidth: 88,
+      justifyContent: 'center',
+    },
+    statusActive: {
+      backgroundColor: colors.accentSoft,
+      borderColor: colors.glowPrimary,
+    },
+    statusPaused: {
+      backgroundColor: colors.accentTertiarySoft,
+      borderColor: colors.glowTertiary,
+    },
+    statusIdle: {
+      backgroundColor: colors.card2,
+      borderColor: colors.border,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+    },
+    statusDotActive: {
+      backgroundColor: colors.success,
+    },
+    statusDotPaused: {
+      backgroundColor: colors.warning,
+    },
+    statusDotIdle: {
+      backgroundColor: colors.textOffSt,
+    },
+    statusText: {
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    statusTextActive: { color: colors.highlight1 },
+    statusTextPaused: { color: colors.highlight3 },
+    statusTextIdle: { color: colors.textMuted },
+    content: { flex: 1, paddingTop: 14 },
+    startWrap: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 32,
+    },
+    startIconWrap: {
+      width: 54,
+      height: 54,
+      borderRadius: 20,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+    },
+    startTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 22,
+      lineHeight: 26,
+    },
+    startBody: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: 'center',
+      maxWidth: 260,
+    },
+    startBtn: {
+      marginTop: 20,
+      minHeight: 56,
+      gap: 10,
+      minWidth: 170,
+    },
+    sessionWrap: {
+      flex: 1,
+      gap: 14,
+    },
+    mapWrap: {
+      flex: 1,
+      minHeight: 260,
+    },
+    metricsBlock: {
+      paddingBottom: 6,
+    },
+    bottom: {
+      paddingTop: 14,
+      paddingBottom: 12,
+    },
+    controlsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    controlBtn: {
+      flex: 1,
+      minHeight: 56,
+      gap: 10,
+    },
+    endBtn: {
+      flex: 1,
+      minHeight: 56,
+      gap: 8,
+    },
+    cancelBtn: {
+      flex: 1,
+      minHeight: 56,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+    },
+    cancelText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+  });
+}

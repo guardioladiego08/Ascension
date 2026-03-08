@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import LogoHeader from '@/components/my components/logoHeader';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
 import {
   deleteOutdoorSession,
@@ -50,12 +50,8 @@ import {
   type AppleHeartRateSample,
 } from '@/lib/health/appleHealthKit';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
-const BG = Colors?.dark?.background ?? '#F5F6F8';
-const CARD = Colors?.dark?.card ?? '#131A24';
-const TEXT = Colors?.dark?.text ?? '#111';
-const MUTED = Colors?.dark?.textMuted ?? '#6B7280';
-const ACCENT = Colors?.dark?.highlight1 ?? '#16A34A';
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 
@@ -89,6 +85,8 @@ type HeartRateSyncState =
 
 export default function SessionSummary() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{
     draftId?: string;
@@ -203,13 +201,16 @@ export default function SessionSummary() {
       }
 
       try {
+        if (!isAppleHealthKitAvailable()) {
+          setHeartRateLoaded(true);
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(getAppleHealthUnavailableMessage());
+          return;
+        }
+
         setHeartRateSyncing(true);
         setHeartRateSyncState('syncing');
         setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
-
-        if (!isAppleHealthKitAvailable()) {
-          throw new Error(getAppleHealthUnavailableMessage());
-        }
 
         const samples = await getAppleHeartRateSamplesForRange({
           startDate: startedAtISO,
@@ -234,10 +235,21 @@ export default function SessionSummary() {
           );
         }
       } catch (error: any) {
-        console.warn('[OutdoorSessionSummary] Apple Health load failed', error);
+        const message = formatAppleHealthError(error);
         setHeartRateLoaded(true);
+        if (
+          message.toLowerCase().includes('not available') ||
+          message.toLowerCase().includes('nitro') ||
+          message.toLowerCase().includes('turbo') ||
+          message.toLowerCase().includes('build')
+        ) {
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(message);
+          return;
+        }
+        console.warn('[OutdoorSessionSummary] Apple Health load failed', message);
         setHeartRateSyncState('failed');
-        setHeartRateSyncMessage(formatAppleHealthError(error));
+        setHeartRateSyncMessage(message);
       } finally {
         setHeartRateSyncing(false);
       }
@@ -409,36 +421,75 @@ export default function SessionSummary() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <LinearGradient
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={globalStyles.page}
+      >
         <View style={styles.loadingWrap}>
-          <ActivityIndicator />
+          <ActivityIndicator size="small" color={colors.highlight1} />
         </View>
-      </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.kicker}>SESSION SUMMARY</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.sub}>{activityType.toUpperCase()}</Text>
-        </View>
+    <LinearGradient
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
+    >
+      <View style={[globalStyles.container, styles.safe]}>
+        <LogoHeader />
 
-        <View style={styles.card}>
-          <Row label="Time" value={formatDuration(elapsedSeconds)} />
-          <Row label="Distance" value={formatDistance(distanceMeters, distanceUnit)} />
-          <Row label="Avg Pace" value={formatPaceForUnit(avgPace, distanceUnit)} />
-        </View>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={[globalStyles.panel, styles.heroCard]}>
+            <View style={styles.headerRow}>
+              <TouchableOpacity style={styles.iconBtn} onPress={onDone}>
+                <Ionicons name="chevron-back" size={18} color={colors.text} />
+              </TouchableOpacity>
+              <View style={styles.headerCenter}>
+                <Text style={globalStyles.eyebrow}>Session summary</Text>
+                <Text style={styles.title}>{title}</Text>
+                <Text style={styles.sub}>{activityType.toUpperCase()}</Text>
+              </View>
+              <View style={styles.iconBtnSpacer} />
+            </View>
 
-        <View style={styles.heartRateCard}>
-          <View style={styles.heartRateHeaderRow}>
-            <Text style={styles.heartRateTitle}>Heart Rate</Text>
-            {heartRateSyncing ? (
-              <ActivityIndicator size="small" color={Colors.dark.highlight1} />
-            ) : null}
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{formatDuration(elapsedSeconds)}</Text>
+                <Text style={styles.heroStatLabel}>time</Text>
+              </View>
+              <View style={[styles.heroStat, styles.heroStatAccent]}>
+                <Text style={styles.heroStatValue}>{formatDistance(distanceMeters, distanceUnit)}</Text>
+                <Text style={styles.heroStatLabel}>distance</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{formatPaceForUnit(avgPace, distanceUnit)}</Text>
+                <Text style={styles.heroStatLabel}>avg pace</Text>
+              </View>
+            </View>
           </View>
+
+          <View style={[globalStyles.panelSoft, styles.card]}>
+            <Row label="Time" value={formatDuration(elapsedSeconds)} styles={styles} />
+            <Row label="Distance" value={formatDistance(distanceMeters, distanceUnit)} styles={styles} />
+            <Row label="Avg Pace" value={formatPaceForUnit(avgPace, distanceUnit)} styles={styles} />
+          </View>
+
+          <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
+            <View style={styles.heartRateHeaderRow}>
+              <View>
+                <Text style={globalStyles.eyebrow}>Recovery signal</Text>
+                <Text style={styles.heartRateTitle}>Heart Rate</Text>
+              </View>
+              {heartRateSyncing ? (
+                <ActivityIndicator size="small" color={colors.highlight1} />
+              ) : null}
+            </View>
 
           {heartRateSummary ? (
             <>
@@ -462,10 +513,10 @@ export default function SessionSummary() {
 
               <MetricChart
                 title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
-                color="#FF4D4F"
+                color={colors.danger}
                 points={heartRatePoints}
-                cardBg="rgba(5, 8, 22, 0.45)"
-                textColor={TEXT}
+                cardBg={colors.cardDark}
+                textColor={colors.text}
                 valueFormatter={(v) => `${Math.round(v)}`}
                 xLabelFormatter={formatTimelineLabel}
                 yClampMin={40}
@@ -546,64 +597,55 @@ export default function SessionSummary() {
 
         <View style={styles.footer}>
           {savedSessionId ? (
-            <TouchableOpacity style={styles.primary} onPress={onDone}>
-              <Ionicons name="checkmark" size={20} color="#0E151F" />
-              <Text style={styles.primaryText}>Done</Text>
+            <TouchableOpacity style={[globalStyles.buttonPrimary, styles.primary]} onPress={onDone}>
+              <Ionicons name="checkmark" size={20} color={colors.blkText} />
+              <Text style={globalStyles.buttonTextPrimary}>Done</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={[styles.primary, saving && styles.primaryDisabled]}
+              style={[globalStyles.buttonPrimary, styles.primary, saving && styles.primaryDisabled]}
               onPress={onSave}
               disabled={saving}
             >
               {saving ? (
-                <ActivityIndicator color="#0E151F" />
+                <ActivityIndicator color={colors.blkText} />
               ) : (
                 <>
-                  <Ionicons name="save-outline" size={20} color="#0E151F" />
-                  <Text style={styles.primaryText}>Save Session</Text>
+                  <Ionicons name="save-outline" size={20} color={colors.blkText} />
+                  <Text style={globalStyles.buttonTextPrimary}>Save Session</Text>
                 </>
               )}
             </TouchableOpacity>
           )}
         </View>
-      </ScrollView>
-
-      <View style={[styles.accentLine, { backgroundColor: ACCENT }]} />
-    </SafeAreaView>
+        </ScrollView>
+      </View>
+    </LinearGradient>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
     </View>
   );
 }
-
-const rowStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-  },
-  label: {
-    color: MUTED,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    fontSize: 12,
-  },
-  value: {
-    color: TEXT,
-    fontWeight: '900',
-    fontSize: 16,
-  },
-});
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+  safe: { flex: 1 },
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
@@ -612,45 +654,109 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 20,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
+  heroCard: {
+    marginTop: 8,
+    marginBottom: 12,
+    paddingBottom: 18,
   },
-  kicker: {
-    color: MUTED,
-    fontWeight: '900',
-    letterSpacing: 1.6,
-    fontSize: 12,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: colors.card2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnSpacer: { width: 40, height: 40 },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   title: {
     marginTop: 8,
-    color: TEXT,
-    fontWeight: '900',
+    color: colors.text,
+    fontFamily: fonts.display,
     fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.8,
+    textAlign: 'center',
   },
   sub: {
     marginTop: 4,
-    color: MUTED,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    color: colors.textMuted,
+    fontFamily: fonts.label,
+    letterSpacing: 1.2,
     fontSize: 12,
+    lineHeight: 16,
+  },
+  heroStatsRow: {
+    marginTop: 18,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  heroStat: {
+    flex: 1,
+    minHeight: 88,
+    borderRadius: 18,
+    backgroundColor: colors.card2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    justifyContent: 'space-between',
+  },
+  heroStatAccent: {
+    backgroundColor: colors.card3,
+  },
+  heroStatValue: {
+    color: colors.text,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  heroStatLabel: {
+    color: colors.textOffSt,
+    fontFamily: fonts.label,
+    letterSpacing: 0.8,
+    fontSize: 10,
+    lineHeight: 14,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
   card: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    marginBottom: 12,
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  rowLabel: {
+    color: colors.textOffSt,
+    fontFamily: fonts.label,
+    letterSpacing: 1.2,
+    fontSize: 12,
+    textTransform: 'uppercase',
+  },
+  rowValue: {
+    color: colors.text,
+    fontFamily: fonts.heading,
+    fontSize: 16,
+    lineHeight: 20,
+  },
   heartRateCard: {
     marginTop: 12,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
@@ -661,19 +767,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   heartRateTitle: {
-    color: '#fff',
+    marginTop: 8,
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 22,
-    fontWeight: '800',
+    lineHeight: 26,
   },
   heartRateAvgLabel: {
-    color: '#c6d0ea',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 15,
-    fontWeight: '600',
+    lineHeight: 19,
   },
   heartRateAvgValue: {
-    color: '#FF4D4F',
+    color: colors.danger,
+    fontFamily: fonts.display,
     fontSize: 40,
-    fontWeight: '900',
+    lineHeight: 44,
     marginTop: 4,
     marginBottom: 10,
   },
@@ -686,39 +796,44 @@ const styles = StyleSheet.create({
   },
   heartRateStat: {
     flex: 1,
-    borderRadius: 12,
-    backgroundColor: 'rgba(5,8,22,0.5)',
+    borderRadius: 14,
+    backgroundColor: colors.card3,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.border,
     paddingVertical: 10,
     paddingHorizontal: 8,
   },
   heartRateStatLabel: {
-    color: '#9aa4bf',
+    color: colors.textOffSt,
+    fontFamily: fonts.label,
     fontSize: 11,
-    fontWeight: '700',
+    lineHeight: 14,
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   heartRateStatValue: {
-    color: '#fff',
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 16,
-    fontWeight: '800',
+    lineHeight: 20,
     marginTop: 4,
   },
   heartRateEmpty: {
-    color: '#9aa4bf',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 8,
   },
   heartRateStatusText: {
-    color: '#A3B2D5',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 10,
   },
   heartRateStatusTextError: {
-    color: '#FCA5A5',
+    color: colors.danger,
   },
   heartRateActionsRow: {
     flexDirection: 'row',
@@ -730,23 +845,23 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.dark.highlight1,
+    borderColor: colors.highlight1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 11,
     paddingHorizontal: 10,
   },
   heartRateActionBtnPrimary: {
-    backgroundColor: Colors.dark.highlight1,
+    backgroundColor: colors.highlight1,
   },
   heartRateActionBtnText: {
-    color: Colors.dark.highlight1,
-    fontWeight: '700',
+    color: colors.highlight1,
+    fontFamily: fonts.heading,
     fontSize: 12,
   },
   heartRateActionBtnPrimaryText: {
-    color: '#0D1320',
-    fontWeight: '800',
+    color: colors.blkText,
+    fontFamily: fonts.heading,
     fontSize: 12,
   },
   heartRateActionBtnDisabled: {
@@ -754,22 +869,21 @@ const styles = StyleSheet.create({
   },
   noticeCard: {
     marginTop: 12,
-    marginHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: CARD,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   noticeText: {
-    color: '#D7E0F4',
+    color: colors.text,
+    fontFamily: fonts.body,
     fontSize: 12.5,
     lineHeight: 18,
   },
   goalCardWrap: {
     marginTop: 12,
-    paddingHorizontal: 16,
   },
   footer: {
     marginTop: 'auto',
@@ -779,24 +893,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   primary: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    minHeight: 56,
     gap: 10,
   },
   primaryDisabled: {
     opacity: 0.65,
   },
-  primaryText: {
-    color: '#0E151F',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  accentLine: {
-    height: 4,
-    width: '100%',
-  },
-});
+  });
+}

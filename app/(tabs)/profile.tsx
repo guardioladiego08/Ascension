@@ -1,4 +1,3 @@
-// app/(tabs)/profile.tsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
@@ -14,8 +13,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import GoalCalendar from './profile/components/GoalCalendar';
 import ProfileHeaderSection, { type ProfileStats } from './profile/components/ProfileHeaderSection';
@@ -24,13 +23,6 @@ import ActivityGrid from './profile/components/ActivityGrid';
 
 import { supabase } from '@/lib/supabase';
 import { getSocialCounts } from '@/lib/social/feed';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
 
 type DetailTab = 'stats' | 'lifetime' | 'calendar';
 
@@ -60,19 +52,22 @@ function formatSupabaseErr(err: any) {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [detailTab, setDetailTab] = useState<DetailTab>('stats');
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
-
-  const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
-
+  const [stats, setStats] = useState<ProfileStats>({
+    posts: 0,
+    followers: 0,
+    following: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const fullName = useMemo(() => {
     if (!profile) return '';
-    const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
-    return name;
+    return [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
   }, [profile]);
 
   const usernameText = useMemo(() => {
@@ -152,25 +147,55 @@ export default function ProfileScreen() {
         icon="bar-chart-outline"
         active={detailTab === 'stats'}
         onPress={() => setDetailTab('stats')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
       <TabButton
         label="Lifetime"
         icon="trophy-outline"
         active={detailTab === 'lifetime'}
         onPress={() => setDetailTab('lifetime')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
       <TabButton
         label="Calendar"
         icon="calendar-outline"
         active={detailTab === 'calendar'}
         onPress={() => setDetailTab('calendar')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
     </View>
   );
 
   const renderHeaderBlock = () => (
     <>
-      {profile && (
+      <View style={[globalStyles.panel, styles.profileHero]}>
+        <View style={styles.profileHeroHeader}>
+          <View>
+            <Text style={globalStyles.eyebrow}>Account</Text>
+            <Text style={styles.profileHeroTitle}>Profile</Text>
+            <Text style={styles.profileHeroText}>
+              Your social presence, training archive, and goal history in one
+              themed view.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={goToSettings}
+            activeOpacity={0.9}
+            style={styles.settingsButton}
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.highlight1} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {profile ? (
         <ProfileHeaderSection
           fullName={fullName}
           username={usernameText}
@@ -182,10 +207,9 @@ export default function ProfileScreen() {
           onPressFollowers={() => goToConnections('followers')}
           onPressFollowing={() => goToConnections('following')}
         />
-      )}
+      ) : null}
 
       {renderDetailTabs()}
-
       <View style={styles.headerDivider} />
     </>
   );
@@ -194,28 +218,20 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={styles.container}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
     >
-      {/* Critical fix: SafeAreaView with flex:1 so FlatList/ScrollView has height */}
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.headerTop}>
           <LogoHeader />
-
-          <View style={styles.topBarIcons} pointerEvents="box-none">
-            <TouchableOpacity onPress={goToSettings} style={styles.iconButton}>
-              <Ionicons name="settings-outline" size={22} color={TEXT_PRIMARY} />
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* Critical fix: body wrapper has flex:1 */}
         <View style={styles.body}>
           {loading ? (
             <View style={styles.stateWrap}>
-              <ActivityIndicator size="small" color={ACCENT} />
+              <ActivityIndicator size="small" color={colors.highlight1} />
               <Text style={styles.stateText}>Loading profile…</Text>
             </View>
           ) : errorText ? (
@@ -258,102 +274,148 @@ function TabButton({
   icon,
   active,
   onPress,
+  styles,
+  activeIconColor,
+  inactiveIconColor,
 }: {
   label: string;
-  icon: any;
+  icon: keyof typeof Ionicons.glyphMap;
   active: boolean;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  activeIconColor: string;
+  inactiveIconColor: string;
 }) {
   return (
-    <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
-      <Ionicons name={icon} size={18} color={active ? TEXT_PRIMARY : TEXT_MUTED} />
+    <TouchableOpacity
+      style={[styles.tabButton, active && styles.tabButtonActive]}
+      onPress={onPress}
+      activeOpacity={0.9}
+    >
+      <Ionicons
+        name={icon}
+        size={18}
+        color={active ? activeIconColor : inactiveIconColor}
+      />
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: { flex: 1 },
-  flex: { flex: 1 },
-
-  headerTop: {
-    // Keep a stable top area so absolute icons don't affect layout
-    paddingBottom: 4,
-  },
-
-  // Put the settings icon in the same place you had it, but inside a flexed container
-  topBarIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'absolute',
-    right: 20,
-    top: 10,
-  },
-  iconButton: {
-    padding: 6,
-    borderRadius: 20,
-  },
-
-  body: { flex: 1 },
-
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-
-  stateWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BG,
-    gap: 10,
-  },
-  stateText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-  },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 13,
-    paddingHorizontal: 16,
-    textAlign: 'center',
-  },
-
-  detailTabs: {
-    flexDirection: 'row',
-    marginTop: 16,
-    backgroundColor: CARD,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
-    gap: 4,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 6,
-  },
-  tabButtonActive: {
-    backgroundColor: Colors.dark.card2,
-  },
-  tabLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabLabelActive: {
-    color: TEXT_PRIMARY,
-  },
-
-  headerDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop: 12,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+    },
+    flex: {
+      flex: 1,
+    },
+    headerTop: {
+      paddingHorizontal: 18,
+      paddingBottom: 4,
+    },
+    body: {
+      flex: 1,
+    },
+    profileHero: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      marginBottom: 14,
+    },
+    profileHeroHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    profileHeroTitle: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 34,
+      lineHeight: 38,
+      letterSpacing: -1,
+    },
+    profileHeroText: {
+      marginTop: 10,
+      maxWidth: 280,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    settingsButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+    },
+    stateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 24,
+    },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    detailTabs: {
+      flexDirection: 'row',
+      marginTop: 16,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 4,
+    },
+    tabButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      borderRadius: 12,
+      gap: 6,
+    },
+    tabButtonActive: {
+      backgroundColor: colors.highlight1,
+    },
+    tabLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    tabLabelActive: {
+      color: colors.blkText,
+    },
+    headerDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginTop: 12,
+    },
+  });
+}

@@ -1,13 +1,8 @@
-import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Pressable,
-} from 'react-native';
-import { Colors } from '@/constants/Colors';
+import React, { useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+
+import AppPopup from '@/components/ui/AppPopup';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
@@ -22,77 +17,68 @@ export default function RunWalkCancelConfirmModal({
   onKeep,
   onDiscard,
   title = 'Cancel session?',
-  subtitle = 'This will discard your current run/walk session.',
+  subtitle = 'This will discard your current run or walk session.',
 }: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      {/* Backdrop press → Keep session */}
-      <Pressable style={styles.backdrop} onPress={onKeep}>
-        {/* Card – pressable but doesn't close modal */}
-        <Pressable style={styles.card}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
+    <AppPopup
+      visible={visible}
+      onClose={onKeep}
+      eyebrow="Discard session"
+      title={title}
+      subtitle={subtitle}
+    >
+      <View style={styles.row}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonSecondary, styles.button]}
+          onPress={onKeep}
+        >
+          <Text style={globalStyles.buttonTextSecondary}>Keep</Text>
+        </TouchableOpacity>
 
-          <View style={styles.btnRow}>
-            <TouchableOpacity style={styles.keepBtn} onPress={onKeep}>
-              <Text style={styles.keepText}>Keep</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.discardBtn} onPress={onDiscard}>
-              <Text style={styles.discardText}>Discard</Text>
-            </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[styles.discardBtn, styles.button]}
+          onPress={onDiscard}
+        >
+          <Text style={styles.discardText}>Discard</Text>
+        </TouchableOpacity>
+      </View>
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: Colors.dark.popUpCard,
-    borderRadius: 16,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-  },
-  title: {
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    marginBottom: 20,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
-  },
-  keepBtn: {
-    flex: 1,
-    borderRadius: 12,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  keepText: { color: Colors.dark.text, fontSize: 15, fontWeight: '700' },
-  discardBtn: {
-    flex: 1,
-    borderRadius: 12,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  discardText: { color: '#e04b4b', fontSize: 15, fontWeight: '800' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 18,
+    },
+    button: {
+      flex: 1,
+    },
+    discardBtn: {
+      height: 48,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 18,
+    },
+    discardText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+  });
+}

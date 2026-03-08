@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors } from '@/constants/Colors';
-
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 export type ProfileStats = {
   posts: number;
@@ -23,7 +17,12 @@ export type ProfileStats = {
 };
 
 export type ProfilePrimaryAction =
-  | { label: string; onPress: () => void; variant?: 'primary' | 'secondary' | 'outline'; disabled?: boolean }
+  | {
+      label: string;
+      onPress: () => void;
+      variant?: 'primary' | 'secondary' | 'outline';
+      disabled?: boolean;
+    }
   | null
   | undefined;
 
@@ -33,15 +32,10 @@ type Props = {
   bio?: string | null;
   profileImageUrl?: string | null;
   stats: ProfileStats;
-
   isOwnProfile: boolean;
   onEditProfile?: () => void;
-
-  // For other-user profiles: Follow / Request / Following / Requested actions
   primaryAction?: ProfilePrimaryAction;
   secondaryAction?: ProfilePrimaryAction;
-
-  // Optional stat actions
   onPressFollowers?: () => void;
   onPressFollowing?: () => void;
 };
@@ -50,10 +44,12 @@ function Stat({
   label,
   value,
   onPress,
+  styles,
 }: {
   label: string;
   value: number;
   onPress?: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   const content = (
     <>
@@ -70,11 +66,7 @@ function Stat({
     );
   }
 
-  return (
-    <View style={styles.stat}>
-      {content}
-    </View>
-  );
+  return <View style={styles.stat}>{content}</View>;
 }
 
 function ActionButton({
@@ -82,11 +74,13 @@ function ActionButton({
   onPress,
   variant = 'primary',
   disabled,
+  styles,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'outline';
   disabled?: boolean;
+  styles: ReturnType<typeof createStyles>;
 }) {
   const style =
     variant === 'primary'
@@ -100,7 +94,7 @@ function ActionButton({
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.88}
       onPress={onPress}
       disabled={disabled}
       style={[styles.btnBase, style, disabled && styles.btnDisabled]}
@@ -123,6 +117,9 @@ export default function ProfileHeaderSection({
   onPressFollowers,
   onPressFollowing,
 }: Props) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
@@ -131,19 +128,29 @@ export default function ProfileHeaderSection({
             <Image source={{ uri: profileImageUrl }} style={styles.avatarImg} />
           ) : (
             <View style={styles.avatarFallback}>
-              <Ionicons name="person" size={22} color={MUTED} />
+              <Ionicons name="person" size={22} color={colors.textMuted} />
             </View>
           )}
         </View>
 
         <View style={styles.statsRow}>
-          <Stat label="Posts" value={stats.posts} />
-          <Stat label="Followers" value={stats.followers} onPress={onPressFollowers} />
-          <Stat label="Following" value={stats.following} onPress={onPressFollowing} />
+          <Stat label="Posts" value={stats.posts} styles={styles} />
+          <Stat
+            label="Followers"
+            value={stats.followers}
+            onPress={onPressFollowers}
+            styles={styles}
+          />
+          <Stat
+            label="Following"
+            value={stats.following}
+            onPress={onPressFollowing}
+            styles={styles}
+          />
         </View>
       </View>
 
-      <View style={{ marginTop: 10 }}>
+      <View style={styles.copyBlock}>
         <Text style={styles.fullName}>{fullName || username}</Text>
         <Text style={styles.username}>@{username}</Text>
         {!!bio ? <Text style={styles.bio}>{bio}</Text> : null}
@@ -155,6 +162,7 @@ export default function ProfileHeaderSection({
             label="Edit Profile"
             onPress={onEditProfile ?? (() => {})}
             variant="outline"
+            styles={styles}
           />
         ) : (
           <>
@@ -164,6 +172,7 @@ export default function ProfileHeaderSection({
                 onPress={primaryAction.onPress}
                 variant={primaryAction.variant ?? 'primary'}
                 disabled={primaryAction.disabled}
+                styles={styles}
               />
             ) : null}
 
@@ -173,6 +182,7 @@ export default function ProfileHeaderSection({
                 onPress={secondaryAction.onPress}
                 variant={secondaryAction.variant ?? 'outline'}
                 disabled={secondaryAction.disabled}
+                styles={styles}
               />
             ) : null}
           </>
@@ -182,85 +192,138 @@ export default function ProfileHeaderSection({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 12,
-    marginTop: 10,
-  },
-  topRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  avatarWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  statsRow: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  stat: { alignItems: 'center' },
-  statValue: { color: TEXT, fontSize: 16, fontWeight: '800' },
-  statLabel: { color: MUTED, fontSize: 11, marginTop: 2 },
-
-  fullName: { color: TEXT, fontSize: 16, fontWeight: '800' },
-  username: { color: MUTED, fontSize: 12, marginTop: 2 },
-  bio: { color: TEXT, fontSize: 12.5, marginTop: 8, lineHeight: 17 },
-
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-
-  btnBase: {
-    flex: 1,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  btnPrimary: {
-    backgroundColor: ACCENT,
-  },
-  btnPrimaryText: {
-    color: '#0B0F1A',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  btnSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  btnOutline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-  },
-  btnText: {
-    color: TEXT,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  btnDisabled: { opacity: 0.55 },
-  btnDisabledText: { opacity: 0.9 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      marginTop: 10,
+    },
+    topRow: {
+      flexDirection: 'row',
+      gap: 14,
+      alignItems: 'center',
+    },
+    avatarWrap: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+    },
+    avatarImg: {
+      width: '100%',
+      height: '100%',
+    },
+    avatarFallback: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card2,
+    },
+    statsRow: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      backgroundColor: colors.card2,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+      paddingHorizontal: 8,
+    },
+    stat: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    statValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: -0.6,
+    },
+    statLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      marginTop: 2,
+    },
+    copyBlock: {
+      marginTop: 12,
+    },
+    fullName: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    username: {
+      color: colors.highlight1,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 3,
+    },
+    bio: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 8,
+    },
+    actionsRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 14,
+    },
+    btnBase: {
+      flex: 1,
+      height: 40,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+    },
+    btnPrimary: {
+      backgroundColor: colors.highlight1,
+    },
+    btnPrimaryText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+    btnSecondary: {
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    btnOutline: {
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+    },
+    btnText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+    btnDisabled: {
+      opacity: 0.55,
+    },
+    btnDisabledText: {
+      opacity: 0.9,
+    },
+  });
+}

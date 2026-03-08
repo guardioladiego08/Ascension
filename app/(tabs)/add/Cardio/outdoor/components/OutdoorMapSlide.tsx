@@ -1,23 +1,22 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps';
-import { Colors } from '@/constants/Colors';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
-  coords: LatLng[]; // [{ latitude, longitude }, ...]
+  coords: LatLng[];
 };
 
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-
 export default function OutdoorMapSlide({ coords }: Props) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const mapRef = useRef<MapView | null>(null);
 
   const hasCoords = coords.length > 0;
 
   const initialRegion = useMemo(() => {
     const last = coords[coords.length - 1];
-    // Fallback region if no coords yet (will rarely be used since slide only appears after start)
     if (!last) {
       return {
         latitude: 37.7749,
@@ -36,7 +35,6 @@ export default function OutdoorMapSlide({ coords }: Props) {
 
   useEffect(() => {
     if (!hasCoords) return;
-    // Fit route in view (best-effort)
     mapRef.current?.fitToCoordinates(coords, {
       edgePadding: { top: 60, right: 40, bottom: 60, left: 40 },
       animated: true,
@@ -47,9 +45,12 @@ export default function OutdoorMapSlide({ coords }: Props) {
     <View style={styles.wrap}>
       {!hasCoords ? (
         <View style={styles.placeholder}>
-          <Text style={styles.placeholderTitle}>Waiting for GPS…</Text>
+          <View style={styles.placeholderBadge}>
+            <Text style={styles.placeholderBadgeText}>GPS</Text>
+          </View>
+          <Text style={styles.placeholderTitle}>Waiting for route data</Text>
           <Text style={styles.placeholderBody}>
-            Start moving to see your route appear on the map.
+            Start moving to see your path appear on the map.
           </Text>
         </View>
       ) : (
@@ -61,40 +62,76 @@ export default function OutdoorMapSlide({ coords }: Props) {
           showsMyLocationButton={false}
           rotateEnabled={false}
         >
-          <Polyline coordinates={coords} strokeWidth={4} />
-          {coords[0] && <Marker coordinate={coords[0]} title="Start" />}
-          {coords[coords.length - 1] && <Marker coordinate={coords[coords.length - 1]} title="Current" />}
+          <Polyline
+            coordinates={coords}
+            strokeWidth={4}
+            strokeColor={colors.highlight1}
+          />
+          {coords[0] ? (
+            <Marker coordinate={coords[0]} title="Start" pinColor={colors.highlight3} />
+          ) : null}
+          {coords[coords.length - 1] ? (
+            <Marker
+              coordinate={coords[coords.length - 1]}
+              title="Current"
+              pinColor={colors.highlight1}
+            />
+          ) : null}
         </MapView>
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: CARD,
-  },
-  placeholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-  },
-  placeholderTitle: {
-    color: TEXT,
-    fontWeight: '900',
-    fontSize: 16,
-    marginBottom: 6,
-  },
-  placeholderBody: {
-    color: TEXT,
-    opacity: 0.75,
-    fontWeight: '700',
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    wrap: {
+      flex: 1,
+      borderRadius: 24,
+      overflow: 'hidden',
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    placeholder: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 22,
+    },
+    placeholderBadge: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      marginBottom: 14,
+    },
+    placeholderBadgeText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+    },
+    placeholderTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+      marginBottom: 6,
+    },
+    placeholderBody: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+    },
+  });
+}

@@ -1,34 +1,25 @@
-// app/(tabs)/home/home.tsx
-// Home screen with live "Nutrition Today" data from nutrition.diary_days.
-
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { GlobalStyles } from '@/constants/GlobalStyles';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
+import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 import { toLocalISODate } from '@/lib/goals/client';
 import { supabase } from '@/lib/supabase';
-import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 
 import WeeklyKpiRow from './home/WeeklyKpiRow';
 import RunWalkTypeModal, { RunWalkExerciseType } from './home/RunWalkTypeModal';
-
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
 
 type DiaryDay = {
   id: string;
@@ -69,20 +60,34 @@ type AppUserRow = {
 const formatNumber = (value: number) =>
   Number.isFinite(value) ? Math.round(value).toLocaleString() : '0';
 
-export default function BlankHome() {
+function getDaySegment() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+}
+
+export default function HomeScreen() {
   const router = useRouter();
+  const {
+    colors,
+    fonts,
+    globalStyles,
+  } = useAppTheme();
+
+  const styles = useMemo(
+    () => createStyles(colors, fonts),
+    [colors, fonts]
+  );
 
   const [todaySummary, setTodaySummary] = useState<DiaryDay | null>(null);
   const [loadingDiary, setLoadingDiary] = useState(false);
   const [profile, setProfile] = useState<AppUserRow | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
-
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
 
-  // YYYY-MM-DD for "today"
   const todayISO = useMemo(() => toLocalISODate(), []);
 
-  // Fetch today's diary_days row whenever this screen is focused
   useFocusEffect(
     useCallback(() => {
       const fetchTodayDiary = async () => {
@@ -107,7 +112,6 @@ export default function BlankHome() {
             .maybeSingle();
 
           if (error) {
-            // PGRST116 is "no rows returned" when using maybeSingle
             if ((error as any).code !== 'PGRST116') {
               console.error('Error fetching today diary_days row:', error);
             }
@@ -171,19 +175,15 @@ export default function BlankHome() {
     }, [])
   );
 
-  // Safely pull totals/targets from diary_days
   const caloriesEaten = todaySummary?.kcal_total != null ? Number(todaySummary.kcal_total) : 0;
-
   const caloriesTarget = todaySummary?.kcal_target != null ? Number(todaySummary.kcal_target) : 0;
-
   const protein = todaySummary?.protein_g_total != null ? Number(todaySummary.protein_g_total) : 0;
-
   const carbs = todaySummary?.carbs_g_total != null ? Number(todaySummary.carbs_g_total) : 0;
-
   const fats = todaySummary?.fat_g_total != null ? Number(todaySummary.fat_g_total) : 0;
 
-  const caloriePct =
-    caloriesTarget > 0 ? Math.min(100, (caloriesEaten / caloriesTarget) * 100) : 0;
+  const caloriePct = caloriesTarget > 0 ? Math.min(1, caloriesEaten / caloriesTarget) : 0;
+  const caloriesRemaining = Math.max(caloriesTarget - caloriesEaten, 0);
+  const totalMacros = protein + carbs + fats;
 
   const displayName = useMemo(() => {
     const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
@@ -192,10 +192,56 @@ export default function BlankHome() {
     return 'Athlete';
   }, [profile]);
 
+  const firstName = useMemo(() => {
+    if (profile?.first_name) return profile.first_name;
+    if (profile?.username) return profile.username;
+    return 'athlete';
+  }, [profile]);
+
   const locationText = useMemo(() => {
     const location = [profile?.city, profile?.state, profile?.country].filter(Boolean).join(', ');
     return location || null;
   }, [profile]);
+
+  const fuelStatus = useMemo(() => {
+    if (loadingDiary) return 'Syncing nutrition data';
+    if (!caloriesTarget) return 'Set a calorie target to track fueling pace.';
+    if (caloriePct >= 1) return 'Target hit for today.';
+    return `${formatNumber(caloriesRemaining)} kcal remaining to hit your goal.`;
+  }, [caloriePct, caloriesRemaining, caloriesTarget, loadingDiary]);
+
+  const macroRows = useMemo(
+    () => [
+      {
+        label: 'Protein',
+        value: protein,
+        width:
+          totalMacros > 0 && protein > 0 ? Math.max(14, (protein / totalMacros) * 100) : 0,
+        color: colors.highlight1,
+      },
+      {
+        label: 'Carbs',
+        value: carbs,
+        width: totalMacros > 0 && carbs > 0 ? Math.max(14, (carbs / totalMacros) * 100) : 0,
+        color: colors.highlight2,
+      },
+      {
+        label: 'Fat',
+        value: fats,
+        width: totalMacros > 0 && fats > 0 ? Math.max(14, (fats / totalMacros) * 100) : 0,
+        color: colors.highlight3,
+      },
+    ],
+    [
+      carbs,
+      colors.highlight1,
+      colors.highlight2,
+      colors.highlight3,
+      fats,
+      protein,
+      totalMacros,
+    ]
+  );
 
   const handleOpenDailySummary = () => {
     router.push({
@@ -206,196 +252,321 @@ export default function BlankHome() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.85, y: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.safeArea}>
+      <ScrollView
+        contentContainerStyle={[globalStyles.container, styles.content]}
+        showsVerticalScrollIndicator={false}
+      >
         <LogoHeader />
-        <Text style={GlobalStyles.header}>HOME</Text>
-        <View style={styles.welcomeCard}>
-          <View>
-            <Text style={styles.welcomeLabel}>WELCOME BACK</Text>
-            <Text style={styles.welcomeName}>
-              {loadingProfile ? 'Loading...' : displayName}
-            </Text>
-            {locationText ? <Text style={styles.welcomeMeta}>{locationText}</Text> : null}
+
+        <View style={[globalStyles.panel, styles.heroCard]}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroBadge}>
+              <Ionicons name="pulse-outline" size={14} color={colors.highlight2} />
+              <Text style={styles.heroBadgeText}>Home Theme Test</Text>
+            </View>
+
+            <View style={styles.privacyPill}>
+              <Ionicons
+                name={profile?.is_private ? 'lock-closed' : 'globe-outline'}
+                size={13}
+                color={colors.highlight1}
+              />
+            </View>
           </View>
-          <Ionicons name={profile?.is_private ? 'lock-closed' : 'people'} size={18} color={PRIMARY} />
+
+          <Text style={styles.heroHeading}>
+            Good {getDaySegment()}, {loadingProfile ? 'loading...' : firstName}
+          </Text>
+
+          <Text style={styles.heroSubheading}>
+            {loadingProfile
+              ? 'Loading your home view.'
+              : locationText
+                ? `${locationText} • testing the new dark system on the home page first.`
+                : 'Testing a new dark theme system with selectable highlight trios.'}
+          </Text>
+
+          <View style={styles.heroMetricsRow}>
+            <View style={styles.heroMetricBlock}>
+              <Text style={globalStyles.eyebrow}>Fuel target</Text>
+              <Text style={styles.heroMetricValue}>
+                {loadingDiary ? '...' : formatNumber(caloriesEaten)}
+                <Text style={styles.heroMetricUnit}>
+                  {' '}
+                  / {formatNumber(caloriesTarget)} kcal
+                </Text>
+              </Text>
+              <Text style={styles.heroMetricHint}>{fuelStatus}</Text>
+            </View>
+
+            <View style={[globalStyles.panelSoft, styles.scoreCard]}>
+              <Text style={styles.scoreValue}>
+                {loadingDiary ? '--' : `${Math.round(caloriePct * 100)}%`}
+              </Text>
+              <Text style={styles.scoreLabel}>paced</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: caloriePct > 0 ? `${Math.max(caloriePct * 100, 10)}%` : '0%' },
+              ]}
+            />
+          </View>
+
+          <View style={styles.heroFootRow}>
+            <View style={[globalStyles.chip, styles.metaChip]}>
+              <Ionicons name="person-outline" size={14} color={colors.highlight1} />
+              <Text style={[globalStyles.chipText, styles.metaChipText]}>{displayName}</Text>
+            </View>
+            <View style={[globalStyles.chip, styles.metaChip]}>
+              <Ionicons
+                name={todaySummary?.goal_hit ? 'checkmark-circle-outline' : 'time-outline'}
+                size={14}
+                color={colors.highlight3}
+              />
+              <Text style={[globalStyles.chipText, styles.metaChipText]}>
+                {todaySummary?.goal_hit ? 'Goal hit' : 'In progress'}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={GlobalStyles.container}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* KPI Row */}
-          <Text style={styles.sectionTitle}>SO FAR THIS WEEK</Text>
-          <WeeklyKpiRow />
+        <SectionHeader
+          eyebrow="This Week"
+          title="Weekly load at a glance"
+          subtitle="The new theme output is already driving the KPI module below."
+          globalStyles={globalStyles}
+          styles={styles}
+        />
+        <WeeklyKpiRow />
 
-          {/* Start Workout */}
-          <Text style={styles.sectionTitle}>START WORKOUT</Text>
-          <View style={styles.quickRow}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={GlobalStyles.quickCard}
-              onPress={() => router.replace('/add/Strength/StrengthTrain')}
-            >
+        <SectionHeader
+          eyebrow="Start Session"
+          title="Train without hunting through tabs"
+          subtitle="The selected theme family is used across the actions with different shade intensity."
+          globalStyles={globalStyles}
+          styles={styles}
+        />
+
+        <View style={styles.actionGrid}>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[globalStyles.panelSoft, styles.actionTile, styles.actionTileHalf]}
+            onPress={() => router.replace('/add/Strength/StrengthTrain')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: colors.accentSoft }]}>
               <MaterialCommunityIcons
-                name="arm-flex"
-                size={28}
-                color={Colors.dark.highlight1}
+                name="dumbbell"
+                size={20}
+                color={colors.highlight1}
               />
-              <Text style={styles.quickText}>Weights</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={GlobalStyles.quickCard}
-              onPress={() => setShowRunWalkModal(true)}
-            >
-              <Ionicons name="walk" size={28} color={Colors.dark.highlight2} />
-              <Text style={styles.quickText}>Run</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={GlobalStyles.quickCard}
-              onPress={() => router.push('/add/Cardio/OutdoorSession')}
-            >
-              <Ionicons name="bicycle" size={28} color={Colors.dark.highlight3} />
-              <Text style={styles.quickText}>Bike</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Nutrition Today */}
-          <Text style={styles.sectionTitle}>NUTRITION TODAY</Text>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.card}
-            onPress={handleOpenDailySummary}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <Ionicons name="checkmark-circle" size={18} color="#7BE495" />
-                <Text style={styles.cardHeaderTitle}>Daily Summary</Text>
-              </View>
-              <Text style={styles.link}>View Details</Text>
             </View>
-
-            <View style={styles.calRow}>
-              <Text style={styles.calLeft}>{loadingDiary ? '...' : formatNumber(caloriesEaten)}</Text>
-              <Text style={styles.calRight}>
-                {loadingDiary ? '' : `/ ${formatNumber(caloriesTarget)} kcal`}
-              </Text>
-            </View>
-
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${caloriePct}%` }]} />
-            </View>
-
-            <View style={styles.macroRow}>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>
-                  {loadingDiary ? '—' : `${Math.round(protein)}g`}
-                </Text>
-                <Text style={styles.macroLabel}>PROTEIN</Text>
-              </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>
-                  {loadingDiary ? '—' : `${Math.round(carbs)}g`}
-                </Text>
-                <Text style={styles.macroLabel}>CARBS</Text>
-              </View>
-              <View style={styles.macroItem}>
-                <Text style={styles.macroNumber}>
-                  {loadingDiary ? '—' : `${Math.round(fats)}g`}
-                </Text>
-                <Text style={styles.macroLabel}>FAT</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.row2}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.ctaButton, { marginRight: 14 }]}
-              onPress={() => router.push('/add/Nutrition/logMeal')}
-            >
-              <Ionicons name="add-circle" size={18} color="#0E151F" />
-              <Text style={styles.ctaText}>Log Meal</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.ctaButton}
-              onPress={() => router.push('../add/Nutrition/scanFood')}
-            >
-              <Ionicons name="camera" size={18} color="#0E151F" />
-              <Text style={styles.ctaText}>Scan Food</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.sectionTitle}>DEBUG</Text>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={styles.card}
-            onPress={() => router.push('/home/heart-rate-test')}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <Ionicons name="pulse-outline" size={18} color="#FF7A7A" />
-                <Text style={styles.cardHeaderTitle}>Heart Rate Test Page</Text>
-              </View>
-              <Text style={styles.link}>Open</Text>
-            </View>
-            <Text style={styles.listSubtitle}>
-              Query Apple Health for the last 3 hours and inspect raw heart-rate samples without
-              finishing a workout.
+            <Text style={styles.actionTitle}>Strength</Text>
+            <Text style={styles.actionSubtitle}>
+              Structured lifting and set tracking.
             </Text>
           </TouchableOpacity>
 
-          {/* Social */}
-          <Text style={styles.sectionTitle}>SOCIAL</Text>
-
-          <View style={styles.listCard}>
-            <View style={styles.listIconWrap}>
-              <Ionicons name="people" size={20} color="#F4B3FF" />
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[globalStyles.panelSoft, styles.actionTile, styles.actionTileHalf]}
+            onPress={() => setShowRunWalkModal(true)}
+          >
+            <View
+              style={[
+                styles.actionIcon,
+                { backgroundColor: colors.accentSecondarySoft },
+              ]}
+            >
+              <Ionicons name="walk-outline" size={20} color={colors.highlight2} />
             </View>
-            <View style={styles.listTextWrap}>
-              <Text style={styles.listTitle}>Workout Feed</Text>
-              <Text style={styles.listSubtitle}>
+            <Text style={styles.actionTitle}>Run / Walk</Text>
+            <Text style={styles.actionSubtitle}>
+              Indoor or outdoor cardio in two taps.
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[globalStyles.panelSoft, styles.actionTile, styles.actionTileFull]}
+            onPress={() =>
+              router.push({
+                pathname: '/add/Cardio/outdoor/OutdoorSession',
+                params: {
+                  title: 'Outdoor Ride',
+                  activityType: 'bike',
+                },
+              })
+            }
+          >
+            <View style={styles.actionWideRow}>
+              <View>
+                <Text style={styles.actionTitle}>Outdoor ride</Text>
+                <Text style={styles.actionSubtitle}>
+                  Start a bike session with the tertiary accent carrying the tile.
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.actionIcon,
+                  styles.actionIconTrailing,
+                  { backgroundColor: colors.accentTertiarySoft },
+                ]}
+              >
+                <Ionicons
+                  name="bicycle-outline"
+                  size={20}
+                  color={colors.highlight3}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <SectionHeader
+          eyebrow="Nutrition"
+          title="Fueling stays front and center"
+          subtitle="Protein, carbs, and fats now use three variations of the selected color family."
+          globalStyles={globalStyles}
+          styles={styles}
+        />
+
+        <TouchableOpacity
+          activeOpacity={0.94}
+          style={[globalStyles.panel, styles.nutritionCard]}
+          onPress={handleOpenDailySummary}
+        >
+          <View style={styles.cardHeader}>
+            <View>
+              <Text style={globalStyles.eyebrow}>Daily summary</Text>
+              <Text style={styles.cardTitle}>Calories and macros for {todayISO}</Text>
+            </View>
+
+            <View style={[globalStyles.chip, styles.cardCta]}>
+              <Text style={[globalStyles.chipText, styles.cardCtaText]}>Open</Text>
+              <Ionicons name="arrow-forward" size={14} color={colors.highlight1} />
+            </View>
+          </View>
+
+          <Text style={styles.cardDescription}>{fuelStatus}</Text>
+
+          <View style={styles.macroStack}>
+            {macroRows.map((macro) => (
+              <View key={macro.label} style={styles.macroRow}>
+                <View style={styles.macroRowTop}>
+                  <Text style={styles.macroLabel}>{macro.label}</Text>
+                  <Text style={styles.macroValue}>
+                    {loadingDiary ? '--' : `${Math.round(macro.value)}g`}
+                  </Text>
+                </View>
+
+                <View style={styles.macroTrack}>
+                  <View
+                    style={[
+                      styles.macroFill,
+                      {
+                        width: macro.width > 0 ? `${macro.width}%` : '0%',
+                        backgroundColor: macro.color,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.dualCtaRow}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              style={[globalStyles.buttonSecondary, styles.inlineButton]}
+              onPress={() => router.push('/add/Nutrition/logMeal')}
+            >
+              <Ionicons name="add-outline" size={16} color={colors.text} />
+              <Text style={globalStyles.buttonTextSecondary}>Log meal</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.92}
+              style={[globalStyles.buttonPrimary, styles.inlineButton]}
+              onPress={() => router.push('/add/Nutrition/scanFood')}
+            >
+              <Ionicons name="scan-outline" size={16} color={colors.blkText} />
+              <Text style={globalStyles.buttonTextPrimary}>Scan food</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+
+        <SectionHeader
+          eyebrow="Community"
+          title="Keep discovery on the same visual wavelength"
+          subtitle="Home-only application for now, but the theme tokens are ready to be rolled out elsewhere."
+          globalStyles={globalStyles}
+          styles={styles}
+        />
+
+        <TouchableOpacity
+          activeOpacity={0.94}
+          style={[globalStyles.panelSoft, styles.communityCard]}
+          onPress={() => router.push('/social')}
+        >
+          <View style={styles.communityLeft}>
+            <View
+              style={[
+                styles.communityIcon,
+                { backgroundColor: colors.accentSecondarySoft },
+              ]}
+            >
+              <Ionicons
+                name="people-outline"
+                size={20}
+                color={colors.highlight2}
+              />
+            </View>
+            <View style={styles.communityCopy}>
+              <Text style={styles.cardTitle}>Open the workout feed</Text>
+              <Text style={styles.cardDescription}>
                 {profile?.username
-                  ? `See what friends are doing, @${profile.username}`
-                  : 'See what friends are doing'}
+                  ? `See what your circle is doing and jump back into @${profile.username}'s network.`
+                  : 'See recent sessions, profiles, and social activity from the tab feed.'}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
           </View>
+          <Ionicons name="arrow-forward" size={18} color={colors.highlight2} />
+        </TouchableOpacity>
 
-          <View style={styles.listCard}>
-            <View style={styles.listIconWrap}>
-              <Ionicons name="trophy" size={20} color="#FFD38C" />
-            </View>
-            <View style={styles.listTextWrap}>
-              <Text style={styles.listTitle}>Leaderboards</Text>
-              <Text style={styles.listSubtitle}>Compete with the community</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.panelSoft, styles.utilityCard]}
+          onPress={() => router.push('/home/heart-rate-test')}
+        >
+          <View
+            style={[
+              styles.utilityIcon,
+              { backgroundColor: colors.accentTertiarySoft },
+            ]}
+          >
+            <Ionicons
+              name="pulse-outline"
+              size={20}
+              color={colors.highlight3}
+            />
           </View>
-
-          <View style={styles.listCard}>
-            <View style={styles.listIconWrap}>
-              <Ionicons name="medal" size={20} color="#8CE0FF" />
-            </View>
-            <View style={styles.listTextWrap}>
-              <Text style={styles.listTitle}>Challenges</Text>
-              <Text style={styles.listSubtitle}>Join active challenges</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+          <View style={styles.utilityCopy}>
+            <Text style={styles.utilityTitle}>Heart rate test page</Text>
+            <Text style={styles.utilitySubtitle}>
+              Kept accessible while the theme system is being tested on the home route.
+            </Text>
           </View>
-        </ScrollView>
-      </View>
+        </TouchableOpacity>
+      </ScrollView>
 
       <RunWalkTypeModal
         visible={showRunWalkModal}
@@ -428,7 +599,6 @@ export default function BlankHome() {
                 activityType: type === 'outdoor_walk' ? 'walk' : 'run',
               },
             });
-            return;
           }
         }}
       />
@@ -436,167 +606,359 @@ export default function BlankHome() {
   );
 }
 
-const styles = StyleSheet.create({
-  welcomeCard: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  welcomeLabel: {
-    color: TEXT_MUTED,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  welcomeName: {
-    color: TEXT_PRIMARY,
-    fontSize: 17,
-    fontWeight: '900',
-    marginTop: 4,
-  },
-  welcomeMeta: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
-  },
+function SectionHeader({
+  eyebrow,
+  title,
+  subtitle,
+  globalStyles,
+  styles,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={globalStyles.eyebrow}>{eyebrow}</Text>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
 
-  // Tighten vertical rhythm + match onboarding label treatment
-  sectionTitle: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 16,
-    marginBottom: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-
-  quickRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  quickText: {
-    color: TEXT_PRIMARY,
-    fontWeight: '700',
-    marginTop: 8,
-    fontSize: 13,
-  },
-
-  // Onboarding-style "panel" card (border + subtle depth)
-  card: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 0,
-    borderWidth: 1,
-  },
-
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardHeaderLeft: { flexDirection: 'row', alignItems: 'center' },
-  cardHeaderTitle: {
-    color: TEXT_PRIMARY,
-    fontWeight: '800',
-    marginLeft: 8,
-    letterSpacing: 0.2,
-  },
-  link: { color: PRIMARY, fontSize: 12, fontWeight: '700' },
-
-  calRow: { flexDirection: 'row', alignItems: 'baseline' },
-  calLeft: {
-    color: TEXT_PRIMARY,
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: 0.2,
-  },
-  calRight: {
-    color: TEXT_MUTED,
-    marginLeft: 8,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  progressTrack: {
-    height: 7,
-    backgroundColor: '#222A3A',
-    borderRadius: 999,
-    marginTop: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 7,
-    backgroundColor: PRIMARY,
-    borderRadius: 999,
-  },
-
-  macroRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  macroItem: { alignItems: 'center', flex: 1 },
-  macroNumber: { color: TEXT_PRIMARY, fontWeight: '900', fontSize: 13 },
-  macroLabel: {
-    color: TEXT_MUTED,
-    fontSize: 10,
-    marginTop: 3,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
-  row2: { flexDirection: 'row', marginTop: 12 },
-
-  // Match onboarding CTAs (use primary accent instead of green)
-  ctaButton: {
-    flex: 1,
-    backgroundColor: PRIMARY,
-    borderRadius: 14,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  ctaText: { color: '#0E151F', fontWeight: '900', letterSpacing: 0.2 },
-
-  // Social list cards = same panel treatment as onboarding
-  listCard: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 16,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 1,
-  },
-  listIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#0a0a0aff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  listTextWrap: { flex: 1 },
-  listTitle: { color: TEXT_PRIMARY, fontWeight: '900', letterSpacing: 0.2 },
-  listSubtitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    content: {
+      paddingTop: 0,
+      paddingBottom: 40,
+    },
+    heroCard: {
+      marginTop: -6,
+      overflow: 'hidden',
+    },
+    heroTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 18,
+    },
+    heroBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: colors.accentSecondarySoft,
+      borderRadius: 999,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+    },
+    heroBadgeText: {
+      color: colors.highlight2,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    privacyPill: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroHeading: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    heroSubheading: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: 10,
+    },
+    heroMetricsRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: 16,
+      marginTop: 26,
+    },
+    heroMetricBlock: {
+      flex: 1,
+    },
+    heroMetricValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 30,
+      lineHeight: 34,
+      letterSpacing: -0.9,
+      marginTop: 8,
+    },
+    heroMetricUnit: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    heroMetricHint: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 20,
+      marginTop: 10,
+    },
+    scoreCard: {
+      width: 96,
+      height: 96,
+      padding: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scoreValue: {
+      color: colors.highlight1,
+      fontFamily: fonts.display,
+      fontSize: 26,
+      lineHeight: 30,
+      letterSpacing: -0.7,
+    },
+    scoreLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 4,
+    },
+    progressTrack: {
+      height: 10,
+      borderRadius: 999,
+      backgroundColor: colors.card2,
+      overflow: 'hidden',
+      marginTop: 18,
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: colors.highlight1,
+    },
+    heroFootRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 18,
+    },
+    metaChip: {
+      flex: 1,
+      gap: 8,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    metaChipText: {
+      flex: 1,
+      color: colors.text,
+    },
+    sectionHeader: {
+      marginTop: 26,
+      marginBottom: 14,
+      gap: 4,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 24,
+      lineHeight: 28,
+      letterSpacing: -0.5,
+    },
+    sectionSubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 21,
+    },
+    actionGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    actionTile: {
+      justifyContent: 'space-between',
+    },
+    actionTileHalf: {
+      width: '48%',
+      minHeight: 160,
+    },
+    actionTileFull: {
+      width: '100%',
+    },
+    actionIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 18,
+    },
+    actionIconTrailing: {
+      marginBottom: 0,
+    },
+    actionTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: -0.3,
+    },
+    actionSubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 8,
+    },
+    actionWideRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 16,
+    },
+    nutritionCard: {
+      gap: 0,
+    },
+    cardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    cardTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: -0.3,
+      marginTop: 6,
+    },
+    cardDescription: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 21,
+      marginTop: 12,
+    },
+    cardCta: {
+      gap: 6,
+      minHeight: 34,
+      justifyContent: 'center',
+    },
+    cardCtaText: {
+      color: colors.highlight1,
+    },
+    macroStack: {
+      marginTop: 18,
+      gap: 14,
+    },
+    macroRow: {
+      gap: 8,
+    },
+    macroRowTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    macroLabel: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    macroValue: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    macroTrack: {
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.card2,
+      overflow: 'hidden',
+    },
+    macroFill: {
+      height: '100%',
+      borderRadius: 999,
+    },
+    dualCtaRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 22,
+    },
+    inlineButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    communityCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    communityLeft: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    communityIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    communityCopy: {
+      flex: 1,
+    },
+    utilityCard: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    utilityIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    utilityCopy: {
+      flex: 1,
+    },
+    utilityTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    utilitySubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 6,
+    },
+  });
+}

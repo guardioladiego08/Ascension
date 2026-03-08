@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import {
   createPostComment,
   deletePostComment,
@@ -23,13 +23,6 @@ import {
   type SocialPostComment,
   type SocialPostLike,
 } from '@/lib/social/feed';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
 
 type Metric = {
   label: string;
@@ -54,14 +47,22 @@ const TYPE_ICON: Record<SocialActivityType, keyof typeof Ionicons.glyphMap> = {
   other: 'sparkles-outline',
 };
 
-const TYPE_GRADIENT: Record<SocialActivityType, [string, string]> = {
-  run: ['#1F3048', '#0F141D'],
-  walk: ['#1E3D37', '#101B18'],
-  ride: ['#233A47', '#111A21'],
-  strength: ['#402A1B', '#1B130D'],
-  nutrition: ['#3C2F18', '#1A150E'],
-  other: ['#2F3341', '#141923'],
-};
+function buildTypeGradients(colors: ReturnType<typeof useAppTheme>['colors']) {
+  return {
+    run: [colors.accentSecondarySoft, colors.cardDark] as [string, string],
+    walk: [colors.accentSoft, colors.cardDark] as [string, string],
+    ride: [colors.accentTertiarySoft, colors.cardDark] as [string, string],
+    strength: [colors.accentSoft, colors.cardDark] as [string, string],
+    nutrition: [colors.accentTertiarySoft, colors.cardDark] as [string, string],
+    other: [colors.card3, colors.cardDark] as [string, string],
+  } satisfies Record<SocialActivityType, [string, string]>;
+}
+
+function useSocialPostTheme() {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  return { colors, fonts, styles };
+}
 
 function initials(nameOrUsername: string) {
   const parts = nameOrUsername.trim().split(/\s+/);
@@ -224,9 +225,10 @@ function ActionButton({
   onPress: () => void;
   iconColor?: string;
 }) {
+  const { colors, styles } = useSocialPostTheme();
   return (
     <TouchableOpacity style={styles.actionBtn} activeOpacity={0.85} onPress={onPress}>
-      <Ionicons name={icon} size={18} color={iconColor ?? TEXT_MUTED} />
+      <Ionicons name={icon} size={18} color={iconColor ?? colors.textMuted} />
       <Text style={styles.actionText}>{label}</Text>
     </TouchableOpacity>
   );
@@ -243,6 +245,7 @@ function ProfilePill({
   imageUrl: string | null;
   onPressProfile?: (userId: string) => void;
 }) {
+  const { styles } = useSocialPostTheme();
   const interactive = !!onPressProfile;
   return (
     <TouchableOpacity
@@ -276,6 +279,7 @@ function CommentRow({
   onDelete: () => void;
   busy: boolean;
 }) {
+  const { colors, styles } = useSocialPostTheme();
   const interactive = !!onPressProfile;
 
   return (
@@ -319,9 +323,9 @@ function CommentRow({
           onPress={onDelete}
         >
           {busy ? (
-            <ActivityIndicator size="small" color={TEXT_MUTED} />
+            <ActivityIndicator size="small" color={colors.textMuted} />
           ) : (
-            <Ionicons name="trash-outline" size={16} color={TEXT_MUTED} />
+            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
           )}
         </TouchableOpacity>
       ) : null}
@@ -352,6 +356,7 @@ export default function SocialPostCard({
   onAdjustCommentCount?: (delta: number) => void;
   onPressSession?: (post: SocialFeedPost) => void;
 }) {
+  const { colors, styles } = useSocialPostTheme();
   const metrics = useMemo(
     () => buildMetricList(post, distanceUnit, weightUnit),
     [post, distanceUnit, weightUnit]
@@ -360,7 +365,8 @@ export default function SocialPostCard({
   const createdAtLabel = formatRelativeTime(post.createdAt);
   const typeLabel = TYPE_LABEL[post.activityType] ?? 'Post';
   const typeIcon = TYPE_ICON[post.activityType] ?? 'sparkles-outline';
-  const gradient = TYPE_GRADIENT[post.activityType] ?? TYPE_GRADIENT.other;
+  const typeGradients = useMemo(() => buildTypeGradients(colors), [colors]);
+  const gradient = typeGradients[post.activityType] ?? typeGradients.other;
   const title = post.title?.trim() || `${typeLabel} session`;
   const summaryMetrics = metrics.slice(0, 3);
   const hasSessionLink =
@@ -524,7 +530,7 @@ export default function SocialPostCard({
         </TouchableOpacity>
 
         <View style={styles.typePill}>
-          <Ionicons name={typeIcon} size={14} color={TEXT} />
+          <Ionicons name={typeIcon} size={14} color={colors.text} />
           <Text style={styles.typePillText}>{typeLabel}</Text>
         </View>
       </View>
@@ -537,7 +543,7 @@ export default function SocialPostCard({
           style={styles.hero}
         >
           <View style={styles.heroKickerRow}>
-            <Ionicons name={typeIcon} size={13} color={ACCENT} />
+            <Ionicons name={typeIcon} size={13} color={colors.highlight1} />
             <Text style={styles.heroKicker}>{typeLabel.toUpperCase()}</Text>
           </View>
 
@@ -562,7 +568,7 @@ export default function SocialPostCard({
       <View style={styles.actionsRow}>
         <ActionButton
           icon={post.isLikedByMe ? 'heart' : 'heart-outline'}
-          iconColor={post.isLikedByMe ? '#ef5350' : TEXT_MUTED}
+          iconColor={post.isLikedByMe ? colors.danger : colors.textMuted}
           label={post.likeCount > 0 ? `${post.likeCount}` : 'Like'}
           onPress={() => void handleToggleLike()}
         />
@@ -599,7 +605,7 @@ export default function SocialPostCard({
               onPress={() => onPressSession(post)}
               activeOpacity={0.85}
             >
-              <Ionicons name="open-outline" size={16} color={TEXT} />
+              <Ionicons name="open-outline" size={16} color={colors.text} />
               <Text style={styles.openBtnText}>Open session</Text>
             </TouchableOpacity>
           ) : null}
@@ -612,7 +618,7 @@ export default function SocialPostCard({
 
             {engagementLoading && !engagementLoaded ? (
               <View style={styles.inlineLoading}>
-                <ActivityIndicator size="small" color={TEXT_MUTED} />
+                <ActivityIndicator size="small" color={colors.textMuted} />
               </View>
             ) : hasLikesSection ? (
               <ScrollView
@@ -643,7 +649,7 @@ export default function SocialPostCard({
 
             {engagementLoading && !engagementLoaded ? (
               <View style={styles.inlineLoading}>
-                <ActivityIndicator size="small" color={TEXT_MUTED} />
+                <ActivityIndicator size="small" color={colors.textMuted} />
               </View>
             ) : comments.length > 0 ? (
               <View style={styles.commentsList}>
@@ -666,7 +672,7 @@ export default function SocialPostCard({
                 value={commentDraft}
                 onChangeText={setCommentDraft}
                 placeholder="Add a comment..."
-                placeholderTextColor={TEXT_MUTED}
+                placeholderTextColor={colors.textMuted}
                 style={styles.commentInput}
                 multiline
                 maxLength={300}
@@ -681,9 +687,9 @@ export default function SocialPostCard({
                 onPress={() => void handleSubmitComment()}
               >
                 {commentBusy ? (
-                  <ActivityIndicator size="small" color={TEXT} />
+                  <ActivityIndicator size="small" color={colors.text} />
                 ) : (
-                  <Ionicons name="send" size={16} color={TEXT} />
+                  <Ionicons name="send" size={16} color={colors.text} />
                 )}
               </TouchableOpacity>
             </View>
@@ -696,12 +702,16 @@ export default function SocialPostCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
   card: {
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   header: {
@@ -721,20 +731,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: colors.borderStrong,
   },
   avatarImg: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.card2,
   },
-  avatarText: { color: TEXT, fontWeight: '900' },
+  avatarText: { color: colors.text, fontFamily: fonts.heading },
   userTopLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  displayName: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
-  dot: { color: TEXT_MUTED },
-  time: { color: TEXT_MUTED, fontSize: 12 },
-  username: { color: TEXT_MUTED, fontSize: 12, marginTop: 2 },
+  displayName: { color: colors.text, fontSize: 13.5, fontFamily: fonts.heading },
+  dot: { color: colors.textMuted },
+  time: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.body },
+  username: { color: colors.textMuted, fontSize: 12, marginTop: 2, fontFamily: fonts.body },
 
   typePill: {
     flexDirection: 'row',
@@ -744,17 +754,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: colors.border,
+    backgroundColor: colors.card2,
   },
-  typePillText: { color: TEXT, fontSize: 12, fontWeight: '800' },
+  typePillText: { color: colors.text, fontSize: 12, fontFamily: fonts.label },
 
   heroPress: { paddingHorizontal: 12, paddingBottom: 12 },
   hero: {
     minHeight: 170,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.borderStrong,
     padding: 14,
     justifyContent: 'flex-end',
   },
@@ -765,39 +775,40 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   heroKicker: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '900',
+    fontFamily: fonts.label,
     letterSpacing: 0.8,
   },
-  title: { color: TEXT, fontSize: 16, fontWeight: '900' },
-  subtitle: { marginTop: 4, color: TEXT_MUTED, fontSize: 12.5 },
+  title: { color: colors.text, fontSize: 16, fontFamily: fonts.heading },
+  subtitle: { marginTop: 4, color: colors.textMuted, fontSize: 12.5, fontFamily: fonts.body },
   heroMetricBlock: { marginTop: 12 },
   heroMetricValue: {
-    color: TEXT,
+    color: colors.text,
     fontSize: 24,
-    fontWeight: '900',
+    fontFamily: fonts.display,
     lineHeight: 28,
   },
   heroMetricLabel: {
     marginTop: 2,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: fonts.label,
   },
   captionPreview: {
     marginTop: 10,
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 12.5,
     lineHeight: 17,
+    fontFamily: fonts.body,
   },
 
   actionsRow: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
+    borderTopColor: colors.border,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomColor: colors.border,
   },
   actionBtn: {
     flex: 1,
@@ -807,12 +818,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  actionText: { color: TEXT_MUTED, fontSize: 12, fontWeight: '800' },
+  actionText: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.label },
 
   expandWrap: {
     padding: 12,
     gap: 12,
-    backgroundColor: 'rgba(0,0,0,0.10)',
+    backgroundColor: colors.cardDark,
   },
   metricsWrap: {
     flexDirection: 'row',
@@ -824,38 +835,39 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: colors.border,
+    backgroundColor: colors.card2,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  metricLabel: { color: TEXT_MUTED, fontSize: 11, fontWeight: '700' },
-  metricValue: { marginTop: 3, color: TEXT, fontSize: 13, fontWeight: '900' },
+  metricLabel: { color: colors.textMuted, fontSize: 11, fontFamily: fonts.label },
+  metricValue: { marginTop: 3, color: colors.text, fontSize: 13, fontFamily: fonts.heading },
   captionFull: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 12.5,
     lineHeight: 18,
+    fontFamily: fonts.body,
   },
   openBtn: {
     alignSelf: 'flex-start',
     height: 34,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.card2,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  openBtnText: { color: TEXT, fontSize: 12.5, fontWeight: '800' },
+  openBtnText: { color: colors.text, fontSize: 12.5, fontFamily: fonts.heading },
 
   section: {
     gap: 10,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderColor: colors.border,
+    backgroundColor: colors.card2,
     padding: 12,
   },
   sectionHeader: {
@@ -863,8 +875,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: { color: TEXT, fontSize: 13, fontWeight: '900' },
-  sectionCount: { color: TEXT_MUTED, fontSize: 12, fontWeight: '800' },
+  sectionTitle: { color: colors.text, fontSize: 13, fontFamily: fonts.heading },
+  sectionCount: { color: colors.textMuted, fontSize: 12, fontFamily: fonts.label },
   inlineLoading: {
     minHeight: 30,
     alignItems: 'center',
@@ -880,8 +892,8 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: BG,
+    borderColor: colors.border,
+    backgroundColor: colors.cardDark,
     paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -900,14 +912,14 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   likeAvatarText: {
-    color: TEXT,
+    color: colors.text,
     fontSize: 10,
-    fontWeight: '900',
+    fontFamily: fonts.heading,
   },
   likePillText: {
-    color: TEXT,
+    color: colors.text,
     fontSize: 11.5,
-    fontWeight: '700',
+    fontFamily: fonts.label,
     flexShrink: 1,
   },
   commentsList: {
@@ -929,12 +941,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: colors.card2,
   },
   commentAvatarText: {
-    color: TEXT,
+    color: colors.text,
     fontSize: 11,
-    fontWeight: '900',
+    fontFamily: fonts.heading,
   },
   commentMetaRow: {
     flexDirection: 'row',
@@ -943,28 +955,30 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   commentUserText: {
-    color: TEXT,
+    color: colors.text,
     fontSize: 12,
-    fontWeight: '900',
+    fontFamily: fonts.heading,
   },
   commentHandleText: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: fonts.label,
   },
   commentDot: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 11,
   },
   commentTimeText: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 11,
+    fontFamily: fonts.body,
   },
   commentBodyText: {
     marginTop: 4,
-    color: TEXT,
+    color: colors.text,
     fontSize: 12.5,
     lineHeight: 18,
+    fontFamily: fonts.body,
   },
   commentDeleteBtn: {
     width: 28,
@@ -986,20 +1000,21 @@ const styles = StyleSheet.create({
     maxHeight: 92,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: BG,
-    color: TEXT,
+    borderColor: colors.border,
+    backgroundColor: colors.cardDark,
+    color: colors.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
+    fontFamily: fonts.body,
   },
   commentSendBtn: {
     width: 42,
     height: 42,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.border,
+    backgroundColor: colors.card3,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1007,13 +1022,16 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   emptyText: {
-    color: TEXT_MUTED,
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 17,
+    fontFamily: fonts.body,
   },
   errorText: {
-    color: '#FCA5A5',
+    color: colors.danger,
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: fonts.body,
   },
-});
+  });
+}

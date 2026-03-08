@@ -1,8 +1,8 @@
-// app/(tabs)/add/Strength/components/SessionHeader.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GlobalStyles } from '@/constants/GlobalStyles';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   title: string;
@@ -12,41 +12,76 @@ type Props = {
   onCancel: () => void;
 };
 
-const SessionHeader: React.FC<Props> = ({ title, paused, seconds, onPauseToggle, onCancel }) => {
+const SessionHeader: React.FC<Props> = ({
+  title,
+  paused,
+  seconds,
+  onPauseToggle,
+  onCancel,
+}) => {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
 
   return (
-    <View style={styles.wrap}>
+    <View style={[globalStyles.panel, styles.wrap]}>
       <View style={styles.topRow}>
-        <Text style={GlobalStyles.title}>{title}</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.copy}>
+          <Text style={globalStyles.eyebrow}>Live session</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>
+            Log sets, track time, and finish with a cleaner session summary.
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.statusPill,
+            paused ? styles.statusPillPaused : styles.statusPillActive,
+          ]}
+        >
+          <View
+            style={[
+              styles.statusDot,
+              paused ? styles.statusDotPaused : styles.statusDotActive,
+            ]}
+          />
+          <Text
+            style={[
+              styles.statusText,
+              paused ? styles.statusTextPaused : styles.statusTextActive,
+            ]}
+          >
+            {paused ? 'Paused' : 'In progress'}
+          </Text>
+        </View>
       </View>
 
-      <Text style={GlobalStyles.timer}>{mm}:{ss}</Text>
-      <Text style={[styles.status, paused ? styles.pausedStatus : null]}>
-        {paused ? '● Paused' : '● In Progress'}
-      </Text>
+      <Text style={styles.timer}>{mm}:{ss}</Text>
 
       <View style={styles.controls}>
         <TouchableOpacity
-          style={[
-            styles.pauseBtn,
-            { backgroundColor: paused ? '#5c976e' : '#7a7a7aff' } // green when paused (Resume), grey when running (Pause)
-          ]}
+          activeOpacity={0.92}
+          style={[paused ? styles.resumeBtn : styles.pauseBtn]}
           onPress={onPauseToggle}
         >
           <Ionicons
             name={paused ? 'play' : 'pause'}
             size={16}
-            color="#e7ecff"
+            color={paused ? colors.blkText : colors.text}
           />
-          <Text style={styles.pauseText}>
+          <Text style={paused ? styles.resumeText : styles.pauseText}>
             {paused ? 'Resume' : 'Pause'}
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={styles.cancelBtn}
+          onPress={onCancel}
+        >
+          <Ionicons name="close" size={16} color={colors.danger} />
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -56,29 +91,146 @@ const SessionHeader: React.FC<Props> = ({ title, paused, seconds, onPauseToggle,
 
 export default SessionHeader;
 
-const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingTop: 12 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  status: { color: '#6fdb7f', marginTop: 4, fontWeight: '600' },
-  pausedStatus: { color: '#f9b24e' },
-  controls: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  pauseBtn: {
-    backgroundColor: '#5c976eff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pauseText: { color: '#e7ecff', fontWeight: '700' },
-  cancelBtn: {
-    backgroundColor: '#ec4b4b',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: { color: '#fff', fontWeight: '800' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    wrap: {
+      marginTop: 10,
+      paddingBottom: 18,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 14,
+    },
+    copy: {
+      flex: 1,
+    },
+    title: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 28,
+      lineHeight: 32,
+      letterSpacing: -0.8,
+    },
+    subtitle: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      maxWidth: 260,
+    },
+    statusPill: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    statusPillActive: {
+      backgroundColor: colors.accentSoft,
+      borderColor: colors.glowPrimary,
+    },
+    statusPillPaused: {
+      backgroundColor: colors.accentTertiarySoft,
+      borderColor: colors.glowTertiary,
+    },
+    statusDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+    },
+    statusDotActive: {
+      backgroundColor: colors.success,
+    },
+    statusDotPaused: {
+      backgroundColor: colors.warning,
+    },
+    statusText: {
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    statusTextActive: {
+      color: colors.highlight1,
+    },
+    statusTextPaused: {
+      color: colors.highlight3,
+    },
+    timer: {
+      marginTop: 20,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 52,
+      lineHeight: 56,
+      letterSpacing: -1.4,
+    },
+    controls: {
+      marginTop: 18,
+      flexDirection: 'row',
+      gap: 12,
+    },
+    pauseBtn: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: 16,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    pauseText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    resumeBtn: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: 16,
+      backgroundColor: colors.highlight1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    resumeText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    cancelBtn: {
+      minWidth: 108,
+      minHeight: 48,
+      borderRadius: 16,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+    },
+    cancelText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+  });
+}

@@ -1,16 +1,8 @@
-import React from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { Colors } from '@/constants/Colors';
+import AppPopup from '@/components/ui/AppPopup';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
@@ -27,134 +19,71 @@ export default function HistoryFilterModal({
   onReset,
   children,
 }: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal
+    <AppPopup
       visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose} />
-
-      <View style={styles.centerWrap} pointerEvents="box-none">
-        <View style={styles.card}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity
-              style={styles.iconButton}
-              activeOpacity={0.85}
-              onPress={onClose}
-            >
-              <Ionicons name="close" size={18} color="#E5E7F5" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
+      onClose={onClose}
+      align="bottom"
+      animationType="slide"
+      eyebrow="Filters"
+      title={title}
+      subtitle="Refine the history view without leaving the page."
+      showCloseButton
+      bodyStyle={styles.body}
+      contentStyle={styles.popup}
+      footer={
+        <View style={styles.footerRow}>
+          <TouchableOpacity
+            style={[globalStyles.buttonSecondary, styles.button]}
+            activeOpacity={0.88}
+            onPress={onReset}
           >
-            {children}
-          </ScrollView>
+            <Text style={globalStyles.buttonTextSecondary}>Reset</Text>
+          </TouchableOpacity>
 
-          <View style={styles.footerRow}>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              activeOpacity={0.85}
-              onPress={onReset}
-            >
-              <Text style={styles.secondaryButtonText}>Reset</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.primaryButton}
-              activeOpacity={0.85}
-              onPress={onClose}
-            >
-              <Text style={styles.primaryButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[globalStyles.buttonPrimary, styles.button]}
+            activeOpacity={0.88}
+            onPress={onClose}
+          >
+            <Text style={globalStyles.buttonTextPrimary}>Apply</Text>
+          </TouchableOpacity>
         </View>
-      </View>
-    </Modal>
+      }
+    >
+      {children}
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(2, 6, 23, 0.74)',
-  },
-  centerWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 28,
-  },
-  card: {
-    maxHeight: '86%',
-    backgroundColor: Colors.dark.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    padding: 18,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#E5E7F5',
-  },
-  iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#111827',
-  },
-  scroll: {
-    maxHeight: 420,
-  },
-  scrollContent: {
-    paddingBottom: 8,
-    gap: 14,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 16,
-  },
-  secondaryButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: '#111827',
-    paddingVertical: 12,
-  },
-  secondaryButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#E5E7F5',
-  },
-  primaryButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-    backgroundColor: '#4F46E5',
-    paddingVertical: 12,
-  },
-  primaryButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    popup: {
+      backgroundColor: colors.card,
+      paddingTop: 20,
+    },
+    body: {
+      gap: 14,
+      maxHeight: 420,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    button: {
+      flex: 1,
+    },
+    helperText: {
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 16,
+    },
+  });
+}

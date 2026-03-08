@@ -1,4 +1,3 @@
-// app/(tabs)/progress/strength/[id].tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
@@ -12,10 +11,10 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import MetricLineChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import { supabase } from '@/lib/supabase';
-import { GlobalStyles } from '@/constants/GlobalStyles';
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import {
   fetchVisibleExerciseById,
   getAuthenticatedUserId,
@@ -31,7 +30,7 @@ type StrengthSetRow = {
   weight_unit_csv?: string | null;
   reps?: number | null;
   est_1rm?: number | null;
-  created_at: string;
+  performed_at: string;
 };
 
 type ExerciseSummaryRow = {
@@ -47,16 +46,32 @@ type WorkoutRow = {
 };
 
 const LB_PER_KG = 2.20462;
-const BG = Colors.dark.background;
 
 function formatMassFromKg(valueKg: number, unit: 'kg' | 'lb') {
   if (unit === 'kg') return `${Math.round(valueKg)} kg`;
   return `${Math.round(valueKg * LB_PER_KG).toLocaleString()} lb`;
 }
 
+function massFromKg(valueKg: number, unit: 'kg' | 'lb') {
+  if (unit === 'kg') return valueKg;
+  return valueKg * LB_PER_KG;
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return 'Unknown';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Unknown';
+  return parsed.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 const ExerciseDetailScreen: React.FC = () => {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
   const { weightUnit } = useUnits();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [exercise, setExercise] = useState<ExerciseRecord | null>(null);
   const [summaries, setSummaries] = useState<ExerciseSummaryRow[]>([]);
@@ -67,9 +82,6 @@ const ExerciseDetailScreen: React.FC = () => {
   const [selectedStat, setSelectedStat] = useState<'sessions' | 'volume' | 'oneRM'>(
     'sessions'
   );
-  
-
-  // ------------------------ LOAD DATA ----------------------------------------
 
   useEffect(() => {
     const load = async () => {
@@ -84,6 +96,7 @@ const ExerciseDetailScreen: React.FC = () => {
       }
 
       try {
+        setLoading(true);
         setExercise(null);
         setSummaries([]);
         setSets([]);
@@ -97,16 +110,14 @@ const ExerciseDetailScreen: React.FC = () => {
           return;
         }
 
-        // 1) Exercise metadata scoped to shared + current user's exercises.
-        const exData = await fetchVisibleExerciseById(userId, id);
-        if (!exData) {
+        const exerciseData = await fetchVisibleExerciseById(userId, id);
+        if (!exerciseData) {
           setErrorMsg('Exercise not found.');
           setLoading(false);
           return;
         }
-        setExercise(exData);
+        setExercise(exerciseData);
 
-        // 2) User-scoped summaries avoid pulling every user's sets for shared exercises.
         const { data: summaryData, error: summaryErr } = await supabase
           .schema('strength')
           .from('exercise_summary')
@@ -129,15 +140,17 @@ const ExerciseDetailScreen: React.FC = () => {
           return;
         }
 
-        const [{ data: setData, error: setErr }, { data: wkData, error: wkErr }] =
+        const [{ data: setData, error: setErr }, { data: workoutData, error: wkErr }] =
           await Promise.all([
             supabase
               .schema('strength')
               .from('strength_sets')
-              .select('id, exercise_id, strength_workout_id, weight, weight_unit_csv, reps, est_1rm, created_at')
+              .select(
+                'id, exercise_id, strength_workout_id, weight, weight_unit_csv, reps, est_1rm, performed_at'
+              )
               .eq('exercise_id', id)
               .in('strength_workout_id', workoutIds)
-              .order('created_at', { ascending: true }),
+              .order('performed_at', { ascending: true }),
             supabase
               .schema('strength')
               .from('strength_workouts')
@@ -150,8 +163,8 @@ const ExerciseDetailScreen: React.FC = () => {
         if (wkErr) throw wkErr;
 
         setSets((setData ?? []) as StrengthSetRow[]);
-        setWorkouts((wkData ?? []) as WorkoutRow[]);
-      } catch (err: any) {
+        setWorkouts((workoutData ?? []) as WorkoutRow[]);
+      } catch (err) {
         console.warn('Error loading exercise detail', err);
         setErrorMsg('Error loading exercise details.');
       } finally {
@@ -162,12 +175,9 @@ const ExerciseDetailScreen: React.FC = () => {
     load();
   }, [id]);
 
-  // ------------------------ DERIVED DATA -------------------------------------
-
   const title = useMemo(() => {
     if (typeof name === 'string' && name.length) return name;
     if (!exercise) return 'Exercise';
-
     return exercise.exercise_name || 'Exercise';
   }, [name, exercise]);
 
@@ -175,120 +185,148 @@ const ExerciseDetailScreen: React.FC = () => {
     if (!summaries.length && !sets.length) {
       return {
         totalSessions: 0,
-        totalTimeMins: 0,
         totalVolume: 0,
         avgReps: 0,
         bestOneRm: 0,
       };
     }
 
-    // Sessions = distinct workouts that used this exercise
     const totalSessions = summaries.length;
     const totalVolume = summaries.reduce((sum, row) => sum + Number(row.vol ?? 0), 0);
     const bestOneRm = summaries.reduce(
       (best, row) => Math.max(best, Number(row.best_est_1rm ?? 0)),
       0
     );
+
     let totalReps = 0;
-
-    for (const s of sets) {
-      const r = s.reps ?? 0;
-      totalReps += r;
+    for (const set of sets) {
+      totalReps += set.reps ?? 0;
     }
-
-    // total time = sum of durations of any workout that contained this exercise
-    let totalTimeMins = 0;
-    if (workouts.length) {
-      for (const wk of workouts) {
-        if (!wk.started_at || !wk.ended_at) continue;
-        const start = new Date(wk.started_at).getTime();
-        const end = new Date(wk.ended_at).getTime();
-        if (end > start) {
-          totalTimeMins += (end - start) / 60000;
-        }
-      }
-    }
-
-    const avgReps = sets.length ? totalReps / sets.length : 0;
 
     return {
       totalSessions,
-      totalTimeMins,
       totalVolume,
-      avgReps,
+      avgReps: sets.length ? totalReps / sets.length : 0,
       bestOneRm,
     };
-  }, [sets, summaries, workouts]);
+  }, [sets, summaries]);
 
-  // ------------------------ SMALL SUBCOMPONENTS ------------------------------
+  const trendRows = useMemo(() => {
+    const workoutMap = new Map(workouts.map((workout) => [workout.id, workout]));
 
-  const StatChip = ({ value, label }: { value: string; label: string }) => (
-    <View style={styles.statChip}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
+    return summaries
+      .map((summary) => {
+        const workout = workoutMap.get(summary.strength_workout_id);
+        const timestampSource = workout?.ended_at ?? workout?.started_at ?? null;
+        if (!timestampSource) return null;
 
-  const renderChartBody = () => {
-    if (!summaries.length) {
-      return (
-        <View style={styles.chartEmpty}>
-          <Text style={styles.chartEmptyText}>No data yet for this exercise.</Text>
-        </View>
-      );
+        const timestampMs = new Date(timestampSource).getTime();
+        if (!Number.isFinite(timestampMs)) return null;
+
+        return {
+          workoutId: summary.strength_workout_id,
+          timestampMs,
+          timestampSeconds: Math.round(timestampMs / 1000),
+          dateLabel: formatShortDate(timestampSource),
+          volumeKg: Number(summary.vol ?? 0),
+          oneRmKg: Number(summary.best_est_1rm ?? 0),
+        };
+      })
+      .filter(
+        (
+          row
+        ): row is {
+          workoutId: string;
+          timestampMs: number;
+          timestampSeconds: number;
+          dateLabel: string;
+          volumeKg: number;
+          oneRmKg: number;
+        } => row != null
+      )
+      .sort((a, b) => a.timestampMs - b.timestampMs)
+      .map((row, index) => ({
+        ...row,
+        sessionCount: index + 1,
+      }));
+  }, [summaries, workouts]);
+
+  const selectedTrendPoints = useMemo<SamplePoint[]>(() => {
+    return trendRows.map((row) => ({
+      t: row.timestampSeconds,
+      v:
+        selectedStat === 'sessions'
+          ? row.sessionCount
+          : selectedStat === 'volume'
+            ? row.volumeKg
+            : row.oneRmKg,
+    }));
+  }, [selectedStat, trendRows]);
+
+  const selectedTrendMeta = useMemo(() => {
+    if (!trendRows.length) {
+      return {
+        latestValue: 'No tracked value yet',
+        latestDate: null as string | null,
+        peakValue: 'No tracked peak',
+        peakDate: null as string | null,
+      };
     }
 
-    const maxValue =
+    const metricValue = (row: (typeof trendRows)[number]) =>
       selectedStat === 'sessions'
-        ? metrics.totalSessions || 1
+        ? row.sessionCount
         : selectedStat === 'volume'
-        ? metrics.totalVolume || 1
-        : metrics.bestOneRm || 1;
+          ? row.volumeKg
+          : row.oneRmKg;
 
-    const items = [
-      { key: 'SESSIONS', value: metrics.totalSessions },
-      { key: 'VOLUME', value: metrics.totalVolume },
-      { key: 'BEST 1RM', value: metrics.bestOneRm },
-    ];
+    const formatValue = (value: number) => {
+      if (selectedStat === 'sessions') return `${Math.round(value)} sessions`;
+      return value > 0 ? formatMassFromKg(value, weightUnit) : '—';
+    };
 
-    return (
-      <View style={{ marginTop: 16 }}>
-        {items.map(item => {
-          const pct = Math.min(1, (item.value || 0) / maxValue);
-          return (
-            <View key={item.key} style={styles.chartRow}>
-              <Text style={styles.chartRowLabel}>{item.key}</Text>
-              <View style={styles.chartBarTrack}>
-                <View style={[styles.chartBarFill, { flex: pct }]} />
-                <View style={{ flex: 1 - pct }} />
-              </View>
-              <Text style={styles.chartRowValue}>
-                {item.key === 'VOLUME'
-                  ? formatMassFromKg(item.value, weightUnit)
-                  : item.key === 'BEST 1RM'
-                  ? formatMassFromKg(item.value, weightUnit)
-                  : item.value}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
+    const latest = trendRows[trendRows.length - 1];
+    const peak = trendRows.reduce((best, row) =>
+      metricValue(row) > metricValue(best) ? row : best
     );
-  };
 
-  // ------------------------ STATES: LOADING / ERROR -------------------------
+    return {
+      latestValue: formatValue(metricValue(latest)),
+      latestDate: latest.dateLabel,
+      peakValue: formatValue(metricValue(peak)),
+      peakDate: peak.dateLabel,
+    };
+  }, [selectedStat, trendRows, weightUnit]);
+
+  const selectedChartValue = useMemo(() => {
+    if (selectedStat === 'sessions') return metrics.totalSessions || 0;
+    if (selectedStat === 'volume') return metrics.totalVolume || 0;
+    return metrics.bestOneRm || 0;
+  }, [metrics.bestOneRm, metrics.totalSessions, metrics.totalVolume, selectedStat]);
+
+  const selectedChartLabel = useMemo(() => {
+    if (selectedStat === 'sessions') return `${metrics.totalSessions} sessions`;
+    if (selectedStat === 'volume') {
+      return metrics.totalVolume > 0
+        ? formatMassFromKg(metrics.totalVolume, weightUnit)
+        : 'No volume yet';
+    }
+    return metrics.bestOneRm > 0
+      ? formatMassFromKg(metrics.bestOneRm, weightUnit)
+      : 'No 1RM yet';
+  }, [metrics.bestOneRm, metrics.totalSessions, metrics.totalVolume, selectedStat, weightUnit]);
 
   if (loading) {
     return (
       <LinearGradient
-        colors={['#3a3a3bff', '#1e1e1eff', BG]}
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
         start={{ x: 0.2, y: 0 }}
         end={{ x: 0.8, y: 1 }}
-        style={{ flex: 1 }}
+        style={globalStyles.page}
       >
-        <View style={[GlobalStyles.container, styles.screen, styles.centered]}>
-          <ActivityIndicator size="small" color={Colors.dark.highlight1} />
-          <Text style={styles.muted}>Loading exercise…</Text>
+        <View style={[globalStyles.safeArea, styles.centered]}>
+          <ActivityIndicator size="small" color={colors.highlight1} />
+          <Text style={styles.stateText}>Loading exercise...</Text>
         </View>
       </LinearGradient>
     );
@@ -297,372 +335,604 @@ const ExerciseDetailScreen: React.FC = () => {
   if (errorMsg) {
     return (
       <LinearGradient
-        colors={['#3a3a3bff', '#1e1e1eff', BG]}
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
         start={{ x: 0.2, y: 0 }}
         end={{ x: 0.8, y: 1 }}
-        style={{ flex: 1 }}
+        style={globalStyles.page}
       >
-        <View style={[GlobalStyles.container, styles.screen, styles.centered]}>
-          <Text style={styles.errorText}>{errorMsg}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.back()}>
-            <Text style={styles.retryText}>Go back</Text>
-          </TouchableOpacity>
+        <View style={[globalStyles.safeArea, styles.centered]}>
+          <View style={[globalStyles.panelSoft, styles.errorCard]}>
+            <Text style={styles.errorText}>{errorMsg}</Text>
+            <TouchableOpacity
+              style={[globalStyles.buttonSecondary, styles.retryButton]}
+              onPress={() => router.back()}
+            >
+              <Text style={globalStyles.buttonTextSecondary}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </LinearGradient>
     );
   }
 
-  // ------------------------ MAIN RENDER -------------------------------------
-
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={globalStyles.page}
     >
-      <View style={[GlobalStyles.container, styles.screen]}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+      <View style={globalStyles.safeArea}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-              <Ionicons name="chevron-back" size={20} color="#E5E7F5" />
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle} numberOfLines={2}>
-              {title}
-            </Text>
-            <View style={{ width: 32 }} />
+            <View style={styles.headerSpacer} />
           </View>
 
-          {exercise && (
-            <View style={styles.metaRow}>
-              {exercise.workout_category && (
-                <View style={styles.metaPill}>
-                  <Text style={styles.metaPillText}>{exercise.workout_category}</Text>
-                </View>
-              )}
-              {getExerciseBodyParts(exercise).map(bp => (
-                <View key={bp} style={styles.metaPill}>
-                  <Text style={styles.metaPillText}>{bp}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <View style={styles.hero}>
+            <Text style={globalStyles.eyebrow}>Exercise Detail</Text>
+            <Text style={globalStyles.header}>{title}</Text>
+            <Text style={styles.heroText}>Detailed stats for this exercise across all logged strength sessions.</Text>
 
-          <View style={styles.metricsRow}>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>SESSIONS</Text>
-              <Text style={styles.metricValue}>{metrics.totalSessions}</Text>
-              <Text style={styles.metricSub}>times completed</Text>
-            </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>TIME</Text>
-              <Text style={styles.metricValue}>
-                {metrics.totalTimeMins > 0
-                  ? `${Math.round(metrics.totalTimeMins)} min`
-                  : '—'}
-              </Text>
-              <Text style={styles.metricSub}>total time</Text>
-            </View>
+            {exercise ? (
+              <View style={styles.metaRow}>
+                {exercise.workout_category ? (
+                  <Tag label={exercise.workout_category} styles={styles} />
+                ) : null}
+                {getExerciseBodyParts(exercise).map((bodyPart) => (
+                  <Tag key={bodyPart} label={bodyPart} styles={styles} />
+                ))}
+              </View>
+            ) : null}
           </View>
 
-          <View style={styles.metricsRow}>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>VOLUME</Text>
-              <Text style={styles.metricValue}>
-                {metrics.totalVolume > 0 ? formatMassFromKg(metrics.totalVolume, weightUnit) : '—'}
-              </Text>
-              <Text style={styles.metricSub}>all time</Text>
-            </View>
-            <View style={styles.metricCard}>
-              <Text style={styles.metricLabel}>BEST 1RM</Text>
-              <Text style={styles.metricValue}>
-                {metrics.bestOneRm > 0 ? formatMassFromKg(metrics.bestOneRm, weightUnit) : '—'}
-              </Text>
-              <Text style={styles.metricSub}>estimated</Text>
-            </View>
-          </View>
-
-          <View style={styles.statRow}>
-            <StatChip value={sets.length.toString()} label="Total sets" />
-            <StatChip
-              value={metrics.avgReps > 0 ? metrics.avgReps.toFixed(1) : '—'}
-              label="Avg reps / set"
+          <View style={styles.metricsGrid}>
+            <MetricCard
+              label="Sessions"
+              value={String(metrics.totalSessions)}
+              subtitle="times completed"
+              styles={styles}
+            />
+            <MetricCard
+              label="Volume"
+              value={metrics.totalVolume > 0 ? formatMassFromKg(metrics.totalVolume, weightUnit) : '—'}
+              subtitle="all time"
+              styles={styles}
+            />
+            <MetricCard
+              label="Best 1RM"
+              value={metrics.bestOneRm > 0 ? formatMassFromKg(metrics.bestOneRm, weightUnit) : '—'}
+              subtitle="estimated"
+              styles={styles}
             />
           </View>
 
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>PROGRESSION</Text>
+          <View style={styles.secondaryStatsRow}>
+            <SecondaryStat
+              value={String(sets.length)}
+              label="Total sets"
+              styles={styles}
+            />
+            <SecondaryStat
+              value={metrics.avgReps > 0 ? metrics.avgReps.toFixed(1) : '—'}
+              label="Avg reps / set"
+              styles={styles}
+            />
+          </View>
+
+          <View style={[globalStyles.panel, styles.chartSection]}>
+            <View style={styles.chartHeader}>
+              <View>
+                <Text style={globalStyles.eyebrow}>Progression</Text>
+                <Text style={styles.sectionTitle}>Performance summary</Text>
+              </View>
+              <View style={styles.chartSummaryPill}>
+                <Text style={styles.chartSummaryLabel}>Latest</Text>
+                <Text style={styles.chartSummaryValue}>{selectedTrendMeta.latestValue}</Text>
+                {selectedTrendMeta.latestDate ? (
+                  <Text style={styles.chartSummarySubvalue}>{selectedTrendMeta.latestDate}</Text>
+                ) : null}
+              </View>
             </View>
 
             <View style={styles.segmentRow}>
-              <TouchableOpacity
-                style={[
-                  styles.segmentChip,
-                  selectedStat === 'sessions' && styles.segmentChipActive,
-                ]}
+              <SegmentChip
+                label="Sessions"
+                active={selectedStat === 'sessions'}
                 onPress={() => setSelectedStat('sessions')}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    selectedStat === 'sessions' && styles.segmentTextActive,
-                  ]}
-                >
-                  Sessions
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.segmentChip,
-                  selectedStat === 'volume' && styles.segmentChipActive,
-                ]}
+                styles={styles}
+              />
+              <SegmentChip
+                label="Volume"
+                active={selectedStat === 'volume'}
                 onPress={() => setSelectedStat('volume')}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    selectedStat === 'volume' && styles.segmentTextActive,
-                  ]}
-                >
-                  Volume
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.segmentChip,
-                  selectedStat === 'oneRM' && styles.segmentChipActive,
-                ]}
+                styles={styles}
+              />
+              <SegmentChip
+                label="1RM"
+                active={selectedStat === 'oneRM'}
                 onPress={() => setSelectedStat('oneRM')}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    selectedStat === 'oneRM' && styles.segmentTextActive,
-                  ]}
-                >
-                  1RM
-                </Text>
-              </TouchableOpacity>
+                styles={styles}
+              />
             </View>
 
-            {renderChartBody()}
+            {!summaries.length ? (
+              <View style={styles.chartEmpty}>
+                <Text style={styles.chartEmptyTitle}>No exercise data yet</Text>
+                <Text style={styles.chartEmptyText}>
+                  Complete more sessions with this movement to populate the progression block.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <MetricLineChart
+                  title={
+                    selectedStat === 'sessions'
+                      ? 'Sessions Over Time'
+                      : selectedStat === 'volume'
+                        ? `Volume Over Time (${weightUnit})`
+                        : `Best 1RM Over Time (${weightUnit})`
+                  }
+                  color={
+                    selectedStat === 'sessions'
+                      ? colors.highlight1
+                      : selectedStat === 'volume'
+                        ? colors.highlight2
+                        : colors.highlight3
+                  }
+                  points={selectedTrendPoints}
+                  cardBg={colors.card2}
+                  textColor={colors.text}
+                  showGrid
+                  hideDataPoints={false}
+                  yClampMin={0}
+                  valueFormatter={(value) =>
+                    selectedStat === 'sessions'
+                      ? `${Math.round(value)}`
+                      : `${Math.round(massFromKg(value, weightUnit)).toLocaleString()}`
+                  }
+                  yAxisSuffix={selectedStat === 'sessions' ? '' : ` ${weightUnit}`}
+                  unitSuffix={selectedStat === 'sessions' ? undefined : weightUnit}
+                  xLabelFormatter={(timestamp) =>
+                    new Date(timestamp * 1000).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  }
+                />
+
+                <View style={styles.trendMetaRow}>
+                  <View style={styles.trendMetaCard}>
+                    <Text style={styles.trendMetaLabel}>Latest session</Text>
+                    <Text style={styles.trendMetaValue}>{selectedTrendMeta.latestValue}</Text>
+                    {selectedTrendMeta.latestDate ? (
+                      <Text style={styles.trendMetaSubvalue}>
+                        {selectedTrendMeta.latestDate}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.trendMetaCard}>
+                    <Text style={styles.trendMetaLabel}>Peak session</Text>
+                    <Text style={styles.trendMetaValue}>{selectedTrendMeta.peakValue}</Text>
+                    {selectedTrendMeta.peakDate ? (
+                      <Text style={styles.trendMetaSubvalue}>
+                        {selectedTrendMeta.peakDate}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
-          <View style={{ height: 32 }} />
+          <View style={[globalStyles.panelSoft, styles.summaryPanel]}>
+            <Text style={styles.summaryLabel}>Current focus</Text>
+            <Text style={styles.summaryValue}>
+              {selectedChartValue > 0 ? selectedChartLabel : 'No tracked value yet'}
+            </Text>
+            <Text style={styles.summaryText}>
+              Use this screen to compare all-time totals above with a dated trend for
+              sessions, per-workout volume, and estimated 1RM.
+            </Text>
+          </View>
         </ScrollView>
       </View>
     </LinearGradient>
   );
 };
 
+function MetricCard({
+  label,
+  value,
+  subtitle,
+  styles,
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.metricCard}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricSub}>{subtitle}</Text>
+    </View>
+  );
+}
+
+function SecondaryStat({
+  value,
+  label,
+  styles,
+}: {
+  value: string;
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.secondaryStat}>
+      <Text style={styles.secondaryStatValue}>{value}</Text>
+      <Text style={styles.secondaryStatLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function Tag({
+  label,
+  styles,
+}: {
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.metaTag}>
+      <Text style={styles.metaTagText}>{label}</Text>
+    </View>
+  );
+}
+
+function SegmentChip({
+  label,
+  active,
+  onPress,
+  styles,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.segmentChip, active ? styles.segmentChipActive : null]}
+      onPress={onPress}
+      activeOpacity={0.88}
+    >
+      <Text style={[styles.segmentText, active ? styles.segmentTextActive : null]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    scrollContent: {
+      paddingTop: 8,
+      paddingBottom: 28,
+      gap: 14,
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: -2,
+    },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerSpacer: {
+      flex: 1,
+    },
+    hero: {
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 20,
+      gap: 8,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 8,
+    },
+    metaTag: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    metaTagText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.35,
+      textTransform: 'uppercase',
+    },
+    metricsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    metricCard: {
+      width: '48%',
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 15,
+    },
+    metricLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 13,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    metricValue: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 24,
+      lineHeight: 28,
+      letterSpacing: -0.6,
+    },
+    metricSub: {
+      marginTop: 5,
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    secondaryStatsRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    secondaryStat: {
+      flex: 1,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    secondaryStatValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    secondaryStatLabel: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    chartSection: {
+      gap: 16,
+    },
+    chartHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    sectionTitle: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 22,
+      lineHeight: 26,
+      letterSpacing: -0.5,
+    },
+    chartSummaryPill: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.accentSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      alignItems: 'flex-end',
+    },
+    chartSummaryLabel: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    chartSummaryValue: {
+      marginTop: 5,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    chartSummarySubvalue: {
+      marginTop: 3,
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    segmentRow: {
+      flexDirection: 'row',
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 4,
+      gap: 4,
+    },
+    segmentChip: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      borderRadius: 14,
+    },
+    segmentChipActive: {
+      backgroundColor: colors.highlight1,
+    },
+    segmentText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.35,
+      textTransform: 'uppercase',
+    },
+    segmentTextActive: {
+      color: colors.blkText,
+    },
+    chartEmpty: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 18,
+      paddingVertical: 24,
+      alignItems: 'center',
+    },
+    chartEmptyTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+      textAlign: 'center',
+    },
+    chartEmptyText: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    trendMetaRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    trendMetaCard: {
+      flex: 1,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+    },
+    trendMetaLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.35,
+      textTransform: 'uppercase',
+    },
+    trendMetaValue: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    trendMetaSubvalue: {
+      marginTop: 4,
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    summaryPanel: {
+      gap: 8,
+    },
+    summaryLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 13,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    summaryValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    summaryText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    stateText: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    errorCard: {
+      alignItems: 'center',
+      gap: 12,
+      width: '100%',
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    retryButton: {
+      minWidth: 140,
+    },
+  });
+}
+
 export default ExerciseDetailScreen;
-
-// ----------------------------- STYLES ----------------------------------------
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 4,
-    paddingTop: 12,
-    paddingBottom: 16,
-  },
-  centered: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  metaPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: Colors.dark.card2,
-  },
-  metaPillText: {
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: Colors.dark.card,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#9DA4C4',
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#E5E7F5',
-  },
-  metricSub: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  statRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 18,
-  },
-  statChip: {
-    flex: 1,
-    borderRadius: 14,
-    backgroundColor: Colors.dark.card,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#E5E7F5',
-  },
-  statLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  sectionCard: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: Colors.dark.card,
-  },
-  sectionHeaderRow: {
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    letterSpacing: 0.8,
-    color: '#9DA4C4',
-  },
-  segmentRow: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.offset1,
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 4,
-  },
-  segmentChip: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  segmentChipActive: {
-    backgroundColor: Colors.dark.highlight1,
-  },
-  segmentText: {
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  segmentTextActive: {
-    color: '#FFFFFF',
-  },
-  chartEmpty: {
-    marginTop: 18,
-    paddingVertical: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chartEmptyText: {
-    fontSize: 12,
-    color: '#9DA4C4',
-  },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  chartRowLabel: {
-    width: 70,
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  chartBarTrack: {
-    flex: 1,
-    flexDirection: 'row',
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: Colors.dark.offset1,
-    overflow: 'hidden',
-    marginHorizontal: 8,
-  },
-  chartBarFill: {
-    backgroundColor: Colors.dark.highlight1,
-    borderRadius: 999,
-  },
-  chartRowValue: {
-    width: 70,
-    fontSize: 11,
-    color: '#E5E7F5',
-    textAlign: 'right',
-  },
-  muted: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#9DA4C4',
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#FCA5A5',
-    textAlign: 'center',
-    paddingHorizontal: 24,
-  },
-  retryBtn: {
-    marginTop: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: Colors.dark.card,
-  },
-  retryText: {
-    color: '#E5E7F5',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-});

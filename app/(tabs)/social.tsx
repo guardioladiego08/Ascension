@@ -14,8 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import {
   getSocialFeedPage,
@@ -27,12 +27,6 @@ import { useUnits } from '@/contexts/UnitsContext';
 
 import ActivityTab from './social/components/ActivityTab';
 import SocialPostCard from './social/components/SocialPostCard';
-
-const BG = Colors.dark.background;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
 
 const PAGE_SIZE = 16;
 
@@ -50,6 +44,8 @@ const FILTERS: Array<{ key: ActivityFilter; label: string; icon?: keyof typeof I
 
 export default function Social() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit, weightUnit } = useUnits();
 
   const [mode, setMode] = useState<Mode>('feed');
@@ -239,7 +235,12 @@ export default function Social() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <LinearGradient colors={[BG, '#0A111C']} style={styles.bg}>
+      <LinearGradient
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={globalStyles.page}
+      >
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -267,14 +268,15 @@ export default function Social() {
               style={styles.searchIcon}
               activeOpacity={0.85}
             >
-              <Ionicons name="search-outline" size={20} color={TEXT} />
+              <Ionicons name="search-outline" size={20} color={colors.highlight1} />
             </TouchableOpacity>
           </View>
 
           {mode === 'feed' ? (
             <>
               <View style={styles.heroCard}>
-                <Text style={styles.heroTitle}>Community Feed</Text>
+                <Text style={styles.heroEyebrow}>Community</Text>
+                <Text style={styles.heroTitle}>Social Feed</Text>
                 <Text style={styles.heroBody}>
                   Scroll like Instagram, tap any post card to open workout summaries, and filter by session type.
                 </Text>
@@ -300,7 +302,7 @@ export default function Social() {
 
               {loadingFeed ? (
                 <View style={styles.stateWrap}>
-                  <ActivityIndicator size="small" color={ACCENT} />
+                  <ActivityIndicator size="small" color={colors.highlight1} />
                   <Text style={styles.stateText}>Loading feed…</Text>
                 </View>
               ) : (
@@ -331,13 +333,13 @@ export default function Social() {
                   ListFooterComponent={
                     loadingMore ? (
                       <View style={styles.footerLoading}>
-                        <ActivityIndicator size="small" color={TEXT_MUTED} />
+                        <ActivityIndicator size="small" color={colors.textMuted} />
                       </View>
                     ) : null
                   }
                   ListEmptyComponent={
                     <View style={styles.stateWrap}>
-                      <Ionicons name="newspaper-outline" size={26} color={TEXT_MUTED} />
+                      <Ionicons name="newspaper-outline" size={26} color={colors.textMuted} />
                       <Text style={styles.stateText}>No posts yet from people you follow.</Text>
                       {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
                     </View>
@@ -365,13 +367,19 @@ function ModePill({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
       style={[styles.modePill, active && styles.modePillActive]}
     >
-      <Ionicons name={icon} size={16} color={active ? TEXT : TEXT_MUTED} />
+      <Ionicons
+        name={icon}
+        size={16}
+        color={active ? colors.blkText : colors.textMuted}
+      />
       <Text style={[styles.modeText, active && styles.modeTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -388,130 +396,157 @@ function FilterChip({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
       style={[styles.chip, active && styles.chipActive]}
     >
-      {icon ? <Ionicons name={icon} size={14} color={active ? TEXT : TEXT_MUTED} /> : null}
+      {icon ? (
+        <Ionicons
+          name={icon}
+          size={14}
+          color={active ? colors.blkText : colors.textMuted}
+        />
+      ) : null}
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: BG },
-  bg: { flex: 1 },
-
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 10,
-  },
-  modeRow: { flex: 1, flexDirection: 'row', gap: 10 },
-  searchIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  modePill: {
-    flex: 1,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  modePillActive: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(255,255,255,0.16)',
-  },
-  modeText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  modeTextActive: { color: TEXT },
-
-  heroCard: {
-    marginHorizontal: 16,
-    marginTop: 2,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  heroTitle: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  heroBody: {
-    marginTop: 5,
-    color: TEXT_MUTED,
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
-
-  filterWrap: { paddingBottom: 10 },
-  filterRow: { paddingHorizontal: 16, gap: 10 },
-  chip: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  chipActive: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  chipText: { color: TEXT_MUTED, fontSize: 12.5, fontWeight: '700' },
-  chipTextActive: { color: TEXT },
-
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
-
-  stateWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    gap: 10,
-  },
-  stateText: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  errorText: {
-    color: '#FCA5A5',
-    fontSize: 12.5,
-    textAlign: 'center',
-  },
-  footerLoading: {
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    flex: { flex: 1 },
+    safe: { flex: 1, backgroundColor: colors.background },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 8,
+      gap: 10,
+    },
+    modeRow: { flex: 1, flexDirection: 'row', gap: 10 },
+    searchIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modePill: {
+      flex: 1,
+      height: 42,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    modePillActive: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    modeText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+    modeTextActive: { color: colors.blkText },
+    heroCard: {
+      marginHorizontal: 16,
+      marginTop: 2,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    heroEyebrow: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
+    heroTitle: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    heroBody: {
+      marginTop: 6,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12.5,
+      lineHeight: 18,
+    },
+    filterWrap: { paddingBottom: 10 },
+    filterRow: { paddingHorizontal: 16, gap: 10 },
+    chip: {
+      height: 36,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    chipActive: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    chipText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12.5,
+      lineHeight: 16,
+    },
+    chipTextActive: { color: colors.blkText },
+    listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+    stateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      gap: 10,
+    },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 12.5,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+    footerLoading: {
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+  });
+}

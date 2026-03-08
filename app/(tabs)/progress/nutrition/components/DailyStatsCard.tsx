@@ -1,13 +1,7 @@
-// app/(tabs)/nutrition/add/Nutrition/components/DailyStatsCard.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/Colors';
 
-const CARD = Colors.dark.card;
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
-const PRIMARY_GREEN = '#15C779';
-const BAR_BG = '#1E293B';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   dateLabel: string;
@@ -26,32 +20,8 @@ type MacroBarProps = {
   total: number;
   target: number | null | undefined;
   unit: string;
-};
-
-const MacroBar: React.FC<MacroBarProps> = ({ label, total, target, unit }) => {
-  const safeTotal = total || 0;
-  const safeTarget = target && target > 0 ? target : null;
-  const ratio =
-    safeTarget && safeTarget > 0
-      ? Math.min(safeTotal / safeTarget, 1)
-      : 0;
-
-  return (
-    <View style={styles.macroRow}>
-      <View style={styles.macroLabelCol}>
-        <Text style={styles.macroLabel}>{label}</Text>
-        <Text style={styles.macroValue}>
-          {safeTotal.toFixed(1)}
-          {unit}
-          {safeTarget ? ` / ${safeTarget.toFixed(0)}${unit}` : ''}
-        </Text>
-      </View>
-      <View style={styles.macroBarOuter}>
-        <View style={[styles.macroBarInner, { flex: ratio }]} />
-        <View style={{ flex: 1 - ratio }} />
-      </View>
-    </View>
-  );
+  fillColor: string;
+  styles: ReturnType<typeof createStyles>;
 };
 
 const DailyStatsCard: React.FC<Props> = ({
@@ -65,120 +35,205 @@ const DailyStatsCard: React.FC<Props> = ({
   carbsTarget,
   fatTarget,
 }) => {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const safeTotalKcal = totalKcal || 0;
   const safeKcalTarget = kcalTarget && kcalTarget > 0 ? kcalTarget : null;
+  const calorieRatio =
+    safeKcalTarget && safeKcalTarget > 0
+      ? Math.min(safeTotalKcal / safeKcalTarget, 1)
+      : 0;
 
   return (
-    <View style={styles.card}>
-      {/* Left: Calories summary */}
-      <View style={styles.leftCol}>
+    <View style={[globalStyles.panel, styles.card]}>
+      <View style={styles.summaryCard}>
         <Text style={styles.dateText}>{dateLabel}</Text>
-        <Text style={styles.kcalLabel}>Calories</Text>
-        <Text style={styles.kcalValue}>
-          {Math.round(safeTotalKcal)} kcal
+        <Text style={styles.kcalLabel}>Calories logged</Text>
+        <Text style={styles.kcalValue}>{Math.round(safeTotalKcal)} kcal</Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${Math.max(calorieRatio * 100, safeTotalKcal > 0 ? 12 : 0)}%` },
+            ]}
+          />
+        </View>
+        <Text style={styles.kcalTargetText}>
+          {safeKcalTarget
+            ? `Target ${Math.round(safeKcalTarget)} kcal`
+            : 'No calorie target set'}
         </Text>
-        {safeKcalTarget ? (
-          <Text style={styles.kcalTargetText}>
-            of {Math.round(safeKcalTarget)} kcal target
-          </Text>
-        ) : (
-          <Text style={styles.kcalTargetText}>
-            No calorie target set
-          </Text>
-        )}
       </View>
 
-      {/* Right: Macro bars */}
       <View style={styles.rightCol}>
         <MacroBar
           label="Protein"
           total={totalProtein}
           target={proteinTarget}
           unit="g"
+          fillColor={colors.macroProtein}
+          styles={styles}
         />
         <MacroBar
           label="Carbs"
           total={totalCarbs}
           target={carbsTarget}
           unit="g"
+          fillColor={colors.macroCarbs}
+          styles={styles}
         />
         <MacroBar
           label="Fat"
           total={totalFat}
           target={fatTarget}
           unit="g"
+          fillColor={colors.macroFats}
+          styles={styles}
         />
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: CARD,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  leftCol: {
-    flex: 0.9,
-    marginRight: 10,
-  },
-  rightCol: {
-    flex: 1.1,
-    justifyContent: 'center',
-  },
-  dateText: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  kcalLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  kcalValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  kcalTargetText: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 4,
-  },
-  macroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  macroLabelCol: {
-    width: 70,
-  },
-  macroLabel: {
-    color: TEXT_PRIMARY,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  macroValue: {
-    color: TEXT_MUTED,
-    fontSize: 10,
-  },
-  macroBarOuter: {
-    flex: 1,
-    height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: BAR_BG,
-    flexDirection: 'row',
-  },
-  macroBarInner: {
-    backgroundColor: PRIMARY_GREEN,
-    borderRadius: 999,
-  },
-});
+const MacroBar: React.FC<MacroBarProps> = ({
+  label,
+  total,
+  target,
+  unit,
+  fillColor,
+  styles,
+}) => {
+  const safeTotal = total || 0;
+  const safeTarget = target && target > 0 ? target : null;
+  const ratio =
+    safeTarget && safeTarget > 0
+      ? Math.min(safeTotal / safeTarget, 1)
+      : 0;
+
+  return (
+    <View style={styles.macroCard}>
+      <View style={styles.macroLabelRow}>
+        <Text style={styles.macroLabel}>{label}</Text>
+        <Text style={styles.macroValue}>
+          {safeTotal.toFixed(1)}
+          {unit}
+          {safeTarget ? ` / ${safeTarget.toFixed(0)}${unit}` : ''}
+        </Text>
+      </View>
+      <View style={styles.macroBarOuter}>
+        <View
+          style={[
+            styles.macroBarInner,
+            {
+              backgroundColor: fillColor,
+              width: `${Math.max(ratio * 100, safeTotal > 0 ? 10 : 0)}%`,
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+};
+
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      gap: 16,
+    },
+    summaryCard: {
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      padding: 16,
+    },
+    dateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 13,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    kcalLabel: {
+      marginTop: 12,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    kcalValue: {
+      marginTop: 4,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 30,
+      lineHeight: 34,
+      letterSpacing: -0.8,
+    },
+    progressTrack: {
+      marginTop: 16,
+      height: 10,
+      borderRadius: 999,
+      backgroundColor: colors.card3,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 999,
+      backgroundColor: colors.highlight1,
+    },
+    kcalTargetText: {
+      marginTop: 10,
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    rightCol: {
+      gap: 10,
+    },
+    macroCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    macroLabelRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 12,
+    },
+    macroLabel: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    macroValue: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    macroBarOuter: {
+      marginTop: 12,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.card3,
+      overflow: 'hidden',
+    },
+    macroBarInner: {
+      height: '100%',
+      borderRadius: 999,
+    },
+  });
+}
 
 export default DailyStatsCard;

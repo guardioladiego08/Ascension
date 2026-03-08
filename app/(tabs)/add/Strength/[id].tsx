@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
@@ -35,9 +34,8 @@ import {
   type AppleHeartRateSample,
 } from '@/lib/health/appleHealthKit';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 
@@ -121,6 +119,8 @@ function formatTimelineLabel(totalSeconds: number): string {
 }
 
 export default function StrengthSummaryPage() {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { id, postId, autoHeartRateSync } = useLocalSearchParams<{
     id?: string;
     postId?: string;
@@ -181,12 +181,15 @@ export default function StrengthSummaryPage() {
 
       try {
         setHeartRateSyncing(true);
+        if (!isAppleHealthKitAvailable()) {
+          setHeartRateLoaded(true);
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(getAppleHealthUnavailableMessage());
+          return;
+        }
+
         setHeartRateSyncState('syncing');
         setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
-
-        if (!isAppleHealthKitAvailable()) {
-          throw new Error(getAppleHealthUnavailableMessage());
-        }
 
         const samples = await getAppleHeartRateSamplesForRange({
           startDate: workout.started_at,
@@ -210,10 +213,22 @@ export default function StrengthSummaryPage() {
           );
         }
       } catch (error: any) {
-        console.warn('[StrengthSummary] Apple Health load failed', error);
+        const message = formatAppleHealthError(error);
         setHeartRateLoaded(true);
+        if (
+          message.toLowerCase().includes('not available') ||
+          message.toLowerCase().includes('nitro') ||
+          message.toLowerCase().includes('turbo') ||
+          message.toLowerCase().includes('build')
+        ) {
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(message);
+          return;
+        }
+
+        console.warn('[StrengthSummary] Apple Health load failed', message);
         setHeartRateSyncState('failed');
-        setHeartRateSyncMessage(formatAppleHealthError(error));
+        setHeartRateSyncMessage(message);
       } finally {
         setHeartRateSyncing(false);
       }
@@ -538,9 +553,17 @@ export default function StrengthSummaryPage() {
 
   if (loading) {
     return (
-      <View style={styles.loading}>
-        <Text style={{ color: '#fff' }}>Loading...</Text>
-      </View>
+      <LinearGradient
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={globalStyles.page}
+      >
+        <View style={styles.loading}>
+          <ActivityIndicator size="small" color={colors.highlight1} />
+          <Text style={styles.loadingText}>Loading workout summary…</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
@@ -609,31 +632,76 @@ export default function StrengthSummaryPage() {
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
-    > 
-      <View style={styles.container}>
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
+    >
+      <View style={[globalStyles.container, styles.container]}>
         <LogoHeader />
 
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-          {/* --- Workout Header --- */}
-          <Text style={styles.headerDate}>{dateStr}</Text>
-          <Text style={styles.headerDuration}>Duration: {durationStr}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[globalStyles.panel, styles.heroCard]}>
+            <View style={styles.heroHeaderRow}>
+              <View style={styles.heroCopy}>
+                <Text style={globalStyles.eyebrow}>Session complete</Text>
+                <Text style={styles.title}>Strength summary</Text>
+                <Text style={styles.heroSubtitle}>
+                  Your workout has been saved. Review the session, heart-rate data,
+                  and per-exercise output below.
+                </Text>
+              </View>
 
-          <Text style={styles.title}>Workout Summary</Text>
+              <View style={styles.livePill}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>Saved</Text>
+              </View>
+            </View>
 
-          <Text style={styles.totalVol}>
-            Total Volume: {formatFromKg(workout?.total_vol, weightUnit)}
-          </Text>
+            <View style={styles.heroMetaRow}>
+              <View style={styles.heroMetaBlock}>
+                <Text style={styles.heroMetaLabel}>Finished</Text>
+                <Text style={styles.heroMetaValue}>{dateStr || 'Today'}</Text>
+              </View>
+
+              <View style={styles.heroMetaBlock}>
+                <Text style={styles.heroMetaLabel}>Duration</Text>
+                <Text style={styles.heroMetaValue}>{durationStr || '-'}</Text>
+              </View>
+            </View>
+
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>
+                  {formatFromKg(workout?.total_vol, weightUnit)}
+                </Text>
+                <Text style={styles.heroStatLabel}>total volume</Text>
+              </View>
+
+              <View style={[styles.heroStat, styles.heroStatAccent]}>
+                <Text style={styles.heroStatValue}>{totalSets}</Text>
+                <Text style={styles.heroStatLabel}>sets logged</Text>
+              </View>
+
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{exercises.length}</Text>
+                <Text style={styles.heroStatLabel}>exercises</Text>
+              </View>
+            </View>
+          </View>
 
           {canDelete && workout?.ended_at ? (
-            <View style={styles.heartRateCard}>
+            <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
               <View style={styles.heartRateHeaderRow}>
-                <Text style={styles.heartRateTitle}>Heart Rate</Text>
+                <View>
+                  <Text style={globalStyles.eyebrow}>Recovery signal</Text>
+                  <Text style={styles.heartRateTitle}>Heart rate</Text>
+                </View>
                 {heartRateSyncing ? (
-                  <ActivityIndicator size="small" color={Colors.dark.highlight1} />
+                  <ActivityIndicator size="small" color={colors.highlight1} />
                 ) : null}
               </View>
 
@@ -659,10 +727,10 @@ export default function StrengthSummaryPage() {
 
                   <MetricLineChart
                     title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
-                    color="#FF4D4F"
+                    color={colors.danger}
                     points={heartRateChartPoints}
-                    cardBg="rgba(5, 8, 22, 0.45)"
-                    textColor="#EAF2FF"
+                    cardBg={colors.cardDark}
+                    textColor={colors.text}
                     height={180}
                     yClampMin={40}
                     yClampMax={220}
@@ -738,33 +806,48 @@ export default function StrengthSummaryPage() {
 
           {/* ---- Per Exercise Summary ---- */}
           {exercises.length === 0 && (
-            <Text style={{ color: '#9aa4bf', marginTop: 8 }}>
-              No exercises logged for this workout.
-            </Text>
+            <View style={[globalStyles.panelSoft, styles.emptyCard]}>
+              <Text style={styles.emptyText}>No exercises logged for this workout.</Text>
+            </View>
           )}
 
           {exercises.map((ex, i) => (
-            <View key={ex.exercise_id ?? i} style={styles.card}>
-              <Text style={styles.exerciseName}>
-                {ex.exercise_name ?? 'Exercise'}
-              </Text>
+            <View key={ex.exercise_id ?? i} style={[globalStyles.panelSoft, styles.card]}>
+              <View style={styles.exerciseHeaderRow}>
+                <Text style={styles.exerciseName}>{ex.exercise_name ?? 'Exercise'}</Text>
+                <View style={styles.exercisePill}>
+                  <Text style={styles.exercisePillText}>
+                    {setsByExercise[ex.exercise_id]?.length ?? 0} sets
+                  </Text>
+                </View>
+              </View>
 
-              <Text style={styles.detail}>
-                Volume: {formatFromKg(ex.vol, weightUnit)}
-              </Text>
-              <Text style={styles.detail}>
-                Strongest Set: {formatFromKg(ex.strongest_set, weightUnit)}
-              </Text>
-              <Text style={styles.detail}>
-                Best Est 1RM: {formatFromKg(ex.best_est_1rm, weightUnit)}
-              </Text>
-              <Text style={styles.detail}>
-                Avg Set Weight: {formatFromKg(ex.avg_set, weightUnit)}
-              </Text>
+              <View style={styles.detailsGrid}>
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Volume</Text>
+                  <Text style={styles.detailValue}>{formatFromKg(ex.vol, weightUnit)}</Text>
+                </View>
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Strongest set</Text>
+                  <Text style={styles.detailValue}>
+                    {formatFromKg(ex.strongest_set, weightUnit)}
+                  </Text>
+                </View>
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Best est. 1RM</Text>
+                  <Text style={styles.detailValue}>
+                    {formatFromKg(ex.best_est_1rm, weightUnit)}
+                  </Text>
+                </View>
+                <View style={styles.detailCard}>
+                  <Text style={styles.detailLabel}>Avg set weight</Text>
+                  <Text style={styles.detailValue}>
+                    {formatFromKg(ex.avg_set, weightUnit)}
+                  </Text>
+                </View>
+              </View>
 
-              {/* ---- Table of Sets ---- */}
               <View style={styles.table}>
-                {/* Header */}
                 <View style={[styles.row, styles.tableHeader]}>
                   <Text style={[styles.col, styles.hCol]}>Set</Text>
                   <Text style={[styles.col, styles.hCol]}>Type</Text>
@@ -774,23 +857,16 @@ export default function StrengthSummaryPage() {
                   <Text style={[styles.col, styles.hCol]}>1RM</Text>
                 </View>
 
-                {/* Rows */}
                 {setsByExercise[ex.exercise_id]?.map((s: any, idx: number) => (
                   <View key={idx} style={styles.row}>
                     <Text style={styles.col}>{s.set_index}</Text>
                     <Text style={styles.col}>{s.set_type}</Text>
                     <Text style={styles.col}>
-                      {formatSetWeight(
-                        s.weight,
-                        s.weight_unit_csv,
-                        weightUnit
-                      )}
+                      {formatSetWeight(s.weight, s.weight_unit_csv, weightUnit)}
                     </Text>
                     <Text style={styles.col}>{s.reps ?? '-'}</Text>
                     <Text style={styles.col}>{s.rpe ?? '-'}</Text>
-                    <Text style={styles.col}>
-                      {formatFromKg(s.est_1rm, weightUnit)}
-                    </Text>
+                    <Text style={styles.col}>{formatFromKg(s.est_1rm, weightUnit)}</Text>
                   </View>
                 ))}
               </View>
@@ -813,14 +889,14 @@ export default function StrengthSummaryPage() {
               <Ionicons
                 name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
                 size={24}
-                color={shareToFeed ? Colors.dark.highlight1 : Colors.dark.text}
+                color={shareToFeed ? colors.highlight1 : colors.textMuted}
               />
             </TouchableOpacity>
           ) : null}
 
-          {/* DELETE + HOME BUTTONS */}
           {canDelete ? (
             <TouchableOpacity
+              activeOpacity={0.92}
               style={styles.deleteBtn}
               onPress={handleDeleteWorkout}
             >
@@ -829,11 +905,22 @@ export default function StrengthSummaryPage() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.homeBtn, sharing ? { opacity: 0.7 } : null]}
+            activeOpacity={0.92}
+            style={[
+              shareToFeed && canDelete ? globalStyles.buttonPrimary : globalStyles.buttonSecondary,
+              styles.homeBtn,
+              sharing ? { opacity: 0.7 } : null,
+            ]}
             onPress={handleReturnHome}
             disabled={sharing}
           >
-            <Text style={styles.homeBtnText}>
+            <Text
+              style={
+                shareToFeed && canDelete
+                  ? globalStyles.buttonTextPrimary
+                  : globalStyles.buttonTextSecondary
+              }
+            >
               {sharing ? 'Posting…' : !canDelete ? 'Back' : shareToFeed ? 'Share + Return Home' : 'Return Home'}
             </Text>
           </TouchableOpacity>
@@ -843,244 +930,414 @@ export default function StrengthSummaryPage() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* --- Header --- */
-  headerDate: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  headerDuration: {
-    color: Colors.dark.highlight1,
-    fontSize: 14,
-    marginBottom: 16,
-  },
-
-  title: {
-    color: '#e7ecff',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  totalVol: {
-    color: Colors.dark.highlight1,
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  goalCardWrap: {
-    marginBottom: 18,
-  },
-  heartRateCard: {
-    borderRadius: 16,
-    backgroundColor: Colors.dark.card,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 18,
-  },
-  heartRateHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  heartRateTitle: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  heartRateAvgLabel: {
-    color: '#c6d0ea',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  heartRateAvgValue: {
-    color: '#FF4D4F',
-    fontSize: 40,
-    fontWeight: '900',
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  heartRateStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 10,
-  },
-  heartRateStat: {
-    flex: 1,
-    borderRadius: 12,
-    backgroundColor: 'rgba(5,8,22,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-  },
-  heartRateStatLabel: {
-    color: '#9aa4bf',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  heartRateStatValue: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  heartRateEmpty: {
-    color: '#9aa4bf',
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  heartRateStatusText: {
-    color: '#A3B2D5',
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 10,
-  },
-  heartRateStatusTextError: {
-    color: '#FCA5A5',
-  },
-  heartRateActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 10,
-  },
-  heartRateActionBtn: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.dark.highlight1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    paddingHorizontal: 10,
-  },
-  heartRateActionBtnPrimary: {
-    backgroundColor: Colors.dark.highlight1,
-  },
-  heartRateActionBtnText: {
-    color: Colors.dark.highlight1,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  heartRateActionBtnPrimaryText: {
-    color: '#0D1320',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  heartRateActionBtnDisabled: {
-    opacity: 0.65,
-  },
-
-  shareCard: {
-    borderRadius: 14,
-    backgroundColor: Colors.dark.card,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  shareTitle: {
-    color: '#fff',
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  shareSubtitle: {
-    marginTop: 4,
-    color: '#9aa4bf',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-
-  card: {
-    backgroundColor: Colors.dark.card,
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 20,
-  },
-  exerciseName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  detail: {
-    color: Colors.dark.text,
-    marginBottom: 4,
-  },
-
-  /* --- Table --- */
-  table: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#1f2946',
-  },
-  tableHeader: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#1f2946',
-    paddingBottom: 6,
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a233a',
-  },
-  col: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  hCol: {
-    fontWeight: '700',
-    color: Colors.dark.highlight1,
-  },
-
-  deleteBtn: {
-    borderColor: '#FF4D4F',
-    borderWidth: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 10,
-  },
-  deleteBtnText: {
-    color: '#FF4D4F',
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  homeBtn: {
-    borderColor: Colors.dark.highlight1,
-    borderWidth: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 12,
-  },
-  homeBtnText: {
-    color: Colors.dark.highlight1,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: 72,
+    },
+    loading: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+    },
+    loadingText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    heroCard: {
+      marginTop: 10,
+      marginBottom: 18,
+      paddingBottom: 18,
+    },
+    heroHeaderRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    heroCopy: {
+      flex: 1,
+    },
+    title: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.9,
+    },
+    heroSubtitle: {
+      marginTop: 10,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+      maxWidth: 290,
+    },
+    livePill: {
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    liveDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999,
+      backgroundColor: colors.highlight1,
+    },
+    liveText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    heroMetaRow: {
+      marginTop: 22,
+      flexDirection: 'row',
+      gap: 16,
+    },
+    heroMetaBlock: {
+      flex: 1,
+    },
+    heroMetaLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+    },
+    heroMetaValue: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    heroStatsRow: {
+      marginTop: 18,
+      flexDirection: 'row',
+      gap: 10,
+    },
+    heroStat: {
+      flex: 1,
+      minHeight: 94,
+      borderRadius: 18,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      justifyContent: 'space-between',
+    },
+    heroStatAccent: {
+      backgroundColor: colors.card3,
+    },
+    heroStatValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 20,
+      lineHeight: 24,
+      letterSpacing: -0.6,
+    },
+    heroStatLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      textTransform: 'uppercase',
+    },
+    goalCardWrap: {
+      marginBottom: 18,
+    },
+    heartRateCard: {
+      marginBottom: 18,
+      padding: 16,
+    },
+    heartRateHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+      gap: 12,
+    },
+    heartRateTitle: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 24,
+      lineHeight: 28,
+      letterSpacing: -0.6,
+    },
+    heartRateAvgLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    heartRateAvgValue: {
+      color: colors.danger,
+      fontFamily: fonts.display,
+      fontSize: 38,
+      lineHeight: 42,
+      letterSpacing: -1,
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    heartRateStatsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+      gap: 10,
+    },
+    heartRateStat: {
+      flex: 1,
+      borderRadius: 14,
+      backgroundColor: colors.card3,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+    },
+    heartRateStatLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    heartRateStatValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+      marginTop: 4,
+    },
+    heartRateEmpty: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      marginBottom: 8,
+    },
+    heartRateStatusText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 10,
+    },
+    heartRateStatusTextError: {
+      color: colors.danger,
+    },
+    heartRateActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 12,
+    },
+    heartRateActionBtn: {
+      flex: 1,
+      minHeight: 46,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 10,
+    },
+    heartRateActionBtnPrimary: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    heartRateActionBtnText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 16,
+      textAlign: 'center',
+    },
+    heartRateActionBtnPrimaryText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 16,
+      textAlign: 'center',
+    },
+    heartRateActionBtnDisabled: {
+      opacity: 0.65,
+    },
+    emptyCard: {
+      marginBottom: 18,
+      alignItems: 'center',
+      paddingVertical: 24,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    card: {
+      padding: 16,
+      marginBottom: 18,
+    },
+    exerciseHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      marginBottom: 14,
+    },
+    exerciseName: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 24,
+      letterSpacing: -0.4,
+    },
+    exercisePill: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
+    },
+    exercisePillText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    detailsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginBottom: 10,
+    },
+    detailCard: {
+      width: '48%',
+      borderRadius: 14,
+      backgroundColor: colors.card3,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    detailLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    detailValue: {
+      marginTop: 6,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    table: {
+      marginTop: 6,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    tableHeader: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingBottom: 6,
+      marginBottom: 4,
+    },
+    row: {
+      flexDirection: 'row',
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    col: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      textAlign: 'center',
+    },
+    hCol: {
+      fontFamily: fonts.label,
+      color: colors.highlight1,
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    shareCard: {
+      borderRadius: 18,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    shareTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    shareSubtitle: {
+      marginTop: 4,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    deleteBtn: {
+      minHeight: 50,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+    },
+    deleteBtnText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    homeBtn: {
+      marginTop: 12,
+    },
+  });
+}

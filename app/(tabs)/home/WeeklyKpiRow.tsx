@@ -1,16 +1,12 @@
-// components/home/WeeklyKpiRow.tsx
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { GlobalStyles } from '@/constants/GlobalStyles';
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 
-const TEXT_MUTED = Colors.dark.textMuted;
-
 type WeeklySummaryRow = {
-  week_start: string; // YYYY-MM-DD
+  week_start: string;
   workouts_count: number;
   total_hours: number;
   total_kcal_consumed: number;
@@ -30,10 +26,9 @@ function toLocalISODate(d: Date) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-// Monday-start week
 function getWeekStartMondayISO(d: Date) {
-  const day = d.getDay(); // Sun=0..Sat=6
-  const daysSinceMonday = (day + 6) % 7; // Mon=0, Tue=1, ... Sun=6
+  const day = d.getDay();
+  const daysSinceMonday = (day + 6) % 7;
   const monday = new Date(d);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() - daysSinceMonday);
@@ -42,7 +37,6 @@ function getWeekStartMondayISO(d: Date) {
 
 function formatHours(value: number) {
   if (!Number.isFinite(value)) return '0';
-  // show 1 decimal if not whole
   const rounded = Math.round(value * 10) / 10;
   return String(rounded);
 }
@@ -60,6 +54,9 @@ function formatMeters(value: number) {
 }
 
 export default function WeeklyKpiRow() {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<WeeklySummaryRow | null>(null);
 
@@ -79,9 +76,7 @@ export default function WeeklyKpiRow() {
           }
           if (!userData?.user) return;
 
-          // Ensure a row exists for this week, then read it (RPC returns the row)
-          const tz =
-            Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone ?? null;
+          const tz = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone ?? null;
 
           const { error: ensureErr } = await supabase
             .schema('user')
@@ -95,8 +90,6 @@ export default function WeeklyKpiRow() {
             return;
           }
 
-          // Read the canonical weekly row. If newer columns are missing (migration not run yet),
-          // fall back to a legacy-compatible select.
           let data: any = null;
           let error: any = null;
 
@@ -144,34 +137,31 @@ export default function WeeklyKpiRow() {
             return;
           }
 
-          setSummary(
-            data
-              ? {
-                  week_start: data.week_start,
-                  workouts_count: Number(data.workouts_count ?? 0),
-                  total_hours: Number(data.total_hours ?? 0),
-                  total_kcal_consumed: Number(data.total_kcal_consumed ?? 0),
-                  total_distance_ran_m: Number(
-                    data.total_distance_ran_m ??
-                      Number(data.total_miles_ran ?? 0) * M_PER_MI
-                  ),
-                  total_distance_walked_m: Number(
-                    data.total_distance_walked_m ??
-                      Number(data.total_miles_walked ?? 0) * M_PER_MI
-                  ),
-                  total_distance_run_walk_m: Number(
-                    data.total_distance_run_walk_m ??
-                      Number(
-                        data.total_miles_run_walk ??
-                          (Number(data.total_miles_ran ?? 0) +
-                            Number(data.total_miles_walked ?? 0))
-                      ) *
-                        M_PER_MI
-                  ),
-                  total_elev_gain_m: Number(data.total_elev_gain_m ?? 0),
-                }
-              : null
-          );
+          if (!data) {
+            setSummary(null);
+            return;
+          }
+
+          const legacyRunWalkMiles =
+            data.total_miles_run_walk ??
+            (Number(data.total_miles_ran ?? 0) + Number(data.total_miles_walked ?? 0));
+
+          setSummary({
+            week_start: data.week_start,
+            workouts_count: Number(data.workouts_count ?? 0),
+            total_hours: Number(data.total_hours ?? 0),
+            total_kcal_consumed: Number(data.total_kcal_consumed ?? 0),
+            total_distance_ran_m: Number(
+              data.total_distance_ran_m ?? Number(data.total_miles_ran ?? 0) * M_PER_MI
+            ),
+            total_distance_walked_m: Number(
+              data.total_distance_walked_m ?? Number(data.total_miles_walked ?? 0) * M_PER_MI
+            ),
+            total_distance_run_walk_m: Number(
+              data.total_distance_run_walk_m ?? legacyRunWalkMiles * M_PER_MI
+            ),
+            total_elev_gain_m: Number(data.total_elev_gain_m ?? 0),
+          });
         } finally {
           setLoading(false);
         }
@@ -190,62 +180,184 @@ export default function WeeklyKpiRow() {
   const elevGainM = summary?.total_elev_gain_m ?? 0;
 
   return (
-    <View>
+    <View style={[globalStyles.panel, styles.wrapper]}>
       <View style={styles.headerRow}>
-        <Text style={styles.subtitle}>Week of {weekStartISO}</Text>
-        {loading ? <Text style={styles.subtitle}>Updating…</Text> : null}
-      </View>
-
-      <View style={styles.kpiRow}>
-        <View style={GlobalStyles.kpiCard}>
-          <Text style={GlobalStyles.kpiNumber}>{workouts}</Text>
-          <Text style={GlobalStyles.kpiLabel}>Workouts</Text>
+        <View>
+          <Text style={styles.dateLabel}>Week of {weekStartISO}</Text>
+          <Text style={styles.helperText}>
+            Training volume synced from the weekly summary table.
+          </Text>
         </View>
 
-        <View style={GlobalStyles.kpiCard}>
-          <Text style={GlobalStyles.kpiNumber}>{formatHours(hours)}</Text>
-          <Text style={GlobalStyles.kpiLabel}>Hours</Text>
-        </View>
-
-        <View style={GlobalStyles.kpiCard}>
-          <Text style={GlobalStyles.kpiNumber}>{formatCalories(calories)}</Text>
-          <Text style={GlobalStyles.kpiLabel}>Calories</Text>
+        <View style={styles.livePill}>
+          <View style={styles.liveDot} />
+          <Text style={styles.liveText}>{loading ? 'Syncing' : 'Live'}</Text>
         </View>
       </View>
 
-      <View style={styles.extraRow}>
-        <Text style={styles.extraText}>Run + Walk: {formatMeters(runWalkDistanceM)} m</Text>
-        <Text style={styles.extraText}>Elevation: {formatMeters(elevGainM)} m</Text>
+      <View style={styles.metricRow}>
+        <MetricCard
+          globalStyles={globalStyles}
+          styles={styles}
+          label="Workouts"
+          value={String(workouts)}
+        />
+        <MetricCard
+          globalStyles={globalStyles}
+          styles={styles}
+          label="Hours"
+          value={formatHours(hours)}
+        />
+        <MetricCard
+          globalStyles={globalStyles}
+          styles={styles}
+          label="Calories"
+          value={formatCalories(calories)}
+        />
+      </View>
+
+      <View style={styles.footerRow}>
+        <View style={[globalStyles.panelSoft, styles.footerCard]}>
+          <View style={styles.footerLabelRow}>
+            <View
+              style={[styles.footerDot, { backgroundColor: colors.highlight2 }]}
+            />
+            <Text style={styles.footerLabel}>Run + Walk</Text>
+          </View>
+          <Text style={styles.footerValue}>{formatMeters(runWalkDistanceM)} m</Text>
+        </View>
+
+        <View style={[globalStyles.panelSoft, styles.footerCard]}>
+          <View style={styles.footerLabelRow}>
+            <View
+              style={[styles.footerDot, { backgroundColor: colors.highlight3 }]}
+            />
+            <Text style={styles.footerLabel}>Elevation</Text>
+          </View>
+          <Text style={styles.footerValue}>{formatMeters(elevGainM)} m</Text>
+        </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  kpiRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  extraRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  extraText: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-});
+function MetricCard({
+  label,
+  value,
+  globalStyles,
+  styles,
+}: {
+  label: string;
+  value: string;
+  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={[globalStyles.kpiCard, styles.metricCard]}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={globalStyles.kpiNumber}>{value}</Text>
+    </View>
+  );
+}
+
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    wrapper: {
+      gap: 16,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    dateLabel: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    helperText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      marginTop: 6,
+      maxWidth: 220,
+    },
+    livePill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentSecondarySoft,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+    },
+    liveDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.highlight2,
+    },
+    liveText: {
+      color: colors.highlight2,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    metricRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    metricCard: {
+      gap: 12,
+    },
+    metricLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+    },
+    footerRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    footerCard: {
+      flex: 1,
+      padding: 16,
+    },
+    footerLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    footerDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    footerLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    footerValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+      marginTop: 10,
+    },
+  });
+}

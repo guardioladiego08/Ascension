@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 
@@ -47,9 +47,6 @@ type Props = {
   gap?: number;
 };
 
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const LB_PER_KG = 2.20462;
 
 const PAGE_SIZE = 24;
@@ -146,10 +143,12 @@ function FilterPill({
   label,
   active,
   onPress,
+  styles,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <TouchableOpacity
@@ -171,6 +170,8 @@ export default function ActivityGrid({
   gap = 4,
 }: Props) {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { width } = useWindowDimensions();
   const { distanceUnit, weightUnit } = useUnits();
 
@@ -521,11 +522,36 @@ export default function ActivityGrid({
         {header}
 
         <View style={styles.filterRow}>
-          <FilterPill label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
-          <FilterPill label="Strength" active={filter === 'strength'} onPress={() => setFilter('strength')} />
-          <FilterPill label="Run" active={filter === 'run'} onPress={() => setFilter('run')} />
-          <FilterPill label="Walk" active={filter === 'walk'} onPress={() => setFilter('walk')} />
-          <FilterPill label="Bike" active={filter === 'cycle'} onPress={() => setFilter('cycle')} />
+          <FilterPill
+            label="All"
+            active={filter === 'all'}
+            onPress={() => setFilter('all')}
+            styles={styles}
+          />
+          <FilterPill
+            label="Strength"
+            active={filter === 'strength'}
+            onPress={() => setFilter('strength')}
+            styles={styles}
+          />
+          <FilterPill
+            label="Run"
+            active={filter === 'run'}
+            onPress={() => setFilter('run')}
+            styles={styles}
+          />
+          <FilterPill
+            label="Walk"
+            active={filter === 'walk'}
+            onPress={() => setFilter('walk')}
+            styles={styles}
+          />
+          <FilterPill
+            label="Bike"
+            active={filter === 'cycle'}
+            onPress={() => setFilter('cycle')}
+            styles={styles}
+          />
         </View>
       </View>
     );
@@ -567,7 +593,7 @@ export default function ActivityGrid({
         ]}
       >
         <View style={styles.badge}>
-          <Ionicons name={iconFor(item.kind)} size={12} color={TEXT} />
+          <Ionicons name={iconFor(item.kind)} size={12} color={colors.text} />
         </View>
 
         <View style={styles.overlay}>
@@ -579,7 +605,7 @@ export default function ActivityGrid({
             <View style={styles.volumeRow}>
               <Text style={styles.overlayText}>{formatVolume(item.totalVolume, weightUnit)}</Text>
               <View style={styles.unitChip}>
-                <Ionicons name="barbell-outline" size={9} color={TEXT} />
+                <Ionicons name="barbell-outline" size={9} color={colors.text} />
                 <Text style={styles.unitChipText}>{weightUnit}</Text>
               </View>
             </View>
@@ -602,7 +628,7 @@ export default function ActivityGrid({
     if (loadingInitial) {
       return (
         <View style={styles.emptyWrap}>
-          <ActivityIndicator />
+          <ActivityIndicator color={colors.highlight1} />
           <Text style={styles.emptyText}>Loading activity…</Text>
         </View>
       );
@@ -651,109 +677,123 @@ export default function ActivityGrid({
       onEndReachedThreshold={0.6}
       ListFooterComponent={
         loadingMore ? (
-          <ActivityIndicator style={{ margin: 16 }} />
+          <ActivityIndicator style={{ margin: 16 }} color={colors.highlight1} />
         ) : null
       }
     />
   );
 }
 
-const styles = StyleSheet.create({
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  pillActive: {
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  pillText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  pillTextActive: {
-    color: TEXT,
-  },
-
-  emptyWrap: {
-    paddingVertical: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  emptyText: {
-    color: MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 6,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  badge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-  },
-  overlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  dateText: {
-    color: MUTED,
-    fontSize: 10,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  overlayText: {
-    color: TEXT,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  volumeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  unitChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  unitChipText: {
-    color: TEXT,
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    filterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      paddingHorizontal: 16,
+      paddingTop: 10,
+      paddingBottom: 4,
+    },
+    pill: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      marginRight: 8,
+      marginBottom: 8,
+    },
+    pillActive: {
+      borderColor: colors.glowPrimary,
+      backgroundColor: colors.accentSoft,
+    },
+    pillText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    pillTextActive: {
+      color: colors.highlight1,
+    },
+    emptyWrap: {
+      paddingVertical: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+    },
+    emptyText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      textAlign: 'center',
+      paddingHorizontal: 16,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    badge: {
+      position: 'absolute',
+      top: 8,
+      left: 8,
+      width: 24,
+      height: 24,
+      borderRadius: 999,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    overlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 8,
+      backgroundColor: colors.popUpCard,
+    },
+    dateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 13,
+      marginBottom: 2,
+    },
+    overlayText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 10,
+      lineHeight: 13,
+    },
+    volumeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    unitChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+    },
+    unitChipText: {
+      color: colors.text,
+      fontFamily: fonts.label,
+      fontSize: 9,
+      lineHeight: 12,
+      textTransform: 'uppercase',
+    },
+  });
+}

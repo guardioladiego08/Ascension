@@ -1,25 +1,16 @@
-// app/(tabs)/add/Strength/components/SetRow.tsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Modal,
-  TouchableWithoutFeedback,
 } from 'react-native';
+
 import type { SetDraft } from '@/lib/strength/types';
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
-
-// --- helpers -------------------------------------------------
-
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark.border;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { useAppTheme } from '@/providers/AppThemeProvider';
+import AppPopup from '@/components/ui/AppPopup';
 
 const LB_PER_KG = 2.20462;
 
@@ -37,11 +28,10 @@ const convertBetweenUnits = (
 const toKg = (weight: number, unit: 'kg' | 'lb') =>
   unit === 'kg' ? weight : weight / LB_PER_KG;
 
-// Epley: 1RM_kg = weight_kg * (1 + reps/30)
 const computeEst1RM = (
   storedWeight: number | undefined,
   reps: number | undefined,
-  storedUnit: 'kg' | 'lb',
+  storedUnit: 'kg' | 'lb'
 ): number | null => {
   if (!storedWeight || !reps || reps <= 0) return null;
   const wKg = toKg(storedWeight, storedUnit);
@@ -63,17 +53,17 @@ const modeLetter: Record<SetDraft['set_type'], string> = {
   failure: 'F',
 };
 
-// --- component -----------------------------------------------
-
 type Props = {
   setDraft: SetDraft;
-  displayIndex: number | null; // UI-only index for normal sets
+  displayIndex: number | null;
   onChange: (s: SetDraft) => void;
 };
 
 const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [modeVisible, setModeVisible] = useState(false);
-  const { weightUnit: viewerUnit } = useUnits(); // user preference
+  const { weightUnit: viewerUnit } = useUnits();
 
   const handleSelectMode = (mode: SetDraft['set_type']) => {
     onChange({ ...setDraft, set_type: mode });
@@ -83,15 +73,12 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
   const letter = modeLetter[setDraft.set_type];
   const showNumber = setDraft.set_type === 'normal' && displayIndex != null;
 
-  // true storage unit for this set
   const storedUnit: 'kg' | 'lb' =
     setDraft.weight_unit_csv === 'kg' || setDraft.weight_unit_csv === 'lb'
       ? setDraft.weight_unit_csv
-      : viewerUnit; // fallback for legacy/new sets
+      : viewerUnit;
 
   const storedWeight = setDraft.weight ?? undefined;
-
-  // what to show in the input (convert from stored unit to viewer's preferred unit)
   const displayWeight =
     storedWeight != null
       ? convertBetweenUnits(storedWeight, storedUnit, viewerUnit)
@@ -99,15 +86,14 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
 
   const handleWeightChange = (text: string) => {
     const wDisplay = text ? Number(text) : undefined;
-    let newStoredWeight: number | undefined = undefined;
+    let newStoredWeight: number | undefined;
 
     if (wDisplay != null && !Number.isNaN(wDisplay)) {
-      // user types in viewerUnit, convert back to stored unit
       newStoredWeight = convertBetweenUnits(wDisplay, viewerUnit, storedUnit);
     }
 
     const reps = setDraft.reps ?? undefined;
-    const est_1rm =
+    const est1rm =
       newStoredWeight && reps
         ? computeEst1RM(newStoredWeight, reps, storedUnit)
         : null;
@@ -116,212 +102,250 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
       ...setDraft,
       weight: newStoredWeight,
       weight_unit_csv: storedUnit,
-      est_1rm: est_1rm ?? undefined,
+      est_1rm: est1rm ?? undefined,
     });
   };
 
   const handleRepsChange = (text: string) => {
     const reps = text ? Number(text) : undefined;
-    const newStoredWeight = storedWeight;
-    const est_1rm =
-      newStoredWeight && reps
-        ? computeEst1RM(newStoredWeight, reps, storedUnit)
+    const est1rm =
+      storedWeight && reps
+        ? computeEst1RM(storedWeight, reps, storedUnit)
         : null;
 
     onChange({
       ...setDraft,
       reps,
       weight_unit_csv: storedUnit,
-      est_1rm: est_1rm ?? undefined,
+      est_1rm: est1rm ?? undefined,
     });
   };
 
+  const typeToneStyle =
+    setDraft.set_type === 'warmup'
+      ? styles.typeToneWarmup
+      : setDraft.set_type === 'dropset'
+        ? styles.typeToneDropset
+          : setDraft.set_type === 'failure'
+            ? styles.typeToneFailure
+            : null;
+  const typeBadgeStyle =
+    setDraft.set_type === 'warmup'
+      ? styles.idxBtnWarmup
+      : setDraft.set_type === 'dropset'
+        ? styles.idxBtnDropset
+        : setDraft.set_type === 'failure'
+          ? styles.idxBtnFailure
+          : null;
+
   return (
     <View style={styles.row}>
-      {/* Set chip */}
       <TouchableOpacity
+        activeOpacity={0.92}
         style={[
           styles.idxBtn,
           setDraft.set_type !== 'normal' && styles.idxBtnActive,
+          typeBadgeStyle,
         ]}
         onPress={() => setModeVisible(true)}
       >
         {showNumber ? (
           <Text style={styles.idxText}>{displayIndex}</Text>
         ) : (
-          <Text style={styles.typeLetter}>{letter}</Text>
+          <Text style={[styles.typeLetter, typeToneStyle]}>{letter}</Text>
         )}
       </TouchableOpacity>
 
-      {/* Weight */}
       <View style={styles.weightWrap}>
         <TextInput
           style={styles.weightInput}
           inputMode="decimal"
           placeholder="0"
-          placeholderTextColor={TEXT_MUTED}
-          value={displayWeight != null && !Number.isNaN(displayWeight)
-            ? String(displayWeight)
-            : ''}
+          placeholderTextColor={colors.textOffSt}
+          value={
+            displayWeight != null && !Number.isNaN(displayWeight)
+              ? String(displayWeight)
+              : ''
+          }
           onChangeText={handleWeightChange}
         />
-        {/* read-only unit badge showing viewer unit */}
         <View style={styles.unitBadge}>
           <Text style={styles.unitText}>{viewerUnit}</Text>
         </View>
       </View>
 
-      {/* Reps */}
       <TextInput
         style={styles.reps}
         inputMode="numeric"
         placeholder="reps"
-        placeholderTextColor={TEXT_MUTED}
+        placeholderTextColor={colors.textOffSt}
         value={setDraft.reps?.toString() ?? ''}
         onChangeText={handleRepsChange}
       />
 
-      {/* Mode picker modal */}
-      <Modal
+      <AppPopup
         visible={modeVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModeVisible(false)}
+        onClose={() => setModeVisible(false)}
+        eyebrow="Set mode"
+        title="Choose a set type"
       >
-        <TouchableWithoutFeedback onPress={() => setModeVisible(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Set Type</Text>
-
-                {(
-                  ['normal', 'warmup', 'dropset', 'failure'] as SetDraft['set_type'][]
-                ).map(m => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[
-                      styles.modeRow,
-                      m === setDraft.set_type && styles.modeRowActive,
-                    ]}
-                    onPress={() => handleSelectMode(m)}
-                  >
-                    <Text style={styles.modeText}>{modeLabel[m]}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        {(
+          ['normal', 'warmup', 'dropset', 'failure'] as SetDraft['set_type'][]
+        ).map((mode) => {
+          const active = mode === setDraft.set_type;
+          return (
+            <TouchableOpacity
+              key={mode}
+              activeOpacity={0.92}
+              style={[styles.modeRow, active ? styles.modeRowActive : null]}
+              onPress={() => handleSelectMode(mode)}
+            >
+              <Text style={[styles.modeText, active ? styles.modeTextActive : null]}>
+                {modeLabel[mode]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </AppPopup>
     </View>
   );
 };
 
 export default SetRow;
 
-// --- styles --------------------------------------------------
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 40,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-  },
-  idxBtn: {
-    width: 32,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  idxBtnActive: {
-    borderColor: '#f9b24e',
-  },
-  idxText: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  typeLetter: {
-    color: '#f9b24e',
-    fontSize: 14,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-
-  weightWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 0.2,
-    backgroundColor: Colors.dark.textInput,
-    borderRadius: 10,
-    overflow: 'hidden',
-    width: 1,
-  },
-  weightInput: {
-    flex: 1,
-    color: TEXT_PRIMARY,
-    paddingHorizontal: 10,
-    height: 40,
-    width: 100,
-  },
-
-  unitBadge: {
-    width: 54,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.dark.card2,
-  },
-  unitText: {
-    color: Colors.dark.text,
-    fontWeight: '700',
-  },
-
-  reps: {
-    width: 70,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: Colors.dark.textInput,
-    color: TEXT_PRIMARY,
-    textAlign: 'center',
-    paddingRight: 10,
-  },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.58)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCard: {
-    width: '70%',
-    backgroundColor: Colors.dark.popUpCard,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: .5,
-    borderColor: '#fff'
-  },
-  modalTitle: {
-    color: Colors.dark.text,
-    fontWeight: '700',
-    fontSize: 15,
-    marginBottom: 8,
-  },
-  modeRow: {
-    paddingVertical: 8,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    marginTop: 4,
-  },
-  modeRowActive: {
-    backgroundColor: '#161617ff',
-  },
-  modeText: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 6,
+    },
+    idxBtn: {
+      width: 38,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    idxBtnActive: {
+      backgroundColor: colors.card3,
+      borderColor: colors.borderStrong,
+    },
+    idxBtnWarmup: {
+      backgroundColor: colors.accentTertiarySoft,
+      borderColor: colors.glowTertiary,
+    },
+    idxBtnDropset: {
+      backgroundColor: colors.accentSecondarySoft,
+      borderColor: colors.glowSecondary,
+    },
+    idxBtnFailure: {
+      backgroundColor: colors.accentSecondarySoft,
+      borderColor: colors.danger,
+    },
+    idxText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    typeLetter: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    typeToneWarmup: {
+      color: colors.highlight3,
+    },
+    typeToneDropset: {
+      color: colors.highlight2,
+    },
+    typeToneFailure: {
+      color: colors.danger,
+    },
+    weightWrap: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 42,
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.textInput,
+      width: 1,
+    },
+    weightInput: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 20,
+      paddingHorizontal: 12,
+      height: 42,
+    },
+    unitBadge: {
+      width: 54,
+      height: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card2,
+      borderLeftWidth: 1,
+      borderLeftColor: colors.border,
+    },
+    unitText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+      textTransform: 'uppercase',
+    },
+    reps: {
+      width: 76,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: colors.textInput,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+      textAlign: 'center',
+      paddingHorizontal: 12,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    modeRow: {
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 14,
+      marginTop: 8,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modeRowActive: {
+      backgroundColor: colors.accentSoft,
+      borderColor: colors.glowPrimary,
+    },
+    modeText: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    modeTextActive: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+    },
+  });
+}

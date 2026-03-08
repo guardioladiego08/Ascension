@@ -1,11 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
-import { Colors } from '@/constants/Colors';
 
-const CARD = Colors.dark.card;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   totalKcal: number;
@@ -14,9 +11,7 @@ type Props = {
   totalFat: number;
 };
 
-const PROTEIN_COLOR = Colors.dark.macroProtein;
-const CARB_COLOR = Colors.dark.macroCarbs;
-const FAT_COLOR = Colors.dark.macroFats;
+const CHART_SIZE = 132;
 
 const MealSummaryCard: React.FC<Props> = ({
   totalKcal,
@@ -24,21 +19,32 @@ const MealSummaryCard: React.FC<Props> = ({
   totalCarbs,
   totalFat,
 }) => {
-  const macroSum = totalProtein + totalCarbs + totalFat;
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
+  const macroSum = totalProtein + totalCarbs + totalFat;
   const hasData = macroSum > 0;
 
   const data = hasData
     ? [
-        { value: totalProtein, color: PROTEIN_COLOR },
-        { value: totalCarbs, color: CARB_COLOR },
-        { value: totalFat, color: FAT_COLOR },
+        { value: totalProtein, color: colors.macroProtein },
+        { value: totalCarbs, color: colors.macroCarbs },
+        { value: totalFat, color: colors.macroFats },
       ]
     : [];
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.sectionLabel}>MEAL SUMMARY</Text>
+    <View style={[globalStyles.panel, styles.card]}>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={globalStyles.eyebrow}>Nutrition Summary</Text>
+          <Text style={styles.title}>Recipe breakdown</Text>
+        </View>
+        <View style={styles.totalPill}>
+          <Text style={styles.totalPillLabel}>Total</Text>
+          <Text style={styles.totalPillValue}>{Math.round(totalKcal)} kcal</Text>
+        </View>
+      </View>
 
       <View style={styles.row}>
         <View style={styles.chartWrap}>
@@ -46,14 +52,12 @@ const MealSummaryCard: React.FC<Props> = ({
             <PieChart
               data={data}
               donut
-              showText
-              textColor={TEXT_PRIMARY}
-              textSize={12}
-              innerCircleColor={Colors.dark.popUpCard}
-              innerRadius={40}
-              radius={60}
+              showText={false}
+              innerCircleColor={colors.cardDark}
+              innerRadius={42}
+              radius={64}
               centerLabelComponent={() => (
-                <View style={{ alignItems: 'center' }}>
+                <View style={styles.centerLabelWrap}>
                   <Text style={styles.centerLabel}>{Math.round(totalKcal)}</Text>
                   <Text style={styles.centerSubLabel}>kcal</Text>
                 </View>
@@ -61,129 +65,197 @@ const MealSummaryCard: React.FC<Props> = ({
             />
           ) : (
             <View style={styles.emptyChart}>
-              <Text style={styles.emptyChartText}>Add ingredients{'\n'}to see macros</Text>
+              <Text style={styles.emptyTitle}>No ingredients yet</Text>
+              <Text style={styles.emptyText}>Add foods to preview calories and macros.</Text>
             </View>
           )}
         </View>
 
-        <View style={styles.macroStats}>
-          <View style={styles.macroRow}>
-            <View style={[styles.macroDot, { backgroundColor: PROTEIN_COLOR }]} />
-            <View>
-              <Text style={styles.macroLabel}>Protein</Text>
-              <Text style={styles.macroValue}>
-                {totalProtein.toFixed(1)} g
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.macroRow}>
-            <View style={[styles.macroDot, { backgroundColor: CARB_COLOR }]} />
-            <View>
-              <Text style={styles.macroLabel}>Carbs</Text>
-              <Text style={styles.macroValue}>{totalCarbs.toFixed(1)} g</Text>
-            </View>
-          </View>
-
-          <View style={styles.macroRow}>
-            <View style={[styles.macroDot, { backgroundColor: FAT_COLOR }]} />
-            <View>
-              <Text style={styles.macroLabel}>Fat</Text>
-              <Text style={styles.macroValue}>{totalFat.toFixed(1)} g</Text>
-            </View>
-          </View>
-
-          <View style={styles.kcalRow}>
-            <Text style={styles.kcalLabel}>Total</Text>
-            <Text style={styles.kcalValue}>{Math.round(totalKcal)} kcal</Text>
-          </View>
+        <View style={styles.metricCol}>
+          <MacroRow
+            label="Protein"
+            value={`${totalProtein.toFixed(1)} g`}
+            color={colors.macroProtein}
+            styles={styles}
+          />
+          <MacroRow
+            label="Carbs"
+            value={`${totalCarbs.toFixed(1)} g`}
+            color={colors.macroCarbs}
+            styles={styles}
+          />
+          <MacroRow
+            label="Fat"
+            value={`${totalFat.toFixed(1)} g`}
+            color={colors.macroFats}
+            styles={styles}
+          />
         </View>
       </View>
     </View>
   );
 };
 
-export default MealSummaryCard;
+function MacroRow({
+  label,
+  value,
+  color,
+  styles,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={styles.metricRow}>
+      <View style={[styles.metricDot, { backgroundColor: color }]} />
+      <View style={styles.metricCopy}>
+        <Text style={styles.metricLabel}>{label}</Text>
+        <Text style={styles.metricValue}>{value}</Text>
+      </View>
+    </View>
+  );
+}
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 16,
-  },
-  sectionLabel: {
-    color: TEXT_PRIMARY,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    marginBottom: 10,
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  chartWrap: {
-    width: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyChart: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 1,
-    borderColor: '#3A4763',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  emptyChartText: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    textAlign: 'center',
-  },
-  centerLabel: {
-    color: TEXT_PRIMARY,
-    fontWeight: '800',
-    fontSize: 18,
-  },
-  centerSubLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-  },
-  macroStats: {
-    flex: 1,
-    paddingLeft: 12,
-    justifyContent: 'space-between',
-  },
-  macroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  macroDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  macroLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-  },
-  macroValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  kcalRow: {
-    marginTop: 8,
-  },
-  kcalLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-  },
-  kcalValue: {
-    color: TEXT_PRIMARY,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      gap: 18,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    title: {
+      marginTop: 8,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 22,
+      lineHeight: 26,
+      letterSpacing: -0.5,
+    },
+    totalPill: {
+      minWidth: 88,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.accentSoft,
+      alignItems: 'flex-end',
+    },
+    totalPillLabel: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    totalPillValue: {
+      marginTop: 4,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 18,
+      alignItems: 'center',
+    },
+    chartWrap: {
+      width: CHART_SIZE,
+      minHeight: CHART_SIZE,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    centerLabelWrap: {
+      alignItems: 'center',
+    },
+    centerLabel: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 22,
+      lineHeight: 24,
+      letterSpacing: -0.7,
+    },
+    centerSubLabel: {
+      marginTop: 2,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    emptyChart: {
+      width: CHART_SIZE,
+      minHeight: CHART_SIZE,
+      borderRadius: CHART_SIZE / 2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+    emptyText: {
+      marginTop: 6,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      textAlign: 'center',
+    },
+    metricCol: {
+      flex: 1,
+      gap: 10,
+    },
+    metricRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+    },
+    metricDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      marginRight: 10,
+    },
+    metricCopy: {
+      flex: 1,
+    },
+    metricLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    metricValue: {
+      marginTop: 4,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+  });
+}
+
+export default MealSummaryCard;

@@ -11,9 +11,9 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
@@ -43,10 +43,7 @@ import {
   type AppleHeartRateSample,
 } from '@/lib/health/appleHealthKit';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
@@ -106,6 +103,8 @@ type HeartRateSyncState =
 
 export default function IndoorSessionSummary() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
   const params = useLocalSearchParams<{ draftId?: string }>();
   const draftId = params.draftId;
@@ -222,13 +221,16 @@ export default function IndoorSessionSummary() {
       }
 
       try {
+        if (!isAppleHealthKitAvailable()) {
+          setHeartRateLoaded(true);
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(getAppleHealthUnavailableMessage());
+          return;
+        }
+
         setHeartRateSyncing(true);
         setHeartRateSyncState('syncing');
         setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
-
-        if (!isAppleHealthKitAvailable()) {
-          throw new Error(getAppleHealthUnavailableMessage());
-        }
 
         const samples = await getAppleHeartRateSamplesForRange({
           startDate: workoutStartISO,
@@ -253,10 +255,21 @@ export default function IndoorSessionSummary() {
           );
         }
       } catch (error: any) {
-        console.warn('[IndoorSessionSummary] Apple Health load failed', error);
+        const message = formatAppleHealthError(error);
         setHeartRateLoaded(true);
+        if (
+          message.toLowerCase().includes('not available') ||
+          message.toLowerCase().includes('nitro') ||
+          message.toLowerCase().includes('turbo') ||
+          message.toLowerCase().includes('build')
+        ) {
+          setHeartRateSyncState('skipped');
+          setHeartRateSyncMessage(message);
+          return;
+        }
+        console.warn('[IndoorSessionSummary] Apple Health load failed', message);
         setHeartRateSyncState('failed');
-        setHeartRateSyncMessage(formatAppleHealthError(error));
+        setHeartRateSyncMessage(message);
       } finally {
         setHeartRateSyncing(false);
       }
@@ -574,17 +587,31 @@ export default function IndoorSessionSummary() {
 
   if (loading) {
     return (
-      <View style={[styles.safe, styles.centered]}>
-        <ActivityIndicator />
-      </View>
+      <LinearGradient
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={globalStyles.page}
+      >
+        <View style={[styles.safe, styles.centered]}>
+          <ActivityIndicator size="small" color={colors.highlight1} />
+        </View>
+      </LinearGradient>
     );
   }
 
   if (!draft) {
     return (
-      <View style={[styles.safe, styles.centered]}>
-        <Text style={{ color: TEXT }}>Draft not found.</Text>
-      </View>
+      <LinearGradient
+        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={globalStyles.page}
+      >
+        <View style={[styles.safe, styles.centered]}>
+          <Text style={styles.emptyStateText}>Draft not found.</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
@@ -597,292 +624,334 @@ export default function IndoorSessionSummary() {
       : draft.total_elevation_m;
 
   return (
-    <View style={styles.safe}>
-      <View style={styles.logoWrap}>
+    <LinearGradient
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={globalStyles.page}
+    >
+      <View style={[globalStyles.container, styles.safe]}>
         <LogoHeader />
-      </View>
 
-      <View style={styles.headerRow}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color={TEXT} />
-        </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={[globalStyles.panel, styles.heroCard]}>
+            <View style={styles.headerRow}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+                <Ionicons name="chevron-back" size={18} color={colors.text} />
+              </TouchableOpacity>
 
-        <View style={styles.headerCenter}>
-          <Text style={styles.currentLabel}>SUMMARY</Text>
-          <Text style={styles.title}>{title}</Text>
-        </View>
-
-        <View style={styles.iconBtnSpacer} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.card}>
-          <Row label="Total Time" value={formatClock(draft.total_time_s)} />
-          <Row label="Total Distance" value={`${displayDistance.toFixed(2)} ${distLabelUnit}`} />
-          <Row
-            label="Elevation Gain"
-            value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
-          />
-          <Row label="Avg Pace" value={avgPaceText} />
-        </View>
-
-        <View style={styles.heartRateCard}>
-          <View style={styles.heartRateHeaderRow}>
-            <Text style={styles.heartRateTitle}>Heart Rate</Text>
-            {heartRateSyncing ? (
-              <ActivityIndicator size="small" color={Colors.dark.highlight1} />
-            ) : null}
-          </View>
-
-          {heartRateSummary ? (
-            <>
-              <Text style={styles.heartRateAvgLabel}>Avg. Heart Rate</Text>
-              <Text style={styles.heartRateAvgValue}>{heartRateSummary.avgBpm} BPM</Text>
-
-              <View style={styles.heartRateStatsRow}>
-                <View style={styles.heartRateStat}>
-                  <Text style={styles.heartRateStatLabel}>Min</Text>
-                  <Text style={styles.heartRateStatValue}>{heartRateSummary.minBpm}</Text>
-                </View>
-                <View style={styles.heartRateStat}>
-                  <Text style={styles.heartRateStatLabel}>Max</Text>
-                  <Text style={styles.heartRateStatValue}>{heartRateSummary.maxBpm}</Text>
-                </View>
-                <View style={styles.heartRateStat}>
-                  <Text style={styles.heartRateStatLabel}>Samples</Text>
-                  <Text style={styles.heartRateStatValue}>{heartRateSummary.sampleCount}</Text>
-                </View>
+              <View style={styles.headerCenter}>
+                <Text style={globalStyles.eyebrow}>Session summary</Text>
+                <Text style={styles.title}>{title}</Text>
+                <Text style={styles.heroSubtitle}>
+                  Review distance, pace, elevation, and saved cardio effort before you move on.
+                </Text>
               </View>
 
-              <MetricChart
-                title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
-                color="#FF4D4F"
-                points={heartRatePoints}
-                cardBg="rgba(5, 8, 22, 0.45)"
-                textColor={TEXT}
-                valueFormatter={(v) => `${Math.round(v)}`}
-                xLabelFormatter={elapsedLabel}
-                yClampMin={40}
-                yClampMax={220}
-                yAxisSuffix=" bpm"
-                unitSuffix="bpm"
-                showGrid
-                showYAxisIndices={false}
-                showXAxisIndices={false}
-                hideDataPoints
-              />
-            </>
-          ) : (
-            <Text style={styles.heartRateEmpty}>
-              No Apple Health heart-rate samples found yet for this session window.
-            </Text>
-          )}
+              <View style={styles.iconBtnSpacer} />
+            </View>
 
-          {heartRateSyncMessage ? (
-            <Text
-              style={[
-                styles.heartRateStatusText,
-                heartRateSyncState === 'failed' ? styles.heartRateStatusTextError : null,
-              ]}
-            >
-              {heartRateSyncMessage}
-            </Text>
+            <View style={styles.heroStatsRow}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{formatClock(draft.total_time_s)}</Text>
+                <Text style={styles.heroStatLabel}>time</Text>
+              </View>
+              <View style={[styles.heroStat, styles.heroStatAccent]}>
+                <Text style={styles.heroStatValue}>{`${displayDistance.toFixed(2)} ${distLabelUnit}`}</Text>
+                <Text style={styles.heroStatLabel}>distance</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatValue}>{avgPaceText}</Text>
+                <Text style={styles.heroStatLabel}>avg pace</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={[globalStyles.panelSoft, styles.card]}>
+            <Row label="Total Time" value={formatClock(draft.total_time_s)} styles={styles} />
+            <Row
+              label="Total Distance"
+              value={`${displayDistance.toFixed(2)} ${distLabelUnit}`}
+              styles={styles}
+            />
+            <Row
+              label="Elevation Gain"
+              value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
+              styles={styles}
+            />
+            <Row label="Avg Pace" value={avgPaceText} styles={styles} />
+          </View>
+
+          <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
+            <View style={styles.heartRateHeaderRow}>
+              <View>
+                <Text style={globalStyles.eyebrow}>Recovery signal</Text>
+                <Text style={styles.heartRateTitle}>Heart Rate</Text>
+              </View>
+              {heartRateSyncing ? (
+                <ActivityIndicator size="small" color={colors.highlight1} />
+              ) : null}
+            </View>
+
+            {heartRateSummary ? (
+              <>
+                <Text style={styles.heartRateAvgLabel}>Avg. Heart Rate</Text>
+                <Text style={styles.heartRateAvgValue}>{heartRateSummary.avgBpm} BPM</Text>
+
+                <View style={styles.heartRateStatsRow}>
+                  <View style={styles.heartRateStat}>
+                    <Text style={styles.heartRateStatLabel}>Min</Text>
+                    <Text style={styles.heartRateStatValue}>{heartRateSummary.minBpm}</Text>
+                  </View>
+                  <View style={styles.heartRateStat}>
+                    <Text style={styles.heartRateStatLabel}>Max</Text>
+                    <Text style={styles.heartRateStatValue}>{heartRateSummary.maxBpm}</Text>
+                  </View>
+                  <View style={styles.heartRateStat}>
+                    <Text style={styles.heartRateStatLabel}>Samples</Text>
+                    <Text style={styles.heartRateStatValue}>{heartRateSummary.sampleCount}</Text>
+                  </View>
+                </View>
+
+                <MetricChart
+                  title={`Session Timeline${heartRateSourceLabel ? ` · ${heartRateSourceLabel}` : ''}`}
+                  color={colors.danger}
+                  points={heartRatePoints}
+                  cardBg={colors.cardDark}
+                  textColor={colors.text}
+                  valueFormatter={(v) => `${Math.round(v)}`}
+                  xLabelFormatter={elapsedLabel}
+                  yClampMin={40}
+                  yClampMax={220}
+                  yAxisSuffix=" bpm"
+                  unitSuffix="bpm"
+                  showGrid
+                  showYAxisIndices={false}
+                  showXAxisIndices={false}
+                  hideDataPoints
+                />
+              </>
+            ) : (
+              <Text style={styles.heartRateEmpty}>
+                No Apple Health heart-rate samples found yet for this session window.
+              </Text>
+            )}
+
+            {heartRateSyncMessage ? (
+              <Text
+                style={[
+                  styles.heartRateStatusText,
+                  heartRateSyncState === 'failed' ? styles.heartRateStatusTextError : null,
+                ]}
+              >
+                {heartRateSyncMessage}
+              </Text>
+            ) : null}
+
+            <View style={styles.heartRateActionsRow}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[
+                  styles.heartRateActionBtn,
+                  styles.heartRateActionBtnPrimary,
+                  heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+                ]}
+                disabled={heartRateSyncing}
+                onPress={() =>
+                  runHeartRateSync({ delayMs: HEART_RATE_MANUAL_DELAY_MS, reason: 'manual' })
+                }
+              >
+                <Text style={styles.heartRateActionBtnPrimaryText}>
+                  {heartRateSyncing
+                    ? 'Syncing…'
+                    : `Retry (${Math.round(HEART_RATE_MANUAL_DELAY_MS / 1000)}s delay)`}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[
+                  styles.heartRateActionBtn,
+                  heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
+                ]}
+                disabled={heartRateSyncing}
+                onPress={() => runHeartRateSync({ reason: 'manual' })}
+              >
+                <Text style={styles.heartRateActionBtnText}>Sync now</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {savedSessionId && saveStatusText ? (
+            <View style={styles.noticeCard}>
+              <Text style={styles.noticeText}>{saveStatusText}</Text>
+            </View>
           ) : null}
 
-          <View style={styles.heartRateActionsRow}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[
-                styles.heartRateActionBtn,
-                styles.heartRateActionBtnPrimary,
-                heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
-              ]}
-              disabled={heartRateSyncing}
-              onPress={() =>
-                runHeartRateSync({ delayMs: HEART_RATE_MANUAL_DELAY_MS, reason: 'manual' })
-              }
-            >
-              <Text style={styles.heartRateActionBtnPrimaryText}>
-                {heartRateSyncing
-                  ? 'Syncing…'
-                  : `Retry (${Math.round(HEART_RATE_MANUAL_DELAY_MS / 1000)}s delay)`}
-              </Text>
-            </TouchableOpacity>
+          {savedSessionId && goalResult && isGoalCategoryClosed(goalResult, 'cardio') ? (
+            <View style={styles.goalCardWrap}>
+              <GoalAchievementCard
+                title="Cardio goal complete"
+                description="This session completed your cardio goal for today."
+              />
+            </View>
+          ) : null}
 
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[
-                styles.heartRateActionBtn,
-                heartRateSyncing ? styles.heartRateActionBtnDisabled : null,
-              ]}
-              disabled={heartRateSyncing}
-              onPress={() => runHeartRateSync({ reason: 'manual' })}
-            >
-              <Text style={styles.heartRateActionBtnText}>Sync now</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          <View style={styles.chartsWrap}>
+            <MetricChart
+              title={`Pace Over Time (${paceSuffix})`}
+              color={colors.highlight1}
+              points={pacePoints}
+              cardBg={colors.card}
+              textColor={colors.text}
+              valueFormatter={paceFormatter}
+              xLabelFormatter={elapsedLabel}
+              yClampMin={1}
+              noOfSections={5}
+              showGrid={false}
+              showYAxisIndices={false}
+              showXAxisIndices={false}
+              hideDataPoints
+            />
 
-        {savedSessionId && saveStatusText ? (
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeText}>{saveStatusText}</Text>
-          </View>
-        ) : null}
+            <MetricChart
+              title={`Speed Over Time (${speedUnitSuffix})`}
+              color={colors.highlight3}
+              points={speedPoints}
+              cardBg={colors.card}
+              textColor={colors.text}
+              valueFormatter={speedFormatter}
+              xLabelFormatter={elapsedLabel}
+              unitSuffix={speedUnitSuffix}
+              yClampMin={0}
+              noOfSections={4}
+              showGrid={false}
+              showYAxisIndices={false}
+              showXAxisIndices={false}
+              hideDataPoints
+            />
 
-        {savedSessionId && goalResult && isGoalCategoryClosed(goalResult, 'cardio') ? (
-          <View style={styles.goalCardWrap}>
-            <GoalAchievementCard
-              title="Cardio goal complete"
-              description="This session completed your cardio goal for today."
+            <MetricChart
+              title={`Elevation Over Time (${elevationUnitSuffix})`}
+              color={colors.highlight2}
+              points={elevationPoints}
+              cardBg={colors.card}
+              textColor={colors.text}
+              valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
+              xLabelFormatter={elapsedLabel}
+              unitSuffix={elevationUnitSuffix}
+              noOfSections={4}
+              showGrid={false}
+              showYAxisIndices={false}
+              showXAxisIndices={false}
+              hideDataPoints
+            />
+
+            <MetricChart
+              title="Incline Over Time (deg)"
+              color={colors.highlight3}
+              points={inclinePoints}
+              cardBg={colors.card}
+              textColor={colors.text}
+              valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
+              xLabelFormatter={elapsedLabel}
+              noOfSections={4}
+              showGrid={false}
+              showYAxisIndices={false}
+              showXAxisIndices={false}
+              hideDataPoints
             />
           </View>
-        ) : null}
 
-        <View style={styles.chartsWrap}>
-          <MetricChart
-            title={`Pace Over Time (${paceSuffix})`}
-            color={Colors.dark.highlight1}
-            points={pacePoints}
-            cardBg={CARD}
-            textColor={TEXT}
-            valueFormatter={paceFormatter}
-            xLabelFormatter={elapsedLabel}
-            yClampMin={1}
-            noOfSections={5}
-            showGrid={false}
-            showYAxisIndices={false}
-            showXAxisIndices={false}
-            hideDataPoints
-          />
-
-          <MetricChart
-            title={`Speed Over Time (${speedUnitSuffix})`}
-            color={Colors.dark.highlight4 ?? Colors.dark.highlight1}
-            points={speedPoints}
-            cardBg={CARD}
-            textColor={TEXT}
-            valueFormatter={speedFormatter}
-            xLabelFormatter={elapsedLabel}
-            unitSuffix={speedUnitSuffix}
-            yClampMin={0}
-            noOfSections={4}
-            showGrid={false}
-            showYAxisIndices={false}
-            showXAxisIndices={false}
-            hideDataPoints
-          />
-
-          <MetricChart
-            title={`Elevation Over Time (${elevationUnitSuffix})`}
-            color={Colors.dark.highlight2 ?? Colors.dark.highlight1}
-            points={elevationPoints}
-            cardBg={CARD}
-            textColor={TEXT}
-            valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
-            xLabelFormatter={elapsedLabel}
-            unitSuffix={elevationUnitSuffix}
-            noOfSections={4}
-            showGrid={false}
-            showYAxisIndices={false}
-            showXAxisIndices={false}
-            hideDataPoints
-          />
-
-          <MetricChart
-            title="Incline Over Time (deg)"
-            color={Colors.dark.highlight3 ?? Colors.dark.highlight1}
-            points={inclinePoints}
-            cardBg={CARD}
-            textColor={TEXT}
-            valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
-            xLabelFormatter={elapsedLabel}
-            noOfSections={4}
-            showGrid={false}
-            showYAxisIndices={false}
-            showXAxisIndices={false}
-            hideDataPoints
-          />
-        </View>
-
-        <View style={styles.actions}>
-          {savedSessionId ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.saveBtn}
-              onPress={() => router.back()}
-            >
-              <Ionicons name="checkmark" size={18} color="#0E151F" />
-              <Text style={styles.saveText}>Done</Text>
-            </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={styles.shareCard}
-                onPress={() => setShareToFeed((v) => !v)}
-                disabled={saving || deleting}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.shareTitle}>Share to social feed</Text>
-                  <Text style={styles.shareSubtitle}>
-                    {shareToFeed ? 'Followers will be able to see this session.' : 'Keep this session private.'}
-                  </Text>
-                </View>
-                <Ionicons
-                  name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={24}
-                  color={shareToFeed ? Colors.dark.highlight1 : TEXT}
-                />
-              </TouchableOpacity>
-
+          <View style={styles.actions}>
+            {savedSessionId ? (
               <TouchableOpacity
                 activeOpacity={0.9}
-                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
-                onPress={onSave}
-                disabled={saving || deleting}
+                style={[globalStyles.buttonPrimary, styles.saveBtn]}
+                onPress={() => router.back()}
               >
-                {saving ? (
-                  <ActivityIndicator />
-                ) : (
-                  <>
-                    <Ionicons name="save-outline" size={18} color="#0E151F" />
-                    <Text style={styles.saveText}>Save</Text>
-                  </>
-                )}
+                <Ionicons name="checkmark" size={18} color={colors.blkText} />
+                <Text style={globalStyles.buttonTextPrimary}>Done</Text>
               </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.shareCard}
+                  onPress={() => setShareToFeed((v) => !v)}
+                  disabled={saving || deleting}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.shareTitle}>Share to social feed</Text>
+                    <Text style={styles.shareSubtitle}>
+                      {shareToFeed
+                        ? 'Followers will be able to see this session.'
+                        : 'Keep this session private.'}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={24}
+                    color={shareToFeed ? colors.highlight1 : colors.textMuted}
+                  />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={[styles.deleteBtn, (saving || deleting) && { opacity: 0.6 }]}
-                onPress={() => setShowDeleteModal(true)}
-                disabled={saving || deleting}
-              >
-                <Ionicons name="trash-outline" size={18} color="#e04b4b" />
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[globalStyles.buttonPrimary, styles.saveBtn, saving && { opacity: 0.6 }]}
+                  onPress={onSave}
+                  disabled={saving || deleting}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={colors.blkText} />
+                  ) : (
+                    <>
+                      <Ionicons name="save-outline" size={18} color={colors.blkText} />
+                      <Text style={globalStyles.buttonTextPrimary}>Save</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-        <View style={{ height: 18 }} />
-      </ScrollView>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.deleteBtn, (saving || deleting) && { opacity: 0.6 }]}
+                  onPress={() => setShowDeleteModal(true)}
+                  disabled={saving || deleting}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
 
-      {/* ✅ Delete confirmation modal */}
-      <DeleteDraftConfirmModal
-        visible={showDeleteModal}
-        isBusy={deleting}
-        onCancel={() => setShowDeleteModal(false)}
-        onConfirm={onDeleteConfirmed}
-        title="Delete this session draft?"
-        message="If you delete this draft, the data will be lost forever. This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-      />
-    </View>
+          <View style={{ height: 18 }} />
+        </ScrollView>
+
+        <DeleteDraftConfirmModal
+          visible={showDeleteModal}
+          isBusy={deleting}
+          onCancel={() => setShowDeleteModal(false)}
+          onConfirm={onDeleteConfirmed}
+          title="Delete this session draft?"
+          message="If you delete this draft, the data will be lost forever. This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+        />
+      </View>
+    </LinearGradient>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -891,85 +960,123 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  centered: { alignItems: 'center', justifyContent: 'center' },
-
-  scrollContent: {
-    paddingBottom: 12,
-  },
-
-  logoWrap: {
-    paddingTop: 6,
-    paddingHorizontal: 16,
-    marginBottom: 2,
-  },
-
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-    justifyContent: 'space-between',
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: CARD,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconBtnSpacer: { width: 44, height: 44 },
-  headerCenter: { alignItems: 'center' },
-  currentLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 11,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  title: {
-    color: Colors.dark.highlight1,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-    textAlign: 'center',
-  },
-
-  card: {
-    marginTop: 8,
-    marginHorizontal: 16,
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 16,
-    gap: 12,
-  },
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safe: { flex: 1 },
+    centered: { alignItems: 'center', justifyContent: 'center' },
+    emptyStateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    scrollContent: {
+      paddingBottom: 12,
+    },
+    heroCard: {
+      marginTop: 8,
+      marginBottom: 12,
+      paddingBottom: 18,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    iconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 14,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    iconBtnSpacer: { width: 40, height: 40 },
+    headerCenter: { flex: 1, alignItems: 'center' },
+    title: {
+      marginTop: 8,
+      color: colors.highlight1,
+      fontFamily: fonts.display,
+      fontSize: 22,
+      lineHeight: 26,
+      letterSpacing: -0.6,
+      textAlign: 'center',
+    },
+    heroSubtitle: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+      maxWidth: 260,
+    },
+    heroStatsRow: {
+      marginTop: 18,
+      flexDirection: 'row',
+      gap: 10,
+    },
+    heroStat: {
+      flex: 1,
+      minHeight: 88,
+      borderRadius: 18,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      justifyContent: 'space-between',
+    },
+    heroStatAccent: {
+      backgroundColor: colors.card3,
+    },
+    heroStatValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+      textAlign: 'center',
+    },
+    heroStatLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 14,
+      letterSpacing: 0.7,
+      textTransform: 'uppercase',
+      textAlign: 'center',
+    },
+    card: {
+      marginBottom: 12,
+      padding: 16,
+      gap: 12,
+    },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
   },
   rowLabel: {
-    color: TEXT,
-    opacity: 0.7,
-    fontSize: 12,
-    fontWeight: '800',
+    color: colors.textOffSt,
+    fontFamily: fonts.label,
+    fontSize: 11,
+    lineHeight: 14,
     letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   rowValue: {
-    color: TEXT,
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 14,
-    fontWeight: '900',
+    lineHeight: 18,
   },
   heartRateCard: {
-    marginTop: 12,
-    marginHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: CARD,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
@@ -980,19 +1087,23 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   heartRateTitle: {
-    color: '#fff',
+    marginTop: 8,
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 22,
-    fontWeight: '800',
+    lineHeight: 26,
   },
   heartRateAvgLabel: {
-    color: '#c6d0ea',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 15,
-    fontWeight: '600',
+    lineHeight: 19,
   },
   heartRateAvgValue: {
-    color: '#FF4D4F',
+    color: colors.danger,
+    fontFamily: fonts.display,
     fontSize: 40,
-    fontWeight: '900',
+    lineHeight: 44,
     marginTop: 4,
     marginBottom: 10,
   },
@@ -1005,39 +1116,44 @@ const styles = StyleSheet.create({
   },
   heartRateStat: {
     flex: 1,
-    borderRadius: 12,
-    backgroundColor: 'rgba(5,8,22,0.5)',
+    borderRadius: 14,
+    backgroundColor: colors.card3,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.border,
     paddingVertical: 10,
     paddingHorizontal: 8,
   },
   heartRateStatLabel: {
-    color: '#9aa4bf',
+    color: colors.textOffSt,
+    fontFamily: fonts.label,
     fontSize: 11,
-    fontWeight: '700',
+    lineHeight: 14,
     letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   heartRateStatValue: {
-    color: '#fff',
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 16,
-    fontWeight: '800',
+    lineHeight: 20,
     marginTop: 4,
   },
   heartRateEmpty: {
-    color: '#9aa4bf',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 8,
   },
   heartRateStatusText: {
-    color: '#A3B2D5',
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 10,
   },
   heartRateStatusTextError: {
-    color: '#FCA5A5',
+    color: colors.danger,
   },
   heartRateActionsRow: {
     flexDirection: 'row',
@@ -1049,23 +1165,23 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.dark.highlight1,
+    borderColor: colors.highlight1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 11,
     paddingHorizontal: 10,
   },
   heartRateActionBtnPrimary: {
-    backgroundColor: Colors.dark.highlight1,
+    backgroundColor: colors.highlight1,
   },
   heartRateActionBtnText: {
-    color: Colors.dark.highlight1,
-    fontWeight: '700',
+    color: colors.highlight1,
+    fontFamily: fonts.heading,
     fontSize: 12,
   },
   heartRateActionBtnPrimaryText: {
-    color: '#0D1320',
-    fontWeight: '800',
+    color: colors.blkText,
+    fontFamily: fonts.heading,
     fontSize: 12,
   },
   heartRateActionBtnDisabled: {
@@ -1074,27 +1190,25 @@ const styles = StyleSheet.create({
 
   chartsWrap: {
     marginTop: 12,
-    paddingHorizontal: 16,
     gap: 12,
   },
   noticeCard: {
     marginTop: 12,
-    marginHorizontal: 16,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: CARD,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   noticeText: {
-    color: '#D7E0F4',
+    color: colors.text,
+    fontFamily: fonts.body,
     fontSize: 12.5,
     lineHeight: 18,
   },
   goalCardWrap: {
     marginTop: 12,
-    paddingHorizontal: 16,
   },
 
   actions: {
@@ -1104,9 +1218,9 @@ const styles = StyleSheet.create({
   },
   shareCard: {
     borderRadius: 14,
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -1114,46 +1228,38 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   shareTitle: {
-    color: TEXT,
+    color: colors.text,
+    fontFamily: fonts.heading,
     fontSize: 13.5,
-    fontWeight: '800',
   },
   shareSubtitle: {
     marginTop: 4,
-    color: TEXT,
-    opacity: 0.72,
+    color: colors.textMuted,
+    fontFamily: fonts.body,
     fontSize: 12,
     lineHeight: 16,
   },
   saveBtn: {
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.highlight1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    minHeight: 56,
     gap: 10,
-  },
-  saveText: {
-    color: '#0E151F',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.2,
   },
 
   deleteBtn: {
     height: 56,
     borderRadius: 16,
-    backgroundColor: CARD,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 10,
   },
   deleteText: {
-    color: '#e04b4b',
+    color: colors.danger,
+    fontFamily: fonts.heading,
     fontSize: 16,
-    fontWeight: '900',
     letterSpacing: 0.2,
   },
-});
+  });
+}

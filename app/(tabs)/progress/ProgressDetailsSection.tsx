@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Colors } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useUnits } from '@/contexts/UnitsContext';
 import {
   fetchCardioSessions,
@@ -66,14 +66,15 @@ function formatNutritionPreview(day: NutritionDayItem) {
 }
 
 const ProgressDetailsSection: React.FC = () => {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
+
   const [selectedDetailIndex, setSelectedDetailIndex] = useState(0);
   const detailAnim = useRef(new Animated.Value(0)).current;
   const [segmentWidth, setSegmentWidth] = useState(0);
 
-  const [weightsWorkouts, setWeightsWorkouts] = useState<StrengthWorkoutRow[]>(
-    []
-  );
+  const [weightsWorkouts, setWeightsWorkouts] = useState<StrengthWorkoutRow[]>([]);
   const [loadingWeights, setLoadingWeights] = useState(true);
 
   const [cardioSessions, setCardioSessions] = useState<CardioSessionItem[]>([]);
@@ -92,8 +93,8 @@ const ProgressDetailsSection: React.FC = () => {
     }).start();
   };
 
-  const handleDetailLayout = (e: LayoutChangeEvent) => {
-    const totalWidth = e.nativeEvent.layout.width;
+  const handleDetailLayout = (event: LayoutChangeEvent) => {
+    const totalWidth = event.nativeEvent.layout.width;
     setSegmentWidth(totalWidth / DETAIL_SEGMENTS.length);
   };
 
@@ -138,8 +139,8 @@ const ProgressDetailsSection: React.FC = () => {
           setWeightsWorkouts(strengthRows);
           setCardioSessions(cardioRows);
           setNutritionDays(nutritionRows);
-        } catch (err) {
-          console.warn('Error loading progress details', err);
+        } catch (error) {
+          console.warn('Error loading progress details', error);
           if (!isActive) return;
           setWeightsWorkouts([]);
           setCardioSessions([]);
@@ -209,7 +210,7 @@ const ProgressDetailsSection: React.FC = () => {
             <Ionicons
               name="arrow-forward-circle-outline"
               size={18}
-              color="#A5B4FC"
+              color={colors.highlight1}
             />
           </TouchableOpacity>
         </View>
@@ -248,7 +249,7 @@ const ProgressDetailsSection: React.FC = () => {
                 <Text style={styles.listTitle}>{dateLabel}</Text>
                 <Text style={styles.listSubtitle}>{subtitle}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           );
         })}
@@ -262,7 +263,7 @@ const ProgressDetailsSection: React.FC = () => {
           <Ionicons
             name="arrow-forward-circle-outline"
             size={18}
-            color="#A5B4FC"
+            color={colors.highlight1}
           />
         </TouchableOpacity>
       </View>
@@ -288,7 +289,7 @@ const ProgressDetailsSection: React.FC = () => {
             <Ionicons
               name="arrow-forward-circle-outline"
               size={18}
-              color="#A5B4FC"
+              color={colors.highlight1}
             />
           </TouchableOpacity>
         </View>
@@ -336,7 +337,7 @@ const ProgressDetailsSection: React.FC = () => {
                 <Text style={styles.listTitle}>{dateLabel}</Text>
                 <Text style={styles.listSubtitle}>{parts.join(' · ')}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           );
         })}
@@ -350,7 +351,7 @@ const ProgressDetailsSection: React.FC = () => {
           <Ionicons
             name="arrow-forward-circle-outline"
             size={18}
-            color="#A5B4FC"
+            color={colors.highlight1}
           />
         </TouchableOpacity>
       </View>
@@ -376,7 +377,7 @@ const ProgressDetailsSection: React.FC = () => {
             <Ionicons
               name="arrow-forward-circle-outline"
               size={18}
-              color="#A5B4FC"
+              color={colors.highlight1}
             />
           </TouchableOpacity>
         </View>
@@ -403,11 +404,9 @@ const ProgressDetailsSection: React.FC = () => {
             >
               <View>
                 <Text style={styles.listTitle}>{dateLabel}</Text>
-                <Text style={styles.listSubtitle}>
-                  {formatNutritionPreview(day)}
-                </Text>
+                <Text style={styles.listSubtitle}>{formatNutritionPreview(day)}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           );
         })}
@@ -421,7 +420,7 @@ const ProgressDetailsSection: React.FC = () => {
           <Ionicons
             name="arrow-forward-circle-outline"
             size={18}
-            color="#A5B4FC"
+            color={colors.highlight1}
           />
         </TouchableOpacity>
       </View>
@@ -461,7 +460,7 @@ const ProgressDetailsSection: React.FC = () => {
             <Ionicons
               name={segment.icon}
               size={16}
-              color={index === selectedDetailIndex ? '#FFFFFF' : '#9DA4C4'}
+              color={index === selectedDetailIndex ? colors.blkText : colors.textMuted}
               style={{ marginRight: 6 }}
             />
             <Text
@@ -481,87 +480,104 @@ const ProgressDetailsSection: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  detailsRow: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.card,
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 0,
-    justifyContent: 'space-between',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  detailsActiveBg: {
-    position: 'absolute',
-    left: 4,
-    top: 4,
-    bottom: 4,
-    borderRadius: 999,
-    backgroundColor: '#6366F1',
-  },
-  detailSegment: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 999,
-    zIndex: 1,
-  },
-  detailPillText: {
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-  detailPillTextActive: {
-    color: '#FFFFFF',
-  },
-  contentCard: {
-    marginTop: 12,
-    marginBottom: 24,
-    backgroundColor: Colors.dark.card,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 80,
-  },
-  contentMuted: {
-    fontSize: 12,
-    color: '#9DA4C4',
-  },
-  listContainer: {
-    gap: 10,
-    paddingBottom: 8,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#111827',
-  },
-  listTitle: {
-    fontSize: 13,
-    color: '#E5E7F5',
-    fontWeight: '600',
-  },
-  listSubtitle: {
-    fontSize: 11,
-    color: '#9DA4C4',
-    marginTop: 2,
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  viewAllText: {
-    fontSize: 12,
-    color: '#A5B4FC',
-    fontWeight: '500',
-    marginRight: 6,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    detailsRow: {
+      flexDirection: 'row',
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 4,
+      justifyContent: 'space-between',
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    detailsActiveBg: {
+      position: 'absolute',
+      left: 4,
+      top: 4,
+      bottom: 4,
+      borderRadius: 999,
+      backgroundColor: colors.highlight1,
+    },
+    detailSegment: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      borderRadius: 999,
+      zIndex: 1,
+    },
+    detailPillText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    detailPillTextActive: {
+      color: colors.blkText,
+    },
+    contentCard: {
+      marginTop: 12,
+      marginBottom: 24,
+      backgroundColor: colors.card,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      minHeight: 80,
+    },
+    contentMuted: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    listContainer: {
+      gap: 10,
+      paddingBottom: 8,
+    },
+    listItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    listTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    listSubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      marginTop: 2,
+      maxWidth: 250,
+    },
+    viewAllButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    viewAllText: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 16,
+      marginRight: 6,
+    },
+  });
+}
 
 export default ProgressDetailsSection;

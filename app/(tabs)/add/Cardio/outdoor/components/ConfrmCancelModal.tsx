@@ -1,6 +1,8 @@
-import React from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '@/constants/Colors';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+
+import AppPopup from '@/components/ui/AppPopup';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
@@ -8,67 +10,72 @@ type Props = {
   onConfirmCancel: () => void;
 };
 
-const CARD = Colors.dark.card;
-const TEXT = Colors.dark.text;
+export default function ConfirmCancelModal({
+  visible,
+  onClose,
+  onConfirmCancel,
+}: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
-export default function ConfirmCancelModal({ visible, onClose, onConfirmCancel }: Props) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Cancel workout?</Text>
-          <Text style={styles.body}>
-            If you cancel, the workout will not be saved.
-          </Text>
+    <AppPopup
+      visible={visible}
+      onClose={onClose}
+      eyebrow="Discard session"
+      title="Cancel workout?"
+      subtitle="If you cancel now, the workout will not be saved."
+    >
+      <View style={styles.row}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[globalStyles.buttonSecondary, styles.button]}
+          onPress={onClose}
+        >
+          <Text style={globalStyles.buttonTextSecondary}>Keep</Text>
+        </TouchableOpacity>
 
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.btn, styles.keepBtn]} onPress={onClose}>
-              <Text style={styles.keepText}>Keep</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={onConfirmCancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[styles.cancelBtn, styles.button]}
+          onPress={onConfirmCancel}
+        >
+          <Text style={styles.cancelText}>Cancel workout</Text>
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </AppPopup>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 18,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: CARD,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  title: { fontSize: 16, fontWeight: '900', color: TEXT, letterSpacing: 0.2 },
-  body: { marginTop: 8, fontSize: 13, color: TEXT, opacity: 0.75, lineHeight: 18 },
-
-  row: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  btn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.dark.card,
-  },
-
-  keepBtn: {},
-  keepText: { color: TEXT, fontSize: 14, fontWeight: '900' },
-
-  cancelBtn: {},
-  cancelText: { color: '#e04b4b', fontSize: 14, fontWeight: '900' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 18,
+    },
+    button: {
+      flex: 1,
+    },
+    cancelBtn: {
+      height: 48,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.accentSecondarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 14,
+    },
+    cancelText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'center',
+    },
+  });
+}

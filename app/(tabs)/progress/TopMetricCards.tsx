@@ -1,5 +1,4 @@
-// components/my components/progress/TopMetricCards.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,7 +6,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 import { fetchVisibleExerciseCount } from '@/lib/strength/exercises';
@@ -56,7 +56,7 @@ function toLocalISODate(d: Date) {
 }
 
 function getWeekStartMondayISO(d: Date) {
-  const day = d.getDay(); // Sun=0..Sat=6
+  const day = d.getDay();
   const daysSinceMonday = (day + 6) % 7;
   const monday = new Date(d);
   monday.setHours(0, 0, 0, 0);
@@ -65,12 +65,19 @@ function getWeekStartMondayISO(d: Date) {
 }
 
 function isRunWalk(type: string) {
-  const v = (type ?? '').toLowerCase();
-  return v.includes('run') || v.includes('walk');
+  const value = (type ?? '').toLowerCase();
+  return value.includes('run') || value.includes('walk');
 }
 
-const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEnd }) => {
+const TopMetricCards: React.FC<Props> = ({
+  onExercisesPress,
+  rangeStart,
+  rangeEnd,
+}) => {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
+
   const [weightsSessions, setWeightsSessions] = useState(0);
   const [weightsHours, setWeightsHours] = useState(0);
   const [loadingWeights, setLoadingWeights] = useState(true);
@@ -81,6 +88,7 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
   const [runningDistanceM, setRunningDistanceM] = useState(0);
   const [runningSessions, setRunningSessions] = useState(0);
   const [loadingRunning, setLoadingRunning] = useState(true);
+
   const [nutritionTrackedDays, setNutritionTrackedDays] = useState(0);
   const [nutritionGoalHitDays, setNutritionGoalHitDays] = useState(0);
   const [loadingNutrition, setLoadingNutrition] = useState(true);
@@ -116,7 +124,6 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         end.setHours(23, 59, 59, 999);
         const weekStartISO = getWeekStartMondayISO(start);
 
-        // ---- Weights (selected week) ----
         const { data: weightData, error: weightError } = await supabase
           .schema('strength')
           .from('strength_workouts')
@@ -135,17 +142,14 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
           const started = new Date(row.started_at).getTime();
           const ended = new Date(row.ended_at).getTime();
           if (Number.isNaN(started) || Number.isNaN(ended)) return sum;
-          const diffHours = Math.max(0, ended - started) / 1000 / 3600;
-          return sum + diffHours;
+          return sum + Math.max(0, ended - started) / 1000 / 3600;
         }, 0);
 
         setWeightsSessions(sessions);
         setWeightsHours(Number(totalHours.toFixed(1)));
 
-        // ---- Exercises (total count) ----
         setExerciseCount(await fetchVisibleExerciseCount(user.id));
 
-        // ---- Running (selected week) ----
         const indoorPromise = supabase
           .schema('run_walk')
           .from('sessions')
@@ -195,6 +199,7 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         const indoorRows = (indoorRes.data ?? []) as IndoorRunWalkRow[];
         const outdoorRows = (outdoorRes.data ?? []) as OutdoorRunWalkRow[];
         let weeklyRow = (weeklyRes.data ?? null) as WeeklyRunWalkRow | null;
+
         if (weeklyRes.error?.code === '42703') {
           const legacyWeeklyRes = await supabase
             .schema('user')
@@ -223,10 +228,13 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
             }
           } else if (!legacyWeeklyRes.error) {
             const milesRan = Number((legacyWeeklyRes.data as any)?.total_miles_ran ?? 0);
-            const milesWalked = Number((legacyWeeklyRes.data as any)?.total_miles_walked ?? 0);
+            const milesWalked = Number(
+              (legacyWeeklyRes.data as any)?.total_miles_walked ?? 0
+            );
             const milesRunWalk = Number(
               (legacyWeeklyRes.data as any)?.total_miles_run_walk ?? milesRan + milesWalked
             );
+
             weeklyRow = {
               total_distance_ran_m: milesRan * M_PER_MI,
               total_distance_walked_m: milesWalked * M_PER_MI,
@@ -275,8 +283,8 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         setNutritionGoalHitDays(
           nutritionRows.filter((row) => Boolean(row.goal_hit)).length
         );
-      } catch (err) {
-        console.warn('Error loading top metrics', err);
+      } catch (error) {
+        console.warn('Error loading top metrics', error);
         setWeightsSessions(0);
         setWeightsHours(0);
         setExerciseCount(0);
@@ -303,19 +311,24 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
   const exercisesSubtitle = loadingExercises ? 'Loading...' : 'exercises';
   const exercisesValue = loadingExercises ? '—' : String(exerciseCount || 0);
 
-  const runningDistance = distanceUnit === 'mi'
-    ? runningDistanceM / M_PER_MI
-    : runningDistanceM / M_PER_KM;
+  const runningDistance =
+    distanceUnit === 'mi'
+      ? runningDistanceM / M_PER_MI
+      : runningDistanceM / M_PER_KM;
   const runningUnitLabel = distanceUnit === 'mi' ? 'miles' : 'km';
   const runningValue = loadingRunning ? '—' : runningDistance.toFixed(1);
   const runningSubtitle = loadingRunning
     ? 'Loading...'
     : `${runningUnitLabel} · ${runningSessions} session${runningSessions === 1 ? '' : 's'}`;
+
   const totalDisplayedDays = Math.max(
     1,
     Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86400000) + 1
   );
-  const nutritionValue = loadingNutrition ? '—' : `${nutritionTrackedDays}/${totalDisplayedDays}`;
+
+  const nutritionValue = loadingNutrition
+    ? '—'
+    : `${nutritionTrackedDays}/${totalDisplayedDays}`;
   const nutritionSubtitle = loadingNutrition
     ? 'Loading...'
     : nutritionGoalHitDays > 0
@@ -324,14 +337,13 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
 
   return (
     <View style={styles.metricGrid}>
-      {/* Weights */}
-      <View style={styles.metricCard}>
+      <View style={[globalStyles.panelSoft, styles.metricCard]}>
         <View style={styles.metricHeaderRow}>
-          <View style={[styles.metricIcon, styles.weightsIcon]}>
+          <View style={[styles.metricIcon, { backgroundColor: colors.accentSoft }]}>
             <MaterialCommunityIcons
               name="dumbbell"
               size={18}
-              color="#C7D2FF"
+              color={colors.highlight1}
             />
           </View>
           <Text style={styles.metricLabel}>WEIGHTS</Text>
@@ -340,11 +352,12 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         <Text style={styles.metricSub}>{weightsSubtitle}</Text>
       </View>
 
-      {/* Running */}
-      <View style={styles.metricCard}>
+      <View style={[globalStyles.panelSoft, styles.metricCard]}>
         <View style={styles.metricHeaderRow}>
-          <View style={[styles.metricIcon, styles.runningIcon]}>
-            <Ionicons name="walk-outline" size={18} color="#C7F4FF" />
+          <View
+            style={[styles.metricIcon, { backgroundColor: colors.accentSecondarySoft }]}
+          >
+            <Ionicons name="walk-outline" size={18} color={colors.highlight2} />
           </View>
           <Text style={styles.metricLabel}>RUNNING</Text>
         </View>
@@ -352,15 +365,16 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         <Text style={styles.metricSub}>{runningSubtitle}</Text>
       </View>
 
-      {/* Exercises (replaces Cycling) */}
       <TouchableOpacity
-        style={styles.metricCard}
+        style={[globalStyles.panelSoft, styles.metricCard]}
         activeOpacity={0.85}
         onPress={onExercisesPress}
       >
         <View style={styles.metricHeaderRow}>
-          <View style={[styles.metricIcon, styles.exercisesIcon]}>
-            <Ionicons name="list-outline" size={18} color="#E6F3FF" />
+          <View
+            style={[styles.metricIcon, { backgroundColor: colors.accentTertiarySoft }]}
+          >
+            <Ionicons name="list-outline" size={18} color={colors.highlight3} />
           </View>
           <Text style={styles.metricLabel}>EXERCISES</Text>
         </View>
@@ -368,14 +382,13 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
         <Text style={styles.metricSub}>{exercisesSubtitle}</Text>
       </TouchableOpacity>
 
-      {/* Nutrition */}
-      <View style={styles.metricCard}>
+      <View style={[globalStyles.panelSoft, styles.metricCard]}>
         <View style={styles.metricHeaderRow}>
-          <View style={[styles.metricIcon, styles.nutritionIcon]}>
+          <View style={[styles.metricIcon, { backgroundColor: colors.accentSoft }]}>
             <MaterialCommunityIcons
               name="food-apple-outline"
               size={18}
-              color="#FFEAD1"
+              color={colors.highlight1}
             />
           </View>
           <Text style={styles.metricLabel}>NUTRITION</Text>
@@ -387,61 +400,60 @@ const TopMetricCards: React.FC<Props> = ({ onExercisesPress, rangeStart, rangeEn
   );
 };
 
-const styles = StyleSheet.create({
-  metricGrid: {
-    marginTop: 24,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 14,
-  },
-  metricCard: {
-    width: '48%',
-    backgroundColor: Colors.dark.card,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  metricHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  metricIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  weightsIcon: {
-    backgroundColor: '#28307A',
-  },
-  runningIcon: {
-    backgroundColor: '#1C7C72',
-  },
-  exercisesIcon: {
-    backgroundColor: '#1E3A8A',
-  },
-  nutritionIcon: {
-    backgroundColor: '#7C2D12',
-  },
-  metricLabel: {
-    fontSize: 10,
-    letterSpacing: 0.9,
-    color: '#9DA4C4',
-  },
-  metricValue: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  metricSub: {
-    marginTop: 4,
-    fontSize: 11,
-    color: '#9DA4C4',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    metricGrid: {
+      marginTop: 24,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: 14,
+    },
+    metricCard: {
+      width: '48%',
+      minHeight: 132,
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    metricHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    metricIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    metricLabel: {
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 13,
+      letterSpacing: 0.9,
+    },
+    metricValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 28,
+      lineHeight: 32,
+      letterSpacing: -0.9,
+    },
+    metricSub: {
+      marginTop: 6,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+    },
+  });
+}
 
 export default TopMetricCards;

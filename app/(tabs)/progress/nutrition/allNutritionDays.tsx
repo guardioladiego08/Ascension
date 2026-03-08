@@ -14,8 +14,6 @@ import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
 import {
   fetchNutritionDays,
   getAuthenticatedUserId,
@@ -28,10 +26,7 @@ import {
 } from '@/lib/progress/historyUi';
 import HistoryFilterModal from '../components/HistoryFilterModal';
 import HistoryListItem from '../components/HistoryListItem';
-
-const BG = Colors.dark.background;
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 function FilterInput({
   label,
@@ -39,12 +34,16 @@ function FilterInput({
   onChangeText,
   placeholder,
   keyboardType = 'decimal-pad',
+  styles,
+  colors,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
   keyboardType?: 'default' | 'decimal-pad' | 'number-pad';
+  styles: ReturnType<typeof createStyles>;
+  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={styles.inputGroup}>
@@ -53,7 +52,7 @@ function FilterInput({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#6B7280"
+        placeholderTextColor={colors.textOffSt}
         keyboardType={keyboardType}
         autoCapitalize="none"
         autoCorrect={false}
@@ -64,6 +63,9 @@ function FilterInput({
 }
 
 export default function AllNutritionDaysScreen() {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const [days, setDays] = useState<NutritionDayItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -96,6 +98,7 @@ export default function AllNutritionDaysScreen() {
           setMaxFat('');
           setFilterModalVisible(false);
           setLoading(true);
+
           const userId = await getAuthenticatedUserId();
           if (!userId) {
             if (isActive) setDays([]);
@@ -135,7 +138,6 @@ export default function AllNutritionDaysScreen() {
     return days.filter((day) => {
       if (startDateValue != null && day.date < startDateValue) return false;
       if (endDateValue != null && day.date > endDateValue) return false;
-
       if (minCaloriesValue != null && day.kcalTotal < minCaloriesValue) return false;
       if (maxCaloriesValue != null && day.kcalTotal > maxCaloriesValue) return false;
       if (minProteinValue != null && day.proteinGTotal < minProteinValue) return false;
@@ -144,7 +146,6 @@ export default function AllNutritionDaysScreen() {
       if (maxCarbsValue != null && day.carbsGTotal > maxCarbsValue) return false;
       if (minFatValue != null && day.fatGTotal < minFatValue) return false;
       if (maxFatValue != null && day.fatGTotal > maxFatValue) return false;
-
       return true;
     });
   }, [
@@ -201,40 +202,44 @@ export default function AllNutritionDaysScreen() {
   };
 
   const listHeader = (
-    <View style={styles.headerContent}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.title}>All Nutrition Days</Text>
-          <Text style={styles.subtitle}>
-            Select a row to open the daily nutrition summary.
-          </Text>
-        </View>
+    <View style={styles.listHeader}>
+      <View style={styles.hero}>
+        <View style={styles.heroRow}>
+          <View style={styles.heroCopy}>
+            <Text style={globalStyles.eyebrow}>Nutrition History</Text>
+            <Text style={globalStyles.header}>All nutrition days</Text>
+            <Text style={styles.heroText}>
+              Review logged calorie and macro totals, then drill into any day for the
+              full nutrition summary.
+            </Text>
+          </View>
 
-        <TouchableOpacity
-          style={styles.filterButton}
-          activeOpacity={0.88}
-          onPress={() => setFilterModalVisible(true)}
-        >
-          <Ionicons name="funnel-outline" size={16} color="#E5E7F5" />
-          {activeFilterCount > 0 ? (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.filterButton}
+            activeOpacity={0.88}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Ionicons name="funnel-outline" size={16} color={colors.text} />
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 
   return (
     <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
+      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+      style={globalStyles.page}
     >
-      <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton usePreviousRoute />
+      <View style={globalStyles.safeArea}>
+        <LogoHeader showBackButton />
 
         <FlatList
           data={filteredDays}
@@ -242,10 +247,10 @@ export default function AllNutritionDaysScreen() {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
-            <View style={styles.emptyState}>
+            <View style={[globalStyles.panelSoft, styles.emptyState]}>
               {loading ? (
                 <>
-                  <ActivityIndicator />
+                  <ActivityIndicator color={colors.highlight1} />
                   <Text style={styles.emptyText}>Loading nutrition days...</Text>
                 </>
               ) : (
@@ -287,6 +292,8 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setStartDate}
               placeholder="YYYY-MM-DD"
               keyboardType="default"
+              styles={styles}
+              colors={colors}
             />
             <FilterInput
               label="End date"
@@ -294,6 +301,8 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setEndDate}
               placeholder="YYYY-MM-DD"
               keyboardType="default"
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -303,12 +312,16 @@ export default function AllNutritionDaysScreen() {
               value={minCalories}
               onChangeText={setMinCalories}
               placeholder="0"
+              styles={styles}
+              colors={colors}
             />
             <FilterInput
               label="Max calories"
               value={maxCalories}
               onChangeText={setMaxCalories}
               placeholder="Any"
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -318,12 +331,16 @@ export default function AllNutritionDaysScreen() {
               value={minProtein}
               onChangeText={setMinProtein}
               placeholder="0"
+              styles={styles}
+              colors={colors}
             />
             <FilterInput
               label="Max protein (g)"
               value={maxProtein}
               onChangeText={setMaxProtein}
               placeholder="Any"
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -333,12 +350,16 @@ export default function AllNutritionDaysScreen() {
               value={minCarbs}
               onChangeText={setMinCarbs}
               placeholder="0"
+              styles={styles}
+              colors={colors}
             />
             <FilterInput
               label="Max carbs (g)"
               value={maxCarbs}
               onChangeText={setMaxCarbs}
               placeholder="Any"
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -348,12 +369,16 @@ export default function AllNutritionDaysScreen() {
               value={minFat}
               onChangeText={setMinFat}
               placeholder="0"
+              styles={styles}
+              colors={colors}
             />
             <FilterInput
               label="Max fat (g)"
               value={maxFat}
               onChangeText={setMaxFat}
               placeholder="Any"
+              styles={styles}
+              colors={colors}
             />
           </View>
 
@@ -366,98 +391,112 @@ export default function AllNutritionDaysScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  headerContent: {
-    paddingTop: 6,
-    paddingBottom: 14,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerTextWrap: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: TEXT,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    color: MUTED,
-  },
-  filterButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: Colors.dark.card,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBadge: {
-    position: 'absolute',
-    right: -2,
-    top: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 4,
-  },
-  filterBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  listContent: {
-    paddingBottom: 28,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: MUTED,
-    textAlign: 'center',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    marginBottom: 6,
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#111827',
-    color: TEXT,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-  },
-  helperText: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#94A3B8',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    listHeader: {
+      paddingTop: 8,
+      paddingBottom: 14,
+    },
+    hero: {
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 20,
+    },
+    heroRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    heroCopy: {
+      flex: 1,
+      gap: 8,
+    },
+    heroText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    filterButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterBadge: {
+      position: 'absolute',
+      right: -2,
+      top: -2,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      paddingHorizontal: 4,
+    },
+    filterBadgeText: {
+      fontSize: 10,
+      lineHeight: 12,
+      fontFamily: fonts.label,
+      color: colors.blkText,
+    },
+    listContent: {
+      paddingBottom: 28,
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+      gap: 8,
+    },
+    emptyText: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      textAlign: 'center',
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    inputGroup: {
+      flex: 1,
+    },
+    inputLabel: {
+      marginBottom: 6,
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+    },
+    input: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 11,
+      fontSize: 13,
+      fontFamily: fonts.body,
+    },
+    helperText: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: colors.textOffSt,
+      fontFamily: fonts.body,
+    },
+  });
+}

@@ -1,14 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  Modal,
-  View,
+  StyleSheet,
   Text,
   TouchableOpacity,
-  StyleSheet,
-  Pressable,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
+
+import { useAppTheme } from '@/providers/AppThemeProvider';
+import AppPopup from '@/components/ui/AppPopup';
 
 export type RunWalkExerciseType =
   | 'outdoor_run'
@@ -23,127 +23,151 @@ type Props = {
 };
 
 export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.card}>
-          <Text style={styles.title}>Start Run/Walk</Text>
-          <Text style={styles.subtitle}>Choose an activity type to begin.</Text>
+    <AppPopup
+      visible={visible}
+      onClose={onClose}
+      eyebrow="Session Type"
+      title="Start run or walk"
+      subtitle="The selected home theme is also driving this modal."
+      showCloseButton
+    >
+      <View style={styles.list}>
+        <OptionRow
+          icon="walk-outline"
+          iconColor={colors.highlight1}
+          iconBg={colors.accentSoft}
+          label="Outdoor Run"
+          detail="GPS route, outdoor pace, and distance."
+          onPress={() => onSelect('outdoor_run')}
+          styles={styles}
+          globalStyles={globalStyles}
+        />
+        <OptionRow
+          icon="footsteps-outline"
+          iconColor={colors.highlight3}
+          iconBg={colors.accentTertiarySoft}
+          label="Outdoor Walk"
+          detail="Track a lower-intensity outdoor session."
+          onPress={() => onSelect('outdoor_walk')}
+          styles={styles}
+          globalStyles={globalStyles}
+        />
+        <OptionRow
+          icon="speedometer-outline"
+          iconColor={colors.highlight2}
+          iconBg={colors.accentSecondarySoft}
+          label="Indoor Run"
+          detail="Treadmill-style tracking without GPS."
+          onPress={() => onSelect('indoor_run')}
+          styles={styles}
+          globalStyles={globalStyles}
+        />
+        <OptionRow
+          icon="analytics-outline"
+          iconColor={colors.highlight2}
+          iconBg={colors.accentSecondarySoft}
+          label="Indoor Walk"
+          detail="Quick indoor walking session flow."
+          onPress={() => onSelect('indoor_walk')}
+          styles={styles}
+          globalStyles={globalStyles}
+        />
+      </View>
 
-          <View style={styles.list}>
-            <OptionRow
-              icon="walk-outline"
-              label="Outdoor Run"
-              onPress={() => onSelect('outdoor_run')}
-            />
-            <OptionRow
-              icon="walk"
-              label="Outdoor Walk"
-              onPress={() => onSelect('outdoor_walk')}
-            />
-            <OptionRow
-              icon="speedometer-outline"
-              label="Indoor Run"
-              onPress={() => onSelect('indoor_run')}
-            />
-            <OptionRow
-              icon="analytics-outline"
-              label="Indoor Walk"
-              onPress={() => onSelect('indoor_walk')}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Text style={styles.closeText}>Close</Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      <TouchableOpacity
+        activeOpacity={0.92}
+        style={[globalStyles.buttonSecondary, styles.closeButton]}
+        onPress={onClose}
+      >
+        <Text style={globalStyles.buttonTextSecondary}>Close</Text>
+      </TouchableOpacity>
+    </AppPopup>
   );
 }
 
 function OptionRow({
   icon,
   label,
+  detail,
+  iconColor,
+  iconBg,
   onPress,
+  styles,
+  globalStyles,
 }: {
-  icon: any;
+  icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  detail: string;
+  iconColor: string;
+  iconBg: string;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
 }) {
   return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.row} onPress={onPress}>
-      <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={18} color={Colors.dark.text} />
+    <TouchableOpacity
+      activeOpacity={0.92}
+      style={[globalStyles.panelSoft, styles.row]}
+      onPress={onPress}
+    >
+      <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
+        <Ionicons name={icon} size={18} color={iconColor} />
       </View>
-      <Text style={styles.rowText}>{label}</Text>
-      <Ionicons name="chevron-forward" size={18} color="#AAB2C5" />
+
+      <View style={styles.rowCopy}>
+        <Text style={styles.rowTitle}>{label}</Text>
+        <Text style={styles.rowDetail}>{detail}</Text>
+      </View>
+
+      <Ionicons name="arrow-forward" size={18} color={iconColor} />
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: Colors.dark.popUpCard,
-    borderRadius: 16,
-    paddingVertical: 22,
-    paddingHorizontal: 20,
-  },
-  title: {
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: Colors.dark.text,
-    fontSize: 14,
-    marginBottom: 14,
-    opacity: 0.9,
-  },
-  list: { gap: 10 },
-  row: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  rowIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: '#0a0a0aff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  rowText: {
-    flex: 1,
-    color: Colors.dark.text,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  closeBtn: {
-    marginTop: 14,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeText: { color: Colors.dark.text, fontSize: 14, fontWeight: '800' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    list: {
+      gap: 10,
+      marginTop: 18,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 14,
+    },
+    rowIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowCopy: {
+      flex: 1,
+    },
+    rowTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    rowDetail: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+    closeButton: {
+      marginTop: 16,
+    },
+  });
+}
