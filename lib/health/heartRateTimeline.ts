@@ -1,4 +1,4 @@
-import type { AppleHeartRateSample } from '@/lib/health/appleHealthKit';
+import type { HealthHeartRateSample } from '@/lib/health/types';
 import type { SamplePoint } from '@/components/charts/MetricLineChart';
 
 function parseTimestampMs(input: string | null | undefined): number | null {
@@ -46,7 +46,7 @@ function resolveRangeBounds(params: {
 }
 
 export function buildHeartRateTimelinePoints(params: {
-  samples: AppleHeartRateSample[];
+  samples: HealthHeartRateSample[];
   workoutStartISO?: string | null;
   workoutEndISO?: string | null;
 }): SamplePoint[] {

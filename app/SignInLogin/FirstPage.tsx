@@ -1,252 +1,338 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
   Animated,
   Dimensions,
+  Image,
   PanResponder,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/Colors';
+import { useRouter } from 'expo-router';
 
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.tint;
-const TEXT_PRIMARY = '#EAF2FF';
-const TEXT_MUTED = '#9AA4BF';
+import { withAlpha } from '@/constants/Colors';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const { width } = Dimensions.get('window');
 
-// Background image array
-const BACKGROUNDS = [
-  require('@/assets/images/bg_strength.png'),
-  require('@/assets/images/bg_endurance.png'),
-  require('@/assets/images/bg_nutrition.png'),
-];
+const SLIDES = [
+  {
+    key: 'strength',
+    title: 'Strength',
+    eyebrow: 'Progressive overload',
+    subtitle: 'Track exercises, sets, PRs, and progression without leaving the session flow.',
+    image: require('@/assets/images/bg_strength.png'),
+  },
+  {
+    key: 'endurance',
+    title: 'Endurance',
+    eyebrow: 'Indoor and outdoor cardio',
+    subtitle: 'Capture pace, distance, routes, and recovery in the same dark, focused interface.',
+    image: require('@/assets/images/bg_endurance.png'),
+  },
+  {
+    key: 'nutrition',
+    title: 'Nutrition',
+    eyebrow: 'Daily intake',
+    subtitle: 'Log meals, scan food, and review macros in one place tied back to training.',
+    image: require('@/assets/images/bg_nutrition.png'),
+  },
+] as const;
 
 export default function FirstPage() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [index, setIndex] = useState(0);
   const animatedX = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const cycleBackground = (direction = 1) => {
-    animatedX.setValue(direction * width);
-    fadeAnim.setValue(0);
+  const goToIndex = (nextIndex: number, direction: 1 | -1 = 1) => {
+    if (nextIndex === index) return;
 
-    const newIndex =
-      direction === 1
-        ? (index + 1) % BACKGROUNDS.length
-        : (index - 1 + BACKGROUNDS.length) % BACKGROUNDS.length;
-
-    setIndex(newIndex);
+    animatedX.setValue(direction * width * 0.14);
+    fadeAnim.setValue(0.55);
+    setIndex(nextIndex);
 
     Animated.parallel([
       Animated.timing(animatedX, {
         toValue: 0,
-        duration: 450,
+        duration: 360,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 420,
         useNativeDriver: true,
       }),
     ]).start();
   };
 
-  // Auto-cycle every 6 seconds
+  const cycleBackground = (direction: 1 | -1) => {
+    const nextIndex =
+      direction === 1
+        ? (index + 1) % SLIDES.length
+        : (index - 1 + SLIDES.length) % SLIDES.length;
+
+    goToIndex(nextIndex, direction);
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
-      cycleBackground(1); // move right → left
+      cycleBackground(1);
     }, 6000);
+
     return () => clearInterval(interval);
   }, [index]);
 
-  // Swipe Gesture
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, gesture) =>
       Math.abs(gesture.dx) > 20 && Math.abs(gesture.dy) < 50,
     onPanResponderRelease: (_, gesture) => {
-      if (gesture.dx < -40) cycleBackground(1); // swipe left
-      if (gesture.dx > 40) cycleBackground(-1); // swipe right
+      if (gesture.dx < -40) cycleBackground(1);
+      if (gesture.dx > 40) cycleBackground(-1);
     },
   });
 
+  const activeSlide = SLIDES[index];
+
   return (
     <SafeAreaView style={styles.container} {...panResponder.panHandlers}>
-      {/* Background image */}
       <Animated.Image
-        key={index}
-        source={BACKGROUNDS[index]}
+        key={activeSlide.key}
+        source={activeSlide.image}
         style={[
           styles.backgroundImage,
           {
             opacity: fadeAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.35],
+              outputRange: [0.22, 0.42],
             }),
-            transform: [{ translateX: animatedX }], 
+            transform: [{ translateX: animatedX }],
           },
         ]}
       />
-
-      {/* Fade mask */}
       <View style={styles.overlay} />
 
-      {/* Foreground hero section */}
-      <View style={styles.heroWrapper}>
-        {/* Blur container behind main content */}
-        <View style={styles.blurBubble}>
-          <Image
-            source={require('@/assets/images/TensrLogo.png')}
-            style={styles.logo}
-          />
+      <View style={styles.content}>
+        <View style={styles.brandPanel}>
+          <View style={styles.brandBadge}>
+            <Text style={styles.brandBadgeText}>Tensr</Text>
+          </View>
 
-          <Text style={styles.title}>TENSR Fitness</Text>
+          <Image source={require('@/assets/images/TensrLogo.png')} style={styles.logo} />
 
+          <Text style={styles.title}>One place for training, recovery, and nutrition.</Text>
           <Text style={styles.subtitle}>
-            Track strength, endurance, and nutrition in one place — the only fitness app you’ll ever need.
+            A dark, focused system for tracking performance without bouncing between apps.
           </Text>
+
+          <View style={styles.slideCard}>
+            <Text style={styles.slideEyebrow}>{activeSlide.eyebrow}</Text>
+            <Text style={styles.slideTitle}>{activeSlide.title}</Text>
+            <Text style={styles.slideSubtitle}>{activeSlide.subtitle}</Text>
+          </View>
+
+          <View style={styles.chipRow}>
+            {SLIDES.map((slide, slideIndex) => {
+              const selected = slideIndex === index;
+              return (
+                <TouchableOpacity
+                  key={slide.key}
+                  activeOpacity={0.92}
+                  style={[styles.chipButton, selected ? styles.chipButtonSelected : null]}
+                  onPress={() => goToIndex(slideIndex, slideIndex > index ? 1 : -1)}
+                >
+                  <Text style={[styles.chipText, selected ? styles.chipTextSelected : null]}>
+                    {slide.title}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
-        {/* Buttons */}
-        <View style={styles.chipRow}>
+        <View style={styles.actions}>
           <TouchableOpacity
-            style={styles.chipButton}
-            onPress={() => cycleBackground(1)}
+            style={styles.primaryButton}
+            activeOpacity={0.92}
+            onPress={() => router.push('/SignInLogin/SignupEmail')}
           >
-            <Text style={styles.chipText}>Strength</Text>
+            <Text style={styles.primaryButtonText}>Create account</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.chipButton}
-            onPress={() => cycleBackground(1)}
+            style={styles.secondaryButton}
+            activeOpacity={0.92}
+            onPress={() => router.push('/SignInLogin/Login')}
           >
-            <Text style={styles.chipText}>Endurance</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.chipButton}
-            onPress={() => cycleBackground(1)}
-          >
-            <Text style={styles.chipText}>Nutrition</Text>
+            <Text style={styles.secondaryButtonText}>Log in</Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      {/* Bottom Buttons */}
-      <View style={styles.bottomButtons}>
-        <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
-          onPress={() => router.push('./Login')}
-        >
-          <Text style={styles.secondaryText}>Log in</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
-          onPress={() => router.push('./SignupEmail')}
-        >
-          <Text style={styles.secondaryText}>Sign up</Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG, paddingHorizontal: 20 },
-
-  backgroundImage: {
-    position: 'absolute',
-    width: '120%',
-    height: '120%',
-    left: 0,
-    resizeMode: 'cover',
-  },
-
-
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#00000066',
-  },
-
-  heroWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 20,
-  },
-
-  blurBubble: {
-    borderRadius: 24,
-    padding: 20,
-    width: '92%',
-    alignItems: 'center',
-
-  },
-
-  logo: {
-    width: 150,
-    height: 150,
-    resizeMode: 'contain',
-    marginBottom: 12,
-  },
-
-  title: {
-    fontSize: 32,
-    color: TEXT_PRIMARY,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: TEXT_MUTED,
-    textAlign: 'center',
-    maxWidth: 300,
-  },
-
-  chipRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-
-  chipButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: '#ffffff04',
-    borderWidth: 1,
-    borderColor: '#ffffff77',
-  },
-  chipText: {
-    fontSize: 12,
-    color: TEXT_PRIMARY,
-    fontWeight: '500',
-  },
-
-  bottomButtons: {
-    paddingBottom: 32,
-    gap: 10,
-  },
-
-  button: {
-    paddingVertical: 14,
-    borderRadius: 999,
-    alignItems: 'center',
-  },
-  primaryButton: { backgroundColor: PRIMARY },
-  secondaryButton: { borderWidth: 1, borderColor: '#3A465E' },
-
-  primaryText: { color: '#020817', fontWeight: '700' },
-  secondaryText: { color: TEXT_PRIMARY, fontWeight: '600' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundStrong,
+    },
+    backgroundImage: {
+      position: 'absolute',
+      width: '120%',
+      height: '110%',
+      left: '-10%',
+      top: 0,
+      resizeMode: 'cover',
+    },
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(1, 4, 8, 0.7)',
+    },
+    content: {
+      flex: 1,
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 28,
+    },
+    brandPanel: {
+      marginTop: 'auto',
+      gap: 16,
+      borderRadius: 32,
+      paddingHorizontal: 22,
+      paddingVertical: 24,
+      backgroundColor: withAlpha(colors.surface, 0.9),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    brandBadge: {
+      alignSelf: 'flex-start',
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: colors.accentSoft,
+    },
+    brandBadgeText: {
+      color: colors.text,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 15,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
+    logo: {
+      width: 88,
+      height: 88,
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 34,
+      lineHeight: 38,
+      letterSpacing: -1,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    slideCard: {
+      borderRadius: 24,
+      padding: 18,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 6,
+    },
+    slideEyebrow: {
+      color: colors.accent,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 15,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
+    slideTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 24,
+    },
+    slideSubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    chipButton: {
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceRaised,
+    },
+    chipButtonSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    chipText: {
+      color: colors.text,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+    },
+    chipTextSelected: {
+      color: colors.blkText,
+    },
+    actions: {
+      gap: 12,
+      marginTop: 20,
+    },
+    primaryButton: {
+      height: 54,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    secondaryButton: {
+      height: 54,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: withAlpha(colors.surfaceRaised, 0.95),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    secondaryButtonText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+  });
+}

@@ -1,59 +1,62 @@
-// app/SignInLogin/onboarding/UserInfo2.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  Animated,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 
-import { Colors } from '@/constants/Colors';
-import LogoHeader from '@/components/my components/logoHeader';
+import AuthScreen from '../components/AuthScreen';
 import AppAlert from '../components/AppAlert';
-
-import { useOnboardingDraftStore, type DbGender } from '@/lib/onboarding/onboardingDraftStore';
-
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { withAlpha } from '@/constants/Colors';
+import {
+  useOnboardingDraftStore,
+  type DbGender,
+} from '@/lib/onboarding/onboardingDraftStore';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type GenderUI = 'female' | 'male' | 'non_binary' | 'prefer_not';
 type ActivePanel = 'dob' | 'height' | 'weight' | 'gender';
 
 const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
-function pad2(n: number) {
-  return String(n).padStart(2, '0');
+function pad2(value: number) {
+  return String(value).padStart(2, '0');
 }
 
 function daysInMonth(year: number, monthIndex: number) {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 export default function UserInfo2() {
   const router = useRouter();
   const { draft, setDraft } = useOnboardingDraftStore();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
-  // DOB local UI state
   const initialDOB = useMemo(() => {
     if (draft.DOB) {
-      const [yy, mm, dd] = draft.DOB.split('-').map((x) => parseInt(x, 10));
-      if (yy && mm && dd) return { year: yy, monthIndex: mm - 1, day: dd };
+      const [year, month, day] = draft.DOB.split('-').map((value) => parseInt(value, 10));
+      if (year && month && day) {
+        return { year, monthIndex: month - 1, day };
+      }
     }
+
     const now = new Date();
     return { year: now.getFullYear() - 25, monthIndex: 0, day: 1 };
   }, [draft.DOB]);
@@ -61,30 +64,25 @@ export default function UserInfo2() {
   const [year, setYear] = useState(initialDOB.year);
   const [monthIndex, setMonthIndex] = useState(initialDOB.monthIndex);
   const [day, setDay] = useState(initialDOB.day);
-
-  // height/weight (store is cm/kg)
   const [heightCm, setHeightCm] = useState<number>(draft.height_cm ?? 175);
   const [weightKg, setWeightKg] = useState<number>(draft.weight_kg ?? 75);
-
   const [gender, setGender] = useState<GenderUI | null>((draft.gender as GenderUI) ?? null);
-
   const [activePanel, setActivePanel] = useState<ActivePanel>('dob');
 
-  // animation (kept from your style)
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
+    fade.setValue(0.75);
     Animated.timing(fade, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-  }, [activePanel]);
+  }, [activePanel, fade]);
 
   const dobISO = useMemo(() => {
-    const m = clamp(monthIndex, 0, 11);
-    const y = clamp(year, 1900, new Date().getFullYear());
-    const maxDay = daysInMonth(y, m);
-    const d = clamp(day, 1, maxDay);
-    return `${y}-${pad2(m + 1)}-${pad2(d)}`;
-  }, [year, monthIndex, day]);
+    const normalizedMonth = clamp(monthIndex, 0, 11);
+    const normalizedYear = clamp(year, 1900, new Date().getFullYear());
+    const maxDay = daysInMonth(normalizedYear, normalizedMonth);
+    const normalizedDay = clamp(day, 1, maxDay);
+    return `${normalizedYear}-${pad2(normalizedMonth + 1)}-${pad2(normalizedDay)}`;
+  }, [day, monthIndex, year]);
 
-  // Alerts
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
@@ -106,9 +104,7 @@ export default function UserInfo2() {
     }
   };
 
-  const canContinue = useMemo(() => !!gender, [gender]);
-
-  const handleBack = () => router.replace('./UserInfo1');
+  const canContinue = useMemo(() => Boolean(gender), [gender]);
 
   const handleNext = () => {
     if (!gender) {
@@ -124,7 +120,7 @@ export default function UserInfo2() {
       gender: gender as DbGender,
     });
 
-    router.replace('./UserInfo3');
+    router.replace('/SignInLogin/onboarding/UserInfo3');
   };
 
   const RailButton = ({
@@ -139,33 +135,38 @@ export default function UserInfo2() {
     icon: keyof typeof Ionicons.glyphMap;
     selected: boolean;
     onPress: () => void;
-  }) => {
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onPress}
-        style={[styles.railBtn, selected ? styles.railBtnSelected : styles.railBtnUnselected]}
-      >
-        <View style={styles.railTopRow}>
-          <Ionicons name={icon} size={18} color={selected ? '#0b0f18' : TEXT_PRIMARY} />
-          <Text style={[styles.railTitle, selected ? styles.railTitleSelected : null]}>{title}</Text>
-          <Text style={[styles.railValue, selected ? styles.railValueSelected : null]} numberOfLines={1}>
-            {value}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={onPress}
+      style={[styles.railButton, selected ? styles.railButtonSelected : null]}
+    >
+      <View style={styles.railTopRow}>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={selected ? colors.blkText : colors.textMuted}
+        />
+        <Text style={[styles.railTitle, selected ? styles.railTitleSelected : null]}>{title}</Text>
+        <Text
+          style={[styles.railValue, selected ? styles.railValueSelected : null]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   const GenderButton = ({ value, label }: { value: GenderUI; label: string }) => {
     const selected = gender === value;
     return (
       <TouchableOpacity
         onPress={() => setGender(value)}
-        activeOpacity={0.9}
-        style={[styles.genderButton, selected ? styles.genderSelected : styles.genderUnselected]}
+        activeOpacity={0.92}
+        style={[styles.choiceButton, selected ? styles.choiceButtonSelected : null]}
       >
-        <Text style={[styles.genderText, selected ? styles.genderTextSelected : styles.genderTextUnselected]}>
+        <Text style={[styles.choiceButtonText, selected ? styles.choiceButtonTextSelected : null]}>
           {label}
         </Text>
       </TouchableOpacity>
@@ -173,226 +174,354 @@ export default function UserInfo2() {
   };
 
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+    <AuthScreen
+      eyebrow="Step 2 of 4"
+      title="Body details"
+      subtitle="These numbers drive onboarding defaults and the training analytics you see later."
+      showBackButton
+      backTo="/SignInLogin/onboarding/UserInfo1"
     >
-      <View style={styles.container}>
-        <LogoHeader />
-
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Details</Text>
-          <View style={{ width: 36 }} />
-        </View>
-
-        <Text style={styles.stepText}>Step 2/4</Text>
-
-        <View style={styles.rail}>
-          <RailButton
-            title="DOB"
-            value={dobISO}
-            icon="calendar-outline"
-            selected={activePanel === 'dob'}
-            onPress={() => setActivePanel('dob')}
-          />
-          <RailButton
-            title="HEIGHT"
-            value={`${Math.round(heightCm)} cm`}
-            icon="resize-outline"
-            selected={activePanel === 'height'}
-            onPress={() => setActivePanel('height')}
-          />
-          <RailButton
-            title="WEIGHT"
-            value={`${Math.round(weightKg)} kg`}
-            icon="barbell-outline"
-            selected={activePanel === 'weight'}
-            onPress={() => setActivePanel('weight')}
-          />
-          <RailButton
-            title="GENDER"
-            value={gender ? gender.replace('_', ' ') : 'Select'}
-            icon="person-outline"
-            selected={activePanel === 'gender'}
-            onPress={() => setActivePanel('gender')}
-          />
-        </View>
-
-        <Animated.View style={[styles.panel, { opacity: fade }]}>
-          {activePanel === 'dob' && (
-            <View>
-              <Text style={styles.panelTitle}>Date of Birth</Text>
-              <View style={styles.pickerRow}>
-                <View style={styles.pickerWrap}>
-                  <Text style={styles.pickerLabel}>Month</Text>
-                  <Picker
-                    selectedValue={monthIndex}
-                    onValueChange={(v) => setMonthIndex(Number(v))}
-                    style={styles.picker}
-                    dropdownIconColor={TEXT_PRIMARY}
-                  >
-                    {MONTHS.map((m, i) => (
-                      <Picker.Item key={m} label={m} value={i} color={TEXT_PRIMARY} />
-                    ))}
-                  </Picker>
-                </View>
-
-                <View style={styles.pickerWrap}>
-                  <Text style={styles.pickerLabel}>Day</Text>
-                  <Picker
-                    selectedValue={day}
-                    onValueChange={(v) => setDay(Number(v))}
-                    style={styles.picker}
-                    dropdownIconColor={TEXT_PRIMARY}
-                  >
-                    {Array.from({ length: daysInMonth(year, monthIndex) }, (_, i) => i + 1).map((d) => (
-                      <Picker.Item key={String(d)} label={String(d)} value={d} color={TEXT_PRIMARY} />
-                    ))}
-                  </Picker>
-                </View>
-
-                <View style={styles.pickerWrap}>
-                  <Text style={styles.pickerLabel}>Year</Text>
-                  <Picker
-                    selectedValue={year}
-                    onValueChange={(v) => setYear(Number(v))}
-                    style={styles.picker}
-                    dropdownIconColor={TEXT_PRIMARY}
-                  >
-                    {Array.from({ length: 90 }, (_, i) => new Date().getFullYear() - i).map((y) => (
-                      <Picker.Item key={String(y)} label={String(y)} value={y} color={TEXT_PRIMARY} />
-                    ))}
-                  </Picker>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {activePanel === 'height' && (
-            <View>
-              <Text style={styles.panelTitle}>Height (cm)</Text>
-              <View style={styles.counterRow}>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setHeightCm((v) => Math.max(90, v - 1))}>
-                  <Ionicons name="remove" size={20} color={TEXT_PRIMARY} />
-                </TouchableOpacity>
-                <Text style={styles.counterValue}>{Math.round(heightCm)} cm</Text>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setHeightCm((v) => Math.min(230, v + 1))}>
-                  <Ionicons name="add" size={20} color={TEXT_PRIMARY} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.hint}>Used for basic calculations and analytics.</Text>
-            </View>
-          )}
-
-          {activePanel === 'weight' && (
-            <View>
-              <Text style={styles.panelTitle}>Weight (kg)</Text>
-              <View style={styles.counterRow}>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setWeightKg((v) => Math.max(25, v - 1))}>
-                  <Ionicons name="remove" size={20} color={TEXT_PRIMARY} />
-                </TouchableOpacity>
-                <Text style={styles.counterValue}>{Math.round(weightKg)} kg</Text>
-                <TouchableOpacity style={styles.counterBtn} onPress={() => setWeightKg((v) => Math.min(250, v + 1))}>
-                  <Ionicons name="add" size={20} color={TEXT_PRIMARY} />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.hint}>You can update this anytime.</Text>
-            </View>
-          )}
-
-          {activePanel === 'gender' && (
-            <View>
-              <Text style={styles.panelTitle}>Gender</Text>
-              <View style={{ marginTop: 10, gap: 10 }}>
-                <GenderButton value="female" label="Female" />
-                <GenderButton value="male" label="Male" />
-                <GenderButton value="non_binary" label="Non-binary" />
-                <GenderButton value="prefer_not" label="Prefer not to say" />
-              </View>
-              <Text style={styles.hint}>Used for optional personalization.</Text>
-            </View>
-          )}
-        </Animated.View>
-
-        <TouchableOpacity
-          style={[styles.primaryBtn, !canContinue ? { opacity: 0.6 } : null]}
-          activeOpacity={0.9}
-          onPress={handleNext}
-        >
-          <Text style={styles.primaryBtnText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={18} color="#0b0f18" />
-        </TouchableOpacity>
-
-        <AppAlert
-          visible={alertVisible}
-          title={alertTitle}
-          message={alertMessage}
-          onClose={handleCloseAlert}
+      <View style={styles.rail}>
+        <RailButton
+          title="DOB"
+          value={dobISO}
+          icon="calendar-outline"
+          selected={activePanel === 'dob'}
+          onPress={() => setActivePanel('dob')}
+        />
+        <RailButton
+          title="Height"
+          value={`${Math.round(heightCm)} cm`}
+          icon="resize-outline"
+          selected={activePanel === 'height'}
+          onPress={() => setActivePanel('height')}
+        />
+        <RailButton
+          title="Weight"
+          value={`${Math.round(weightKg)} kg`}
+          icon="barbell-outline"
+          selected={activePanel === 'weight'}
+          onPress={() => setActivePanel('weight')}
+        />
+        <RailButton
+          title="Gender"
+          value={gender ? gender.replace('_', ' ') : 'Select'}
+          icon="person-outline"
+          selected={activePanel === 'gender'}
+          onPress={() => setActivePanel('gender')}
         />
       </View>
-    </LinearGradient>
+
+      <Animated.View style={[styles.panel, { opacity: fade }]}>
+        {activePanel === 'dob' ? (
+          <View>
+            <Text style={styles.panelTitle}>Date of birth</Text>
+            <View style={styles.pickerRow}>
+              <View style={styles.pickerWrap}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <Picker
+                  selectedValue={monthIndex}
+                  onValueChange={(value) => setMonthIndex(Number(value))}
+                  style={styles.picker}
+                  dropdownIconColor={colors.text}
+                >
+                  {MONTHS.map((month, currentMonthIndex) => (
+                    <Picker.Item
+                      key={month}
+                      label={month}
+                      value={currentMonthIndex}
+                      color={colors.text}
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerWrap}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <Picker
+                  selectedValue={day}
+                  onValueChange={(value) => setDay(Number(value))}
+                  style={styles.picker}
+                  dropdownIconColor={colors.text}
+                >
+                  {Array.from({ length: daysInMonth(year, monthIndex) }, (_, index) => index + 1).map(
+                    (currentDay) => (
+                      <Picker.Item
+                        key={String(currentDay)}
+                        label={String(currentDay)}
+                        value={currentDay}
+                        color={colors.text}
+                      />
+                    )
+                  )}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerWrap}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <Picker
+                  selectedValue={year}
+                  onValueChange={(value) => setYear(Number(value))}
+                  style={styles.picker}
+                  dropdownIconColor={colors.text}
+                >
+                  {Array.from({ length: 90 }, (_, index) => new Date().getFullYear() - index).map(
+                    (currentYear) => (
+                      <Picker.Item
+                        key={String(currentYear)}
+                        label={String(currentYear)}
+                        value={currentYear}
+                        color={colors.text}
+                      />
+                    )
+                  )}
+                </Picker>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {activePanel === 'height' ? (
+          <View>
+            <Text style={styles.panelTitle}>Height</Text>
+            <View style={styles.counterRow}>
+              <TouchableOpacity
+                style={styles.counterButton}
+                onPress={() => setHeightCm((value) => Math.max(90, value - 1))}
+                activeOpacity={0.92}
+              >
+                <Ionicons name="remove" size={20} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.counterValue}>{Math.round(heightCm)} cm</Text>
+              <TouchableOpacity
+                style={styles.counterButton}
+                onPress={() => setHeightCm((value) => Math.min(230, value + 1))}
+                activeOpacity={0.92}
+              >
+                <Ionicons name="add" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.hint}>Used for basic calculations and progress analytics.</Text>
+          </View>
+        ) : null}
+
+        {activePanel === 'weight' ? (
+          <View>
+            <Text style={styles.panelTitle}>Weight</Text>
+            <View style={styles.counterRow}>
+              <TouchableOpacity
+                style={styles.counterButton}
+                onPress={() => setWeightKg((value) => Math.max(25, value - 1))}
+                activeOpacity={0.92}
+              >
+                <Ionicons name="remove" size={20} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.counterValue}>{Math.round(weightKg)} kg</Text>
+              <TouchableOpacity
+                style={styles.counterButton}
+                onPress={() => setWeightKg((value) => Math.min(250, value + 1))}
+                activeOpacity={0.92}
+              >
+                <Ionicons name="add" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.hint}>You can update this later if it changes.</Text>
+          </View>
+        ) : null}
+
+        {activePanel === 'gender' ? (
+          <View>
+            <Text style={styles.panelTitle}>Gender</Text>
+            <View style={styles.choiceStack}>
+              <GenderButton value="female" label="Female" />
+              <GenderButton value="male" label="Male" />
+              <GenderButton value="non_binary" label="Non-binary" />
+              <GenderButton value="prefer_not" label="Prefer not to say" />
+            </View>
+            <Text style={styles.hint}>Used for optional personalization only.</Text>
+          </View>
+        ) : null}
+      </Animated.View>
+
+      <TouchableOpacity
+        style={[styles.primaryButton, !canContinue ? styles.buttonDisabled : null]}
+        activeOpacity={0.92}
+        onPress={handleNext}
+      >
+        <Text style={styles.primaryButtonText}>Continue</Text>
+        <Ionicons name="arrow-forward" size={18} color={colors.blkText} />
+      </TouchableOpacity>
+
+      <AppAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={handleCloseAlert}
+      />
+    </AuthScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 54 : 38 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
-  headerTitle: { color: TEXT_PRIMARY, fontSize: 26, fontWeight: '700' },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  stepText: { color: TEXT_MUTED, marginTop: 8, marginBottom: 12 },
-
-  rail: { gap: 10, marginBottom: 12 },
-  railBtn: { borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12 },
-  railBtnSelected: { backgroundColor: PRIMARY },
-  railBtnUnselected: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  railTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  railTitle: { color: TEXT_PRIMARY, fontWeight: '800' },
-  railTitleSelected: { color: '#0b0f18' },
-  railValue: { marginLeft: 'auto', color: TEXT_MUTED, maxWidth: 140 },
-  railValueSelected: { color: '#0b0f18', fontWeight: '700' },
-
-  panel: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 18, padding: 16, minHeight: 210 },
-  panelTitle: { color: TEXT_PRIMARY, fontSize: 16, fontWeight: '800', marginBottom: 10 },
-  hint: { color: TEXT_MUTED, marginTop: 12, fontSize: 12 },
-
-  pickerRow: { flexDirection: 'row', gap: 10 },
-  pickerWrap: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 8 },
-  pickerLabel: { color: TEXT_MUTED, fontSize: 12, marginBottom: 6 },
-  picker: { color: TEXT_PRIMARY },
-
-  counterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  counterBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  counterValue: { color: TEXT_PRIMARY, fontSize: 20, fontWeight: '900' },
-
-  genderButton: { borderRadius: 16, paddingVertical: 14, paddingHorizontal: 14 },
-  genderSelected: { backgroundColor: PRIMARY },
-  genderUnselected: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  genderText: { fontSize: 14, fontWeight: '800' },
-  genderTextSelected: { color: '#0b0f18' },
-  genderTextUnselected: { color: TEXT_PRIMARY },
-
-  primaryBtn: {
-    marginTop: 16,
-    backgroundColor: PRIMARY,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  primaryBtnText: { color: '#0b0f18', fontWeight: '800', fontSize: 15 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    rail: {
+      gap: 10,
+    },
+    railButton: {
+      borderRadius: 20,
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+      backgroundColor: withAlpha(colors.surface, 0.92),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    railButtonSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    railTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    railTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    railTitleSelected: {
+      color: colors.blkText,
+    },
+    railValue: {
+      marginLeft: 'auto',
+      maxWidth: 140,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      textTransform: 'capitalize',
+    },
+    railValueSelected: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+    },
+    panel: {
+      marginTop: 14,
+      minHeight: 240,
+      borderRadius: 28,
+      padding: 22,
+      backgroundColor: withAlpha(colors.surface, 0.92),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    panelTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 24,
+      marginBottom: 12,
+    },
+    hint: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 14,
+    },
+    pickerRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    pickerWrap: {
+      flex: 1,
+      borderRadius: 18,
+      padding: 8,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    pickerLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 15,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+      marginBottom: 4,
+    },
+    picker: {
+      color: colors.text,
+    },
+    counterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 18,
+    },
+    counterButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    counterValue: {
+      color: colors.text,
+      fontFamily: fonts.display,
+      fontSize: 30,
+      lineHeight: 34,
+      letterSpacing: -0.8,
+    },
+    choiceStack: {
+      gap: 10,
+      marginTop: 4,
+    },
+    choiceButton: {
+      borderRadius: 18,
+      paddingVertical: 16,
+      paddingHorizontal: 16,
+      backgroundColor: colors.surfaceRaised,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    choiceButtonSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    choiceButtonText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    choiceButtonTextSelected: {
+      color: colors.blkText,
+    },
+    primaryButton: {
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 16,
+    },
+    buttonDisabled: {
+      opacity: 0.62,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+  });
+}

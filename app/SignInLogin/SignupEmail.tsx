@@ -1,25 +1,20 @@
-// app/SignInLogin/SignupEmail.tsx
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Keyboard,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Keyboard,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/Colors';
-import LogoHeader from '@/components/my components/logoHeader';
-import AppAlert from './components/AppAlert';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import AuthScreen from './components/AuthScreen';
+import AppAlert from './components/AppAlert';
+import { withAlpha } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 function sanitizeUsername(raw: string) {
   let u = (raw ?? '')
@@ -32,21 +27,7 @@ function sanitizeUsername(raw: string) {
   return u;
 }
 
-/**
- * Checks username availability against user.users.username.
- *
- * IMPORTANT requirements:
- * 1) Supabase Dashboard → Project Settings → API → Schemas
- *    - Make sure "user" schema is exposed.
- *
- * 2) RLS:
- *    - If RLS is ON for user.users and you don't have a SELECT policy that allows this check,
- *      the query may fail (42501) or always return null.
- *    - Best practice: create a public view (e.g. public.username_registry) OR an RPC
- *      (SECURITY DEFINER) that only checks existence.
- */
 async function checkUsernameAgainstUserUsers(desired: string) {
-  // Query schema('user') table('users') column username
   const { data, error } = await supabase
     .schema('public')
     .from('profiles_stub')
@@ -60,17 +41,16 @@ async function checkUsernameAgainstUserUsers(desired: string) {
 
 export default function SignupEmail() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [email, setEmail] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
-
   const [loadingEmail, setLoadingEmail] = useState(false);
-
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
 
-  // 🔔 Custom alert state
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
@@ -109,9 +89,6 @@ export default function SignupEmail() {
     setCheckingUsername(true);
     setUsernameAvailable(null);
 
-    // 1) If you have an RPC, use it (preferred).
-    // Update your RPC to check "user".users (NOT public.profiles).
-    // If RPC doesn't exist, this will error and we fall back to direct query.
     const { data: rpcData, error: rpcErr } = await supabase.rpc('is_username_available', {
       desired_username: desired,
     });
@@ -122,20 +99,16 @@ export default function SignupEmail() {
       return;
     }
 
-    // 2) Fallback: direct query against user.users
     const { exists, error: qErr } = await checkUsernameAgainstUserUsers(desired);
-
     setCheckingUsername(false);
 
     if (qErr) {
       console.log('username check error', qErr);
-
-      // Common failure: RLS blocks select (42501) or schema not exposed
       const code = (qErr as any)?.code;
       if (code === '42501') {
         showAlert(
           'Username check blocked',
-          'Your database RLS is preventing username checks. Create a public view (recommended) or an RPC (SECURITY DEFINER) that only checks username existence.'
+          'Your database RLS is preventing username checks. Create a public view or a SECURITY DEFINER RPC for username availability.'
         );
         return;
       }
@@ -143,7 +116,7 @@ export default function SignupEmail() {
       if (code === 'PGRST200' || code === 'PGRST205') {
         showAlert(
           'Schema/table not exposed',
-          'Make sure the "user" schema is exposed in Supabase API settings (Project Settings → API → Schemas).'
+          'Make sure the required schema and username lookup table are exposed in Supabase API settings.'
         );
         return;
       }
@@ -172,7 +145,6 @@ export default function SignupEmail() {
       return;
     }
 
-    // If they never pressed "Check", do it here to prevent duplicates
     if (usernameAvailable === null) {
       setCheckingUsername(true);
       try {
@@ -182,7 +154,7 @@ export default function SignupEmail() {
           console.log('username check error (during signup)', qErr);
           showAlert(
             'Could not verify username',
-            'Please press "Check" to verify your username, or ensure username checking is enabled server-side.'
+            'Please verify the username before creating the account.'
           );
           return;
         }
@@ -210,7 +182,6 @@ export default function SignupEmail() {
       email: emailTrim,
       password: passwordTrim,
       options: {
-        // This metadata is optional; you can use it later after login to prefill onboarding.
         data: {
           username: usernameTrim,
           display_name: usernameTrim,
@@ -225,14 +196,12 @@ export default function SignupEmail() {
       return;
     }
 
-    // IMPORTANT CHANGE:
-    // We do NOT upsert into public.profiles anymore.
-    // Your canonical table is "user".users and you said you want to submit onboarding ONLY at the end.
-    // After they confirm email and log in, your onboarding flow will upsert user.users in one shot.
-
     const userId = data.user?.id;
     if (!userId) {
-      showAlert('Error', 'Account was created, but we did not receive an ID. Please try again.');
+      showAlert(
+        'Error',
+        'Account was created, but we did not receive an ID. Please try again.'
+      );
       return;
     }
 
@@ -243,164 +212,234 @@ export default function SignupEmail() {
         router.replace({ pathname: '/SignInLogin/Login', params: { email: emailTrim } });
       }
     );
-  }, [email, password, usernameSanitized, usernameAvailable, router]);
+  }, [email, password, usernameAvailable, usernameSanitized, router]);
 
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+    <AuthScreen
+      eyebrow="Create account"
+      title="Start with email"
+      subtitle="Set up your account first, then we’ll take you through the rest of onboarding."
+      showBackButton
+      backTo="/SignInLogin/FirstPage"
     >
-      <View style={styles.container}>
-        <LogoHeader showBackButton usePreviousRoute />
-
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Create an account</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <View style={styles.card}>
+      <View style={styles.card}>
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
-            onChangeText={(v) => setEmail(v)}
+            onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="you@example.com"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
+        </View>
 
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Username</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={styles.usernameRow}>
             <TextInput
               value={usernameInput}
-              onChangeText={(v) => {
-                setUsernameInput(v);
+              onChangeText={(value) => {
+                setUsernameInput(value);
                 setUsernameAvailable(null);
               }}
               autoCapitalize="none"
               placeholder="my_username"
-              placeholderTextColor={TEXT_MUTED}
-              style={[styles.input, { flex: 1 }]}
+              placeholderTextColor={colors.textMuted}
+              style={[styles.input, styles.usernameInput]}
             />
+
             <TouchableOpacity
-              style={styles.smallButton}
+              style={[
+                styles.inlineButton,
+                (checkingUsername || !usernameInput.trim()) && styles.inlineButtonDisabled,
+              ]}
               onPress={checkUsernameAvailability}
               disabled={checkingUsername || !usernameInput.trim()}
+              activeOpacity={0.92}
             >
               {checkingUsername ? (
-                <ActivityIndicator color="#020817" />
+                <ActivityIndicator color={colors.blkText} />
               ) : (
-                <Text style={styles.smallButtonText}>Check</Text>
+                <Text style={styles.inlineButtonText}>Check</Text>
               )}
-            </TouchableOpacity>
-          </View>
-
-          {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() && (
-            <Text style={styles.helperText}>
-              Will be saved as: <Text style={{ fontWeight: '700' }}>{usernameSanitized}</Text>
-            </Text>
-          )}
-
-          {usernameAvailable === true && (
-            <Text style={[styles.helperText, { color: '#15C779' }]}>Username is available.</Text>
-          )}
-          {usernameAvailable === false && (
-            <Text style={[styles.helperText, { color: '#FF6B81' }]}>Username is already taken.</Text>
-          )}
-
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            value={password}
-            onChangeText={(v) => setPassword(v)}
-            secureTextEntry
-            placeholder="Create a password"
-            placeholderTextColor={TEXT_MUTED}
-            style={styles.input}
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              (loadingEmail || checkingUsername) && { opacity: 0.7 },
-            ]}
-            onPress={handleEmailSignup}
-            disabled={loadingEmail || checkingUsername}
-          >
-            {loadingEmail ? (
-              <ActivityIndicator color="#020817" />
-            ) : (
-              <Text style={styles.primaryText}>Create account</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => router.replace('/SignInLogin/Login')}>
-              <Text style={styles.footerLink}> Log in</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <AppAlert
-          visible={alertVisible}
-          title={alertTitle}
-          message={alertMessage}
-          onClose={handleCloseAlert}
-        />
+        {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() ? (
+          <Text style={styles.helperText}>
+            Saved as <Text style={styles.helperValue}>{usernameSanitized}</Text>
+          </Text>
+        ) : null}
+
+        {usernameAvailable === true ? (
+          <Text style={[styles.helperText, styles.helperSuccess]}>Username is available.</Text>
+        ) : null}
+        {usernameAvailable === false ? (
+          <Text style={[styles.helperText, styles.helperDanger]}>
+            Username is already taken.
+          </Text>
+        ) : null}
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="Create a password"
+            placeholderTextColor={colors.textMuted}
+            style={styles.input}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            (loadingEmail || checkingUsername) && styles.buttonDisabled,
+          ]}
+          onPress={handleEmailSignup}
+          disabled={loadingEmail || checkingUsername}
+          activeOpacity={0.92}
+        >
+          {loadingEmail ? (
+            <ActivityIndicator color={colors.blkText} />
+          ) : (
+            <Text style={styles.primaryButtonText}>Create account</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Already have an account?</Text>
+          <TouchableOpacity onPress={() => router.replace('/SignInLogin/Login')}>
+            <Text style={styles.footerLink}> Log in</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </LinearGradient>
+
+      <AppAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={handleCloseAlert}
+      />
+    </AuthScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 24,
-    color: TEXT_PRIMARY,
-    fontWeight: '600',
-  },
-  card: { borderRadius: 18, padding: 18, marginTop: 16 },
-  label: { fontSize: 13, color: TEXT_PRIMARY, marginTop: 10, marginBottom: 4 },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#7b7b7bff',
-    backgroundColor: '#b0b0b050',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-  },
-  smallButton: {
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-  },
-  smallButtonText: { color: PRIMARY, fontWeight: '600', fontSize: 13 },
-  helperText: { fontSize: 12, color: TEXT_MUTED, marginTop: 6 },
-  primaryButton: {
-    marginTop: 16,
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryText: { color: PRIMARY, fontWeight: '600', fontSize: 15 },
-  footerRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
-  footerText: { color: TEXT_MUTED, fontSize: 13 },
-  footerLink: { color: Colors.dark.highlight1, fontSize: 13, fontWeight: '600' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      borderRadius: 28,
+      padding: 22,
+      gap: 16,
+      backgroundColor: withAlpha(colors.surface, 0.92),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    fieldGroup: {
+      gap: 8,
+    },
+    label: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    usernameRow: {
+      flexDirection: 'row',
+      gap: 10,
+      alignItems: 'center',
+    },
+    input: {
+      minHeight: 54,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 16,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 15,
+    },
+    usernameInput: {
+      flex: 1,
+    },
+    inlineButton: {
+      minWidth: 96,
+      height: 54,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      paddingHorizontal: 16,
+    },
+    inlineButtonDisabled: {
+      opacity: 0.62,
+    },
+    inlineButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    helperText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    helperValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+    },
+    helperSuccess: {
+      color: colors.success,
+    },
+    helperDanger: {
+      color: colors.danger,
+    },
+    primaryButton: {
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 4,
+    },
+    buttonDisabled: {
+      opacity: 0.72,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    footerText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    footerLink: {
+      color: colors.accent,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+  });
+}

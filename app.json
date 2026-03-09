@@ -33,7 +33,10 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.alterastudio.ascension"
+      "package": "com.alterastudio.ascension",
+      "permissions": [
+        "android.permission.health.READ_HEART_RATE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -41,6 +44,14 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
       [
         "expo-location",
         {
@@ -53,6 +64,7 @@
           "RNMapboxMapsVersion": "11.16.0"
         }
       ],
+      "expo-health-connect",
       ["@kingstinct/react-native-healthkit", {
         "NSHealthShareUsageDescription": "Tensr reads your heart rate to show workout analytics and training insights.",
         "NSHealthUpdateUsageDescription": "Tensr can write workouts you log to Apple Health (optional).",

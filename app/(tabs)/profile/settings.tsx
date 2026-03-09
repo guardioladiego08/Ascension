@@ -16,9 +16,10 @@ import { Colors } from '@/constants/Colors';
 import { clearAllRunWalkLocalState } from '@/lib/runWalkSessionCleanup';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import {
-  getAppleHealthPreferences,
-  getAppleHealthStatusLabel,
+  getHealthPreferences,
+  getHealthStatusLabel,
 } from '@/lib/health/preferences';
+import { getCurrentHealthProviderLabel } from '@/lib/health/provider';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
@@ -40,22 +41,23 @@ export default function SettingsScreen() {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showDistanceModal, setShowDistanceModal] = useState(false);
   const [showProfileDetailsModal, setShowProfileDetailsModal] = useState(false);
-  const [appleHealthStatus, setAppleHealthStatus] = useState('Not connected');
+  const [healthStatus, setHealthStatus] = useState('Not connected');
+  const providerLabel = getCurrentHealthProviderLabel();
 
-  const loadAppleHealthStatus = useCallback(async () => {
+  const loadHealthStatus = useCallback(async () => {
     try {
-      const prefs = await getAppleHealthPreferences();
-      setAppleHealthStatus(getAppleHealthStatusLabel(prefs));
+      const prefs = await getHealthPreferences();
+      setHealthStatus(getHealthStatusLabel(prefs));
     } catch (error) {
-      console.warn('[Settings] failed to load Apple Health status', error);
-      setAppleHealthStatus('Unavailable');
+      console.warn('[Settings] failed to load health status', error);
+      setHealthStatus('Unavailable');
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadAppleHealthStatus();
-    }, [loadAppleHealthStatus])
+      loadHealthStatus();
+    }, [loadHealthStatus])
   );
 
   const handleComingSoon = (label: string) => {
@@ -262,9 +264,9 @@ export default function SettingsScreen() {
               style={[styles.row, styles.rowBorder]}
               onPress={() => router.push('/profile/settings/health')}
             >
-              <Text style={styles.rowLabel}>Apple Health</Text>
+              <Text style={styles.rowLabel}>Health data</Text>
               <View style={styles.rowRight}>
-                <Text style={styles.rowValue}>{appleHealthStatus}</Text>
+                <Text style={styles.rowValue}>{`${providerLabel} · ${healthStatus}`}</Text>
                 <Ionicons
                   name="chevron-forward"
                   size={18}

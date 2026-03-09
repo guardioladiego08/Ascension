@@ -1,23 +1,12 @@
 import { Platform } from 'react-native';
 
-import type { AppleHealthAuthorizationStatus } from '@/lib/health/preferences';
+import type {
+  HealthAuthorizationResult,
+  HealthAuthorizationStatus,
+  HealthHeartRateSample,
+} from '@/lib/health/types';
 
-export type AppleHeartRateSample = {
-  sampleUuid: string | null;
-  sampleStartAt: string;
-  sampleEndAt: string;
-  bpm: number;
-  sourceName: string | null;
-  sourceBundleId: string | null;
-  deviceName: string | null;
-  deviceModel: string | null;
-  metadata: Record<string, unknown>;
-};
-
-type AppleHealthAuthorizationResult = {
-  status: AppleHealthAuthorizationStatus;
-  error: string | null;
-};
+export type AppleHeartRateSample = HealthHeartRateSample;
 
 const HEART_RATE_IDENTIFIER = 'HKQuantityTypeIdentifierHeartRate';
 const HEART_RATE_UNIT = 'count/min';
@@ -202,7 +191,7 @@ export function formatAppleHealthError(error: unknown): string {
 
 export function inferAppleHealthAuthorizationStatusFromError(
   error: unknown
-): AppleHealthAuthorizationStatus {
+): HealthAuthorizationStatus {
   const message = formatAppleHealthError(error).toLowerCase();
 
   if (
@@ -226,7 +215,7 @@ export function inferAppleHealthAuthorizationStatusFromError(
   return 'not_determined';
 }
 
-export async function requestAppleHeartRateAuthorization(): Promise<AppleHealthAuthorizationResult> {
+export async function requestAppleHeartRateAuthorization(): Promise<HealthAuthorizationResult> {
   const healthKit = getHealthKitModule();
   if (!healthKit || !isAppleHealthKitAvailable()) {
     console.log(`${HEALTH_DEBUG_PREFIX} request auth skipped: unavailable`);
@@ -272,7 +261,7 @@ export async function requestAppleHeartRateAuthorization(): Promise<AppleHealthA
 export async function getAppleHeartRateSamplesForRange(params: {
   startDate: string;
   endDate: string;
-}): Promise<AppleHeartRateSample[]> {
+}): Promise<HealthHeartRateSample[]> {
   const healthKit = getHealthKitModule();
   if (!healthKit || !isAppleHealthKitAvailable()) {
     throw new Error(getAppleHealthUnavailableMessage());
@@ -345,7 +334,7 @@ export async function getAppleHeartRateSamplesForRange(params: {
         metadata: (toJsonSafeValue(sample.metadata) as Record<string, unknown>) ?? {},
       };
     })
-    .filter((sample): sample is AppleHeartRateSample => sample != null)
+    .filter((sample): sample is HealthHeartRateSample => sample != null)
     .filter((sample) => {
       const sampleStart = new Date(sample.sampleStartAt);
       const sampleEnd = new Date(sample.sampleEndAt);

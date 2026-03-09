@@ -1,24 +1,19 @@
-// app/SignInLogin/Login.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/Colors';
-import LogoHeader from '@/components/my components/logoHeader';
-import { LinearGradient } from 'expo-linear-gradient';
 
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import AuthScreen from './components/AuthScreen';
+import { withAlpha } from '@/constants/Colors';
+import { supabase } from '@/lib/supabase';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Params = { email?: string };
 
@@ -52,6 +47,9 @@ function getMetaUsername(user: any) {
 export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const prefillEmail = Array.isArray(params.email) ? params.email[0] : params.email;
 
   const [email, setEmail] = useState(prefillEmail ?? '');
@@ -60,11 +58,6 @@ export default function Login() {
 
   const routingRef = useRef(false);
 
-  /**
-   * Ensures a row exists in user.users for this auth user.
-   * - Uses PK user_id
-   * - Does NOT reference public.profiles
-   */
   const ensureUserUsersRow = async (userId: string) => {
     const {
       data: { user },
@@ -79,11 +72,12 @@ export default function Login() {
     const fallbackUsername = buildFallbackUsername(user.email, userId);
     const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
 
-    // Read existing profile first so we don't treat established users as "new".
     const { data: existing, error: readErr } = await supabase
       .schema('user')
       .from('users')
-      .select('user_id,onboarding_completed,first_name,last_name,fitness_journey_stage,app_usage_reasons')
+      .select(
+        'user_id,onboarding_completed,first_name,last_name,fitness_journey_stage,app_usage_reasons'
+      )
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -115,7 +109,6 @@ export default function Login() {
       return { ok: true as const, onboardingCompleted: inferredCompleted };
     }
 
-    // Insert only for true first-time users.
     const { error: insertErr } = await supabase
       .schema('user')
       .from('users')
@@ -124,11 +117,10 @@ export default function Login() {
         username,
         onboarding_completed: false,
         is_private: true,
-        app_usage_reasons: [], // matches your default type
+        app_usage_reasons: [],
       });
 
     if (insertErr) {
-      // If this raced with another insert, continue as existing user.
       if ((insertErr as any).code !== '23505') {
         return { ok: false as const, message: insertErr.message };
       }
@@ -137,10 +129,6 @@ export default function Login() {
     return { ok: true as const, onboardingCompleted: false };
   };
 
-  /**
-   * Optional: Ensure profiles_stub row exists (so your seed trigger can run off it).
-   * Your table has: user_id (unique), username (nullable).
-   */
   const ensureProfilesStubRow = async (userId: string) => {
     const {
       data: { user },
@@ -150,17 +138,14 @@ export default function Login() {
     const fallbackUsername = buildFallbackUsername(user?.email, userId);
     const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
 
-    const { error } = await supabase
-      .from('profiles_stub') // public schema by default
-      .upsert(
-        {
-          user_id: userId,
-          username,
-        },
-        { onConflict: 'user_id' }
-      );
+    const { error } = await supabase.from('profiles_stub').upsert(
+      {
+        user_id: userId,
+        username,
+      },
+      { onConflict: 'user_id' }
+    );
 
-    // If RLS blocks this (common), don’t fail login—your auth.users trigger should seed this anyway.
     if (error) {
       console.log('[ensureProfilesStubRow] non-fatal error', error);
     }
@@ -171,7 +156,6 @@ export default function Login() {
     routingRef.current = true;
 
     try {
-      // 1) Ensure canonical rows exist
       const ensure = await ensureUserUsersRow(userId);
       if (!ensure.ok) {
         Alert.alert('Error', ensure.message);
@@ -179,12 +163,10 @@ export default function Login() {
         return;
       }
 
-      // Optional: seed stub (non-fatal if blocked)
       await ensureProfilesStubRow(userId);
 
       const onboardingCompleted = ensure.onboardingCompleted === true;
 
-      // 3) Route
       if (!onboardingCompleted) {
         router.replace('/SignInLogin/onboarding/UserInfo1');
         return;
@@ -223,7 +205,6 @@ export default function Login() {
     await routeAfterLogin(userId);
   };
 
-  // Handles OAuth completion or any auth state changes
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const id = session?.user?.id;
@@ -238,20 +219,17 @@ export default function Login() {
   }, []);
 
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+    <AuthScreen
+      eyebrow="Account access"
+      title="Log in"
+      subtitle="Pick up your training, cardio, and nutrition history where you left off."
+      showBackButton
+      backTo="/SignInLogin/FirstPage"
+      scrollable={false}
+      bodyStyle={styles.body}
     >
-      <View style={styles.container}>
-        <LogoHeader showBackButton usePreviousRoute />
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Log In</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <View style={styles.card}>
+      <View style={styles.card}>
+        <View style={styles.fieldGroup}>
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
@@ -259,90 +237,117 @@ export default function Login() {
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="you@example.com"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
+        </View>
 
-          <Text style={[styles.label, { marginTop: 14 }]}>Password</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Password</Text>
           <TextInput
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            placeholder="••••••••"
-            placeholderTextColor={TEXT_MUTED}
+            placeholder="Enter your password"
+            placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
+        </View>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, loadingEmail && { opacity: 0.7 }]}
-            onPress={handleEmailLogin}
-            disabled={loadingEmail}
-          >
-            {loadingEmail ? (
-              <ActivityIndicator color="#020817" />
-            ) : (
-              <Text style={styles.primaryText}>Log in</Text>
-            )}
+        <TouchableOpacity
+          style={[styles.primaryButton, loadingEmail ? styles.buttonDisabled : null]}
+          onPress={handleEmailLogin}
+          disabled={loadingEmail}
+          activeOpacity={0.92}
+        >
+          {loadingEmail ? (
+            <ActivityIndicator color={colors.blkText} />
+          ) : (
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Don&apos;t have an account?</Text>
+          <TouchableOpacity onPress={() => router.replace('/SignInLogin/SignupEmail')}>
+            <Text style={styles.footerLink}> Create one</Text>
           </TouchableOpacity>
-
-          <View style={styles.footerRow}>
-            <Text style={styles.footerText}>Don’t have an account?</Text>
-            <TouchableOpacity onPress={() => router.replace('/SignInLogin/SignupEmail')}>
-              <Text style={styles.footerLink}> Sign up</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
-    </LinearGradient>
+    </AuthScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 20 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 32,
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 24,
-    color: TEXT_PRIMARY,
-    fontWeight: '600',
-  },
-  card: {
-    borderRadius: 18,
-    padding: 18,
-    marginTop: 16,
-  },
-  label: { fontSize: 13, color: TEXT_PRIMARY, marginBottom: 4 },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#7b7b7bff',
-    backgroundColor: '#b0b0b050',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-  },
-  primaryButton: {
-    marginTop: 20,
-    backgroundColor: 'transparent',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: PRIMARY,
-  },
-  primaryText: { color: PRIMARY, fontWeight: '600', fontSize: 15 },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  footerText: { color: TEXT_MUTED, fontSize: 13 },
-  footerLink: { color: PRIMARY, fontSize: 13, fontWeight: '600' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    body: {
+      justifyContent: 'center',
+    },
+    card: {
+      borderRadius: 28,
+      padding: 22,
+      gap: 18,
+      backgroundColor: withAlpha(colors.surface, 0.92),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    fieldGroup: {
+      gap: 8,
+    },
+    label: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 16,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    input: {
+      minHeight: 54,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceRaised,
+      paddingHorizontal: 16,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 15,
+    },
+    primaryButton: {
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonDisabled: {
+      opacity: 0.72,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    footerText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    footerLink: {
+      color: colors.accent,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+  });
+}

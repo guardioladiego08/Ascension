@@ -1,28 +1,23 @@
-// app/SignInLogin/onboarding/UserInfo3.tsx
 import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors } from '@/constants/Colors';
-import LogoHeader from '@/components/my components/logoHeader';
+import AuthScreen from '../components/AuthScreen';
 import AppAlert from '../components/AppAlert';
-
-import { useOnboardingDraftStore, type AppUsageReason } from '@/lib/onboarding/onboardingDraftStore';
-
-const BG = Colors.dark.background;
-const PRIMARY = Colors.dark.highlight1;
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted;
+import { withAlpha } from '@/constants/Colors';
+import {
+  useOnboardingDraftStore,
+  type AppUsageReason,
+} from '@/lib/onboarding/onboardingDraftStore';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const USAGE_OPTIONS: Array<{
   key: AppUsageReason;
@@ -32,32 +27,32 @@ const USAGE_OPTIONS: Array<{
 }> = [
   {
     key: 'track_fitness_health',
-    title: 'TRACK FITNESS & HEALTH',
+    title: 'Track fitness and health',
     subtitle: 'Track training, consistency, and overall progress.',
     icon: 'pulse-outline',
   },
   {
     key: 'train_for_personal_goal',
-    title: 'TRAIN FOR A PERSONAL GOAL',
+    title: 'Train for a personal goal',
     subtitle: 'Build toward a race, PR, or body composition goal.',
     icon: 'flag-outline',
   },
   {
     key: 'compete_with_friends',
-    title: 'COMPETE WITH FRIENDS',
+    title: 'Compete with friends',
     subtitle: 'Leaderboards, challenges, and performance comparisons.',
     icon: 'trophy-outline',
   },
   {
     key: 'connect_with_friends',
-    title: 'CONNECT WITH FRIENDS',
+    title: 'Connect with friends',
     subtitle: 'Share sessions, follow friends, and stay accountable.',
     icon: 'people-outline',
   },
   {
     key: 'other',
-    title: 'OTHER',
-    subtitle: 'A bit of everything—or something unique to you.',
+    title: 'Other',
+    subtitle: 'A mix of features or something specific to your routine.',
     icon: 'ellipsis-horizontal-circle-outline',
   },
 ];
@@ -65,12 +60,14 @@ const USAGE_OPTIONS: Array<{
 export default function UserInfo3() {
   const router = useRouter();
   const { draft, setUsageReasons } = useOnboardingDraftStore();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [usage, setUsage] = useState<AppUsageReason[]>(
     Array.isArray(draft.app_usage_reasons) ? draft.app_usage_reasons : []
   );
+  const [saving, setSaving] = useState(false);
 
-  // Alerts
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
@@ -95,12 +92,10 @@ export default function UserInfo3() {
   const canContinue = useMemo(() => usage.length > 0, [usage]);
 
   const toggleUsage = (key: AppUsageReason) => {
-    setUsage((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+    setUsage((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    );
   };
-
-  const [saving, setSaving] = useState(false);
-
-  const handleBack = () => router.replace('./UserInfo2');
 
   const handleNext = async () => {
     if (!canContinue) {
@@ -111,163 +106,192 @@ export default function UserInfo3() {
     setSaving(true);
     try {
       setUsageReasons(usage);
-      router.replace('./UserInfo4');
+      router.replace('/SignInLogin/onboarding/UserInfo4');
     } finally {
       setSaving(false);
     }
   };
 
-  const OptionCard = ({
-    title,
-    subtitle,
-    icon,
-    selected,
-    onPress,
-  }: {
-    title: string;
-    subtitle: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    selected: boolean;
-    onPress: () => void;
-  }) => {
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onPress}
-        style={[styles.cardBtn, selected ? styles.cardBtnSelected : styles.cardBtnUnselected]}
-      >
-        <View style={styles.cardRow}>
-          <View style={styles.iconWrap}>
-            <Ionicons name={icon} size={22} color={selected ? '#0b0f18' : 'rgba(255,255,255,0.55)'} />
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.cardTitle, selected ? styles.cardTitleSelected : null]}>{title}</Text>
-            <Text style={[styles.cardSubtitle, selected ? styles.cardSubtitleSelected : null]}>{subtitle}</Text>
-          </View>
-
-          <View style={styles.trailing}>
-            {selected ? (
-              <View style={styles.checkPill}>
-                <Ionicons name="checkmark" size={16} color="#0b0f18" />
-              </View>
-            ) : (
-              <View style={styles.unchecked} />
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
+    <AuthScreen
+      eyebrow="Step 3 of 4"
+      title="Why Tensr?"
+      subtitle="Select the jobs you want this app to do well so the experience starts in the right place."
+      showBackButton
+      backTo="/SignInLogin/onboarding/UserInfo2"
+      bodyStyle={styles.body}
+      scrollable={false}
     >
-      <View style={styles.container}>
-        <LogoHeader />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {USAGE_OPTIONS.map((option) => {
+          const selected = usage.includes(option.key);
+          return (
+            <TouchableOpacity
+              key={option.key}
+              activeOpacity={0.92}
+              onPress={() => toggleUsage(option.key)}
+              style={[styles.cardButton, selected ? styles.cardButtonSelected : null]}
+            >
+              <View style={styles.cardRow}>
+                <View style={[styles.iconWrap, selected ? styles.iconWrapSelected : null]}>
+                  <Ionicons
+                    name={option.icon}
+                    size={22}
+                    color={selected ? colors.blkText : colors.textMuted}
+                  />
+                </View>
 
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Why Tensr?</Text>
-          <View style={{ width: 36 }} />
-        </View>
+                <View style={styles.cardCopy}>
+                  <Text style={[styles.cardTitle, selected ? styles.cardTitleSelected : null]}>
+                    {option.title}
+                  </Text>
+                  <Text
+                    style={[styles.cardSubtitle, selected ? styles.cardSubtitleSelected : null]}
+                  >
+                    {option.subtitle}
+                  </Text>
+                </View>
 
-        <Text style={styles.stepText}>Step 3/4</Text>
+                {selected ? (
+                  <View style={styles.checkPill}>
+                    <Ionicons name="checkmark" size={16} color={colors.blkText} />
+                  </View>
+                ) : (
+                  <View style={styles.unchecked} />
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: 22 }}>
-          <Text style={styles.title}>What brings you here?</Text>
-          <Text style={styles.subtitle}>Select one or more. This helps tailor your experience.</Text>
+      <TouchableOpacity
+        style={[styles.primaryButton, !canContinue ? styles.buttonDisabled : null]}
+        activeOpacity={0.92}
+        onPress={handleNext}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color={colors.blkText} />
+        ) : (
+          <>
+            <Text style={styles.primaryButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.blkText} />
+          </>
+        )}
+      </TouchableOpacity>
 
-          <View style={{ marginTop: 12, gap: 12 }}>
-            {USAGE_OPTIONS.map((opt) => (
-              <OptionCard
-                key={opt.key}
-                title={opt.title}
-                subtitle={opt.subtitle}
-                icon={opt.icon}
-                selected={usage.includes(opt.key)}
-                onPress={() => toggleUsage(opt.key)}
-              />
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.primaryBtn, !canContinue ? { opacity: 0.6 } : null]}
-            activeOpacity={0.9}
-            onPress={handleNext}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator />
-            ) : (
-              <>
-                <Text style={styles.primaryBtnText}>Continue</Text>
-                <Ionicons name="arrow-forward" size={18} color="#0b0f18" />
-              </>
-            )}
-          </TouchableOpacity>
-        </ScrollView>
-
-        <AppAlert
-          visible={alertVisible}
-          title={alertTitle}
-          message={alertMessage}
-          onClose={handleCloseAlert}
-        />
-      </View>
-    </LinearGradient>
+      <AppAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        onClose={handleCloseAlert}
+      />
+    </AuthScreen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 18, paddingTop: Platform.OS === 'ios' ? 54 : 38 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 },
-  headerTitle: { color: TEXT_PRIMARY, fontSize: 26, fontWeight: '700' },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  stepText: { color: TEXT_MUTED, marginTop: 8, marginBottom: 12 },
-
-  title: { color: TEXT_PRIMARY, fontSize: 18, fontWeight: '900' },
-  subtitle: { color: TEXT_MUTED, marginTop: 6 },
-
-  cardBtn: { borderRadius: 18, padding: 14 },
-  cardBtnSelected: { backgroundColor: PRIMARY },
-  cardBtnUnselected: { backgroundColor: 'rgba(255,255,255,0.06)' },
-
-  cardRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  cardTitle: { color: TEXT_PRIMARY, fontWeight: '900', fontSize: 13 },
-  cardTitleSelected: { color: '#0b0f18' },
-  cardSubtitle: { color: TEXT_MUTED, marginTop: 4, fontSize: 12 },
-  cardSubtitleSelected: { color: 'rgba(0,0,0,0.7)' },
-
-  trailing: { paddingLeft: 10 },
-  checkPill: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#0b0f18', alignItems: 'center', justifyContent: 'center' },
-  unchecked: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
-
-  primaryBtn: {
-    marginTop: 16,
-    backgroundColor: PRIMARY,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  primaryBtnText: { color: '#0b0f18', fontWeight: '800', fontSize: 15 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    body: {
+      flex: 1,
+    },
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      gap: 12,
+      paddingBottom: 8,
+    },
+    cardButton: {
+      borderRadius: 24,
+      padding: 18,
+      backgroundColor: withAlpha(colors.surface, 0.92),
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cardButtonSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    cardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+    },
+    iconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceRaised,
+    },
+    iconWrapSelected: {
+      backgroundColor: withAlpha(colors.blkText, 0.12),
+    },
+    cardCopy: {
+      flex: 1,
+    },
+    cardTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+    cardTitleSelected: {
+      color: colors.blkText,
+    },
+    cardSubtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+    cardSubtitleSelected: {
+      color: withAlpha(colors.blkText, 0.72),
+    },
+    checkPill: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: withAlpha(colors.blkText, 0.12),
+    },
+    unchecked: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 1.5,
+      borderColor: colors.borderStrong,
+    },
+    primaryButton: {
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 16,
+    },
+    buttonDisabled: {
+      opacity: 0.62,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 20,
+    },
+  });
+}

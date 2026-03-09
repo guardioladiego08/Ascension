@@ -15,11 +15,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
 import {
-  getAppleHeartRateSamplesForRange,
-  getAppleHealthUnavailableMessage,
-  isAppleHealthKitAvailable,
-  type AppleHeartRateSample,
-} from '@/lib/health/appleHealthKit';
+  getCurrentHeartRateSamplesForRange,
+  getCurrentHealthProviderLabel,
+  getCurrentHealthProviderUnavailableMessage,
+  isCurrentHealthProviderAvailable,
+} from '@/lib/health/provider';
+import type { HealthHeartRateSample } from '@/lib/health/types';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -27,6 +28,7 @@ const BORDER = Colors.dark?.border ?? '#1F2937';
 const TEXT_PRIMARY = Colors.dark.text;
 const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const ACCENT = Colors.dark.highlight1;
+const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -47,7 +49,7 @@ function formatWindowDate(value: string) {
 export default function HeartRateTestScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [samples, setSamples] = useState<AppleHeartRateSample[]>([]);
+  const [samples, setSamples] = useState<HealthHeartRateSample[]>([]);
   const [windowStart, setWindowStart] = useState<string | null>(null);
   const [windowEnd, setWindowEnd] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -68,11 +70,11 @@ export default function HeartRateTestScreen() {
     setErrorText(null);
 
     try {
-      if (!isAppleHealthKitAvailable()) {
-        throw new Error(getAppleHealthUnavailableMessage());
+      if (!(await isCurrentHealthProviderAvailable())) {
+        throw new Error(await getCurrentHealthProviderUnavailableMessage());
       }
 
-      const nextSamples = await getAppleHeartRateSamplesForRange({
+      const nextSamples = await getCurrentHeartRateSamplesForRange({
         startDate: start.toISOString(),
         endDate: end.toISOString(),
       });
@@ -99,7 +101,7 @@ export default function HeartRateTestScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Heart Rate Test</Text>
           <Text style={styles.subtitle}>
-            Query Apple Health for the last 3 hours and inspect the raw samples.
+            Query {HEART_RATE_PROVIDER_LABEL} for the last 3 hours and inspect the raw samples.
           </Text>
         </View>
 
@@ -112,7 +114,7 @@ export default function HeartRateTestScreen() {
             <Text style={styles.cardTitle}>Query</Text>
             <Text style={styles.cardBody}>
               This is a temporary debug tool. It does not save anything by itself. It only reads
-              the samples that Apple Health already has.
+              the samples that {HEART_RATE_PROVIDER_LABEL} already has.
             </Text>
 
             <TouchableOpacity
@@ -195,7 +197,7 @@ export default function HeartRateTestScreen() {
                   </View>
                   <View style={styles.sampleRight}>
                     <Text style={styles.sampleSource}>
-                      {sample.sourceName ?? sample.deviceName ?? 'Apple Health'}
+                      {sample.sourceName ?? sample.deviceName ?? HEART_RATE_PROVIDER_LABEL}
                     </Text>
                     {sample.deviceModel ? (
                       <Text style={styles.sampleMeta}>{sample.deviceModel}</Text>

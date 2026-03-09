@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
   createCustomExercise,
   findVisibleExerciseByName,
   getAuthenticatedUserId,
+  type ExerciseRecord,
 } from '@/lib/strength/exercises';
 
 const BODY_PARTS = [
@@ -55,7 +56,7 @@ const CATEGORIES = [
 type Props = {
   visible: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (exercise: ExerciseRecord) => void;
 };
 
 const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) => {
@@ -81,6 +82,19 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
     setBodyParts([]);
     setCategory('');
     setInfo('');
+    setCategoryDropdownVisible(false);
+  };
+
+  useEffect(() => {
+    if (!visible) {
+      resetForm();
+      setLoading(false);
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   const handleSubmit = async () => {
@@ -119,7 +133,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
         return;
       }
 
-      await createCustomExercise({
+      const createdExercise = await createCustomExercise({
         exercise_name: name.trim(),
         body_parts: bodyParts,
         workout_category: category || null,
@@ -127,9 +141,8 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
         userId,
       });
 
-      Alert.alert('Success', 'Exercise added successfully!');
       resetForm();
-      onSuccess();
+      onSuccess(createdExercise);
     } catch (err: any) {
       console.warn('Error inserting custom exercise', err);
       Alert.alert('Error', err?.message ?? 'Failed to add exercise.');
@@ -141,8 +154,8 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
   return (
     <>
       <AppPopup
-        visible={visible}
-        onClose={onClose}
+        visible={visible && !categoryDropdownVisible}
+        onClose={handleClose}
         eyebrow="Custom exercise"
         title="Add to your library"
         showCloseButton
@@ -203,7 +216,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
         <View style={styles.btnRow}>
           <TouchableOpacity
             activeOpacity={0.92}
-            onPress={onClose}
+            onPress={handleClose}
             style={[globalStyles.buttonSecondary, styles.button]}
           >
             <Text style={globalStyles.buttonTextSecondary}>Cancel</Text>
@@ -224,7 +237,7 @@ const CustomExerciseModal: React.FC<Props> = ({ visible, onClose, onSuccess }) =
       </AppPopup>
 
       <AppPopup
-        visible={categoryDropdownVisible}
+        visible={visible && categoryDropdownVisible}
         onClose={() => setCategoryDropdownVisible(false)}
         eyebrow="Category"
         title="Select category"

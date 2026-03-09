@@ -19,7 +19,7 @@ interface LogoHeaderProps {
    * Example:
    *   backHref={{ pathname: "/SignInLogin/Login", params: { email: "a@b.com" } }}
    */
-  backHref?: Href<string | object>;
+  backHref?: Href;
 
   /**
    * If true, uses router.replace(...) (good for auth/onboarding).

@@ -191,7 +191,7 @@ const ExercisePickerModal: React.FC<Props> = ({
   return (
     <>
       <AppPopup
-        visible={visible}
+        visible={visible && !filterVisible && !showCustomModal}
         onClose={onClose}
         eyebrow="Exercise library"
         title="Select exercise"
@@ -278,7 +278,7 @@ const ExercisePickerModal: React.FC<Props> = ({
       </AppPopup>
 
       <AppPopup
-        visible={filterVisible}
+        visible={visible && filterVisible && !showCustomModal}
         onClose={() => setFilterVisible(false)}
         eyebrow="Filter library"
         title="Refine exercises"
@@ -346,11 +346,12 @@ const ExercisePickerModal: React.FC<Props> = ({
       </AppPopup>
 
       <CustomExerciseModal
-        visible={showCustomModal}
+        visible={visible && showCustomModal}
         onClose={() => setShowCustomModal(false)}
-        onSuccess={() => {
+        onSuccess={(exercise) => {
           setShowCustomModal(false);
-          fetchAllExercises();
+          onPick({ id: exercise.id, exercise_name: exercise.exercise_name });
+          onClose();
         }}
       />
     </>

@@ -27,17 +27,19 @@ import {
 } from '@/lib/goals/goalLogic';
 import MetricLineChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import {
-  formatAppleHealthError,
-  getAppleHealthUnavailableMessage,
-  getAppleHeartRateSamplesForRange,
-  isAppleHealthKitAvailable,
-  type AppleHeartRateSample,
-} from '@/lib/health/appleHealthKit';
+  formatCurrentHealthError,
+  getCurrentHeartRateSamplesForRange,
+  getCurrentHealthProviderLabel,
+  getCurrentHealthProviderUnavailableMessage,
+  isCurrentHealthProviderAvailable,
+} from '@/lib/health/provider';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
+import type { HealthHeartRateSample } from '@/lib/health/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
+const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
 
 const LB_PER_KG = 2.20462;
 
@@ -135,7 +137,7 @@ export default function StrengthSummaryPage() {
   const [shareToFeed, setShareToFeed] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
   const [goalResult, setGoalResult] = React.useState<DailyGoalResults | null>(null);
-  const [heartRateSamples, setHeartRateSamples] = React.useState<AppleHeartRateSample[]>([]);
+  const [heartRateSamples, setHeartRateSamples] = React.useState<HealthHeartRateSample[]>([]);
   const [heartRateSyncState, setHeartRateSyncState] = React.useState<HeartRateSyncState>('idle');
   const [heartRateSyncMessage, setHeartRateSyncMessage] = React.useState<string | null>(null);
   const [heartRateSyncing, setHeartRateSyncing] = React.useState(false);
@@ -170,7 +172,7 @@ export default function StrengthSummaryPage() {
         setHeartRateSyncMessage(
           `${reason === 'auto' ? 'Auto retry' : 'Retry'} in ${Math.round(
             delayMs / 1000
-          )} seconds before re-checking Apple Health.`
+          )} seconds before re-checking ${HEART_RATE_PROVIDER_LABEL}.`
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -181,17 +183,19 @@ export default function StrengthSummaryPage() {
 
       try {
         setHeartRateSyncing(true);
-        if (!isAppleHealthKitAvailable()) {
+        if (!(await isCurrentHealthProviderAvailable())) {
           setHeartRateLoaded(true);
           setHeartRateSyncState('skipped');
-          setHeartRateSyncMessage(getAppleHealthUnavailableMessage());
+          setHeartRateSyncMessage(await getCurrentHealthProviderUnavailableMessage());
           return;
         }
 
         setHeartRateSyncState('syncing');
-        setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
+        setHeartRateSyncMessage(
+          `Loading heart-rate samples from ${HEART_RATE_PROVIDER_LABEL}…`
+        );
 
-        const samples = await getAppleHeartRateSamplesForRange({
+        const samples = await getCurrentHeartRateSamplesForRange({
           startDate: workout.started_at,
           endDate: workout.ended_at,
         });
@@ -205,15 +209,15 @@ export default function StrengthSummaryPage() {
         setHeartRateSyncState('synced');
         if (samples.length === 0) {
           setHeartRateSyncMessage(
-            'Apple Health returned no samples for this workout yet. Retry after a short delay.'
+            `${HEART_RATE_PROVIDER_LABEL} returned no samples for this workout yet. Retry after a short delay.`
           );
         } else {
           setHeartRateSyncMessage(
-            `Loaded ${samples.length} heart-rate samples from Apple Health.`
+            `Loaded ${samples.length} heart-rate samples from ${HEART_RATE_PROVIDER_LABEL}.`
           );
         }
       } catch (error: any) {
-        const message = formatAppleHealthError(error);
+        const message = formatCurrentHealthError(error);
         setHeartRateLoaded(true);
         if (
           message.toLowerCase().includes('not available') ||
@@ -226,7 +230,7 @@ export default function StrengthSummaryPage() {
           return;
         }
 
-        console.warn('[StrengthSummary] Apple Health load failed', message);
+        console.warn('[StrengthSummary] health provider load failed', message);
         setHeartRateSyncState('failed');
         setHeartRateSyncMessage(message);
       } finally {
@@ -548,7 +552,7 @@ export default function StrengthSummaryPage() {
   const heartRateSourceLabel = React.useMemo(() => {
     if (heartRateSamples.length === 0) return null;
     const first = heartRateSamples[0];
-    return first.sourceName ?? first.deviceName ?? 'Apple Health';
+    return first.sourceName ?? first.deviceName ?? HEART_RATE_PROVIDER_LABEL;
   }, [heartRateSamples]);
 
   if (loading) {
@@ -744,8 +748,8 @@ export default function StrengthSummaryPage() {
                 </>
               ) : (
                 <Text style={styles.heartRateEmpty}>
-                  No Apple Health heart-rate samples found yet for this workout window. Data can
-                  appear with a short delay after completion.
+                  No {HEART_RATE_PROVIDER_LABEL} heart-rate samples found yet for this workout
+                  window. Data can appear with a short delay after completion.
                 </Text>
               )}
 

@@ -1,14 +1,15 @@
 import {
   formatAppleHealthError,
-  getAppleHealthUnavailableMessage,
-  getAppleHeartRateSamplesForRange,
   inferAppleHealthAuthorizationStatusFromError,
-  isAppleHealthKitAvailable,
 } from '@/lib/health/appleHealthKit';
+import { getCurrentHealthProviderId, getCurrentHealthProviderLabel } from '@/lib/health/provider';
 import {
-  getAppleHealthPreferences,
-  updateAppleHealthPreferences,
-} from '@/lib/health/preferences';
+  formatCurrentHealthError,
+  getCurrentHeartRateSamplesForRange,
+  getCurrentHealthProviderUnavailableMessage,
+  isCurrentHealthProviderAvailable,
+} from '@/lib/health/provider';
+import { getHealthPreferences, updateHealthPreferences } from '@/lib/health/preferences';
 import { supabase } from '@/lib/supabase';
 
 const HEALTH_DEBUG_PREFIX = '[HealthDebug]';
@@ -35,44 +36,48 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
   startedAtISO: string;
   endedAtISO: string;
 }): Promise<SyncStrengthWorkoutHeartRateResult> {
-  const preferences = await getAppleHealthPreferences();
+  const preferences = await getHealthPreferences();
+  const providerId = getCurrentHealthProviderId();
+  const providerLabel = getCurrentHealthProviderLabel();
   console.log(`${HEALTH_DEBUG_PREFIX} sync start`, {
     workoutId: params.workoutId,
     userId: params.userId,
     startedAtISO: params.startedAtISO,
     endedAtISO: params.endedAtISO,
+    providerId,
     syncEnabled: preferences.syncEnabled,
     authorizationStatus: preferences.authorizationStatus,
-    nativeAvailable: isAppleHealthKitAvailable(),
+    nativeAvailable: await isCurrentHealthProviderAvailable(),
   });
 
   if (!preferences.syncEnabled) {
     console.log(`${HEALTH_DEBUG_PREFIX} sync skipped`, {
-      reason: 'Apple Health sync is turned off.',
+      reason: `${providerLabel} sync is turned off.`,
     });
     return {
       status: 'skipped',
       insertedCount: 0,
-      reason: 'Apple Health sync is turned off.',
+      reason: `${providerLabel} sync is turned off.`,
     };
   }
 
   if (preferences.authorizationStatus !== 'authorized') {
     console.log(`${HEALTH_DEBUG_PREFIX} sync skipped`, {
-      reason: 'Apple Health permission has not been granted.',
+      reason: `${providerLabel} permission has not been granted.`,
       authorizationStatus: preferences.authorizationStatus,
     });
     return {
       status: 'skipped',
       insertedCount: 0,
-      reason: 'Apple Health permission has not been granted.',
+      reason: `${providerLabel} permission has not been granted.`,
     };
   }
 
-  if (!isAppleHealthKitAvailable()) {
-    const message = getAppleHealthUnavailableMessage();
+  if (!(await isCurrentHealthProviderAvailable())) {
+    const message = await getCurrentHealthProviderUnavailableMessage();
     console.warn(`${HEALTH_DEBUG_PREFIX} sync failed: unavailable`, { message });
-    await updateAppleHealthPreferences({
+    await updateHealthPreferences({
+      providerId,
       syncEnabled: false,
       authorizationStatus: 'unavailable',
       lastError: message,
@@ -89,7 +94,7 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
     let samples;
 
     try {
-      samples = await getAppleHeartRateSamplesForRange({
+      samples = await getCurrentHeartRateSamplesForRange({
         startDate: params.startedAtISO,
         endDate: params.endedAtISO,
       });
@@ -98,7 +103,7 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
         sampleCount: samples.length,
       });
     } catch (error) {
-      const message = formatAppleHealthError(error);
+      const message = formatCurrentHealthError(error);
       const authorizationStatus = inferAppleHealthAuthorizationStatusFromError(error);
       console.warn(`${HEALTH_DEBUG_PREFIX} sample query failed`, {
         workoutId: params.workoutId,
@@ -106,7 +111,8 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
         authorizationStatus,
       });
 
-      await updateAppleHealthPreferences({
+      await updateHealthPreferences({
+        providerId,
         syncEnabled:
           authorizationStatus === 'authorized'
             ? preferences.syncEnabled
@@ -129,7 +135,7 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
       const payload = samples.map((sample) => ({
         user_id: params.userId,
         strength_workout_id: params.workoutId,
-        source: 'apple_healthkit',
+        source: providerId,
         sample_uuid: sample.sampleUuid,
         sample_start_at: sample.sampleStartAt,
         sample_end_at: sample.sampleEndAt,
@@ -171,7 +177,8 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
       });
     }
 
-    await updateAppleHealthPreferences({
+    await updateHealthPreferences({
+      providerId,
       lastSyncAt: new Date().toISOString(),
       lastError: null,
     });
@@ -186,14 +193,18 @@ export async function syncStrengthWorkoutHeartRateSamples(params: {
       insertedCount: samples.length,
     };
   } catch (error) {
-    const message = formatAppleHealthError(error);
+    const message =
+      providerId === 'apple_health'
+        ? formatAppleHealthError(error)
+        : formatCurrentHealthError(error);
     console.warn(`${HEALTH_DEBUG_PREFIX} sync failed`, {
       workoutId: params.workoutId,
       message,
       error,
     });
 
-    await updateAppleHealthPreferences({
+    await updateHealthPreferences({
+      providerId,
       lastError: message,
     });
 

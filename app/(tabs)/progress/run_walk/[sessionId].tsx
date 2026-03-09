@@ -19,13 +19,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DeleteConfirmModal from './DeleteConfirmModal';
 import { useUnits } from '@/contexts/UnitsContext';
 import {
-  formatAppleHealthError,
-  getAppleHealthUnavailableMessage,
-  getAppleHeartRateSamplesForRange,
-  isAppleHealthKitAvailable,
-  type AppleHeartRateSample,
-} from '@/lib/health/appleHealthKit';
+  formatCurrentHealthError,
+  getCurrentHeartRateSamplesForRange,
+  getCurrentHealthProviderLabel,
+  getCurrentHealthProviderUnavailableMessage,
+  isCurrentHealthProviderAvailable,
+} from '@/lib/health/provider';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
+import type { HealthHeartRateSample } from '@/lib/health/types';
 
 const BG = Colors.dark.background;
 const CARD = Colors.dark.card;
@@ -39,6 +40,7 @@ const KMH_PER_MPS = 3.6;
 const FT_PER_M = 3.28084;
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
+const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
 
 
 
@@ -151,7 +153,7 @@ export default function RunWalkSessionSummary() {
   const [samples, setSamples] = useState<SampleRow[]>([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [canDelete, setCanDelete] = useState(false);
-  const [heartRateSamples, setHeartRateSamples] = useState<AppleHeartRateSample[]>([]);
+  const [heartRateSamples, setHeartRateSamples] = useState<HealthHeartRateSample[]>([]);
   const [heartRateSyncState, setHeartRateSyncState] = useState<HeartRateSyncState>('idle');
   const [heartRateSyncMessage, setHeartRateSyncMessage] = useState<string | null>(null);
   const [heartRateSyncing, setHeartRateSyncing] = useState(false);
@@ -272,7 +274,9 @@ export default function RunWalkSessionSummary() {
     async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
       if (!canDelete) {
         setHeartRateSyncState('skipped');
-        setHeartRateSyncMessage('Apple Health heart-rate is shown only for your own sessions.');
+        setHeartRateSyncMessage(
+          `${HEART_RATE_PROVIDER_LABEL} heart-rate is shown only for your own sessions.`
+        );
         return;
       }
 
@@ -292,7 +296,7 @@ export default function RunWalkSessionSummary() {
         setHeartRateSyncMessage(
           `${reason === 'auto' ? 'Auto retry' : 'Retry'} in ${Math.round(
             delayMs / 1000
-          )} seconds before re-checking Apple Health.`
+          )} seconds before re-checking ${HEART_RATE_PROVIDER_LABEL}.`
         );
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -304,13 +308,15 @@ export default function RunWalkSessionSummary() {
       try {
         setHeartRateSyncing(true);
         setHeartRateSyncState('syncing');
-        setHeartRateSyncMessage('Loading heart-rate samples from Apple Health…');
+        setHeartRateSyncMessage(
+          `Loading heart-rate samples from ${HEART_RATE_PROVIDER_LABEL}…`
+        );
 
-        if (!isAppleHealthKitAvailable()) {
-          throw new Error(getAppleHealthUnavailableMessage());
+        if (!(await isCurrentHealthProviderAvailable())) {
+          throw new Error(await getCurrentHealthProviderUnavailableMessage());
         }
 
-        const loaded = await getAppleHeartRateSamplesForRange({
+        const loaded = await getCurrentHeartRateSamplesForRange({
           startDate: workoutStartISO,
           endDate: workoutEndISO,
         });
@@ -325,18 +331,18 @@ export default function RunWalkSessionSummary() {
 
         if (loaded.length === 0) {
           setHeartRateSyncMessage(
-            'Apple Health returned no samples for this session window. Retry after a short delay.'
+            `${HEART_RATE_PROVIDER_LABEL} returned no samples for this session window. Retry after a short delay.`
           );
         } else {
           setHeartRateSyncMessage(
-            `Loaded ${loaded.length} heart-rate samples from Apple Health.`
+            `Loaded ${loaded.length} heart-rate samples from ${HEART_RATE_PROVIDER_LABEL}.`
           );
         }
       } catch (error: any) {
-        console.warn('[RunWalkSessionSummary] Apple Health load failed', error);
+        console.warn('[RunWalkSessionSummary] health provider load failed', error);
         setHeartRateLoaded(true);
         setHeartRateSyncState('failed');
-        setHeartRateSyncMessage(formatAppleHealthError(error));
+        setHeartRateSyncMessage(formatCurrentHealthError(error));
       } finally {
         setHeartRateSyncing(false);
       }
@@ -462,7 +468,7 @@ export default function RunWalkSessionSummary() {
   const heartRateSourceLabel = useMemo(() => {
     if (heartRateSamples.length === 0) return null;
     const first = heartRateSamples[0];
-    return first.sourceName ?? first.deviceName ?? 'Apple Health';
+    return first.sourceName ?? first.deviceName ?? HEART_RATE_PROVIDER_LABEL;
   }, [heartRateSamples]);
 
   if (loading || !session) {
@@ -567,7 +573,8 @@ export default function RunWalkSessionSummary() {
                 </>
               ) : (
                 <Text style={styles.heartRateEmpty}>
-                  No Apple Health heart-rate samples found yet for this session window.
+                  No {HEART_RATE_PROVIDER_LABEL} heart-rate samples found yet for this session
+                  window.
                 </Text>
               )}
 
