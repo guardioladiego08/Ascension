@@ -29,7 +29,7 @@ const SLIDES = [
     key: 'endurance',
     title: 'Endurance',
     eyebrow: 'Indoor and outdoor cardio',
-    subtitle: 'Capture pace, distance, routes, and recovery in the same dark, focused interface.',
+    subtitle: 'Capture pace, distance, routes, and recovery.',
     image: require('@/assets/images/bg_endurance.png'),
   },
   {
@@ -126,9 +126,7 @@ export default function FirstPage() {
           <Image source={require('@/assets/images/TensrLogo.png')} style={styles.logo} />
 
           <Text style={styles.title}>One place for training, recovery, and nutrition.</Text>
-          <Text style={styles.subtitle}>
-            A dark, focused system for tracking performance without bouncing between apps.
-          </Text>
+
 
           <View style={styles.slideCard}>
             <Text style={styles.slideEyebrow}>{activeSlide.eyebrow}</Text>

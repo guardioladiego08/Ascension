@@ -23,7 +23,13 @@ import {
 } from '@/constants/GlobalStyles';
 import { Fonts, type AppFonts } from '@/constants/Fonts';
 
-const STORAGE_KEY = 'app-theme.palette-id.v1';
+const LEGACY_STORAGE_KEY = 'app-theme.palette-id.v1';
+const STORAGE_KEY = 'app-theme.palette-preference.v2';
+
+type StoredPalettePreference = {
+  explicit: true;
+  paletteId: ThemePaletteId;
+};
 
 type AppThemeContextValue = {
   theme: AppTheme;
@@ -50,12 +56,21 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     const loadPalettePreference = async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (mounted && isThemePaletteId(stored)) {
-          setSelectedPaletteIdState(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored) as Partial<StoredPalettePreference>;
+          if (
+            mounted &&
+            parsed.explicit === true &&
+            typeof parsed.paletteId === 'string' &&
+            isThemePaletteId(parsed.paletteId)
+          ) {
+            setSelectedPaletteIdState(parsed.paletteId);
+          }
         }
       } catch (error) {
         console.warn('[AppThemeProvider] Failed to load palette preference', error);
       } finally {
+        AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => null);
         if (mounted) {
           setIsHydrated(true);
         }
@@ -73,7 +88,12 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     setSelectedPaletteIdState(paletteId);
 
     try {
-      await AsyncStorage.setItem(STORAGE_KEY, paletteId);
+      const preference: StoredPalettePreference = {
+        explicit: true,
+        paletteId,
+      };
+
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(preference));
     } catch (error) {
       console.warn('[AppThemeProvider] Failed to save palette preference', error);
     }

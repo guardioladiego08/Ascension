@@ -59,6 +59,12 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow TENSR to access your camera to scan food barcodes."
+        }
+      ],
+      [
         "@rnmapbox/maps",
         {
           "RNMapboxMapsVersion": "11.16.0"

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 
 import AuthScreen from './components/AuthScreen';
 import AppAlert from './components/AppAlert';
@@ -214,6 +215,10 @@ export default function SignupEmail() {
     );
   }, [email, password, usernameAvailable, usernameSanitized, router]);
 
+  const handleOpenTerms = useCallback(() => {
+    WebBrowser.openBrowserAsync('https://tensrfitness.com/terms-of-service/');
+  }, []);
+
   return (
     <AuthScreen
       eyebrow="Create account"
@@ -311,6 +316,14 @@ export default function SignupEmail() {
             <Text style={styles.primaryButtonText}>Create account</Text>
           )}
         </TouchableOpacity>
+
+        <Text style={styles.termsNote}>
+          By clicking Create account, you agree to our{' '}
+          <Text style={styles.termsLink} onPress={handleOpenTerms}>
+            Terms of Service
+          </Text>
+          .
+        </Text>
 
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Already have an account?</Text>
@@ -423,6 +436,19 @@ function createStyles(
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 20,
+    },
+    termsNote: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 18,
+      textAlign: 'center',
+      paddingHorizontal: 6,
+      marginTop: -4,
+    },
+    termsLink: {
+      color: colors.accent,
+      fontFamily: fonts.heading,
     },
     footerRow: {
       flexDirection: 'row',

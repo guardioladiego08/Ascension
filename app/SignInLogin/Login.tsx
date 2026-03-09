@@ -222,7 +222,7 @@ export default function Login() {
     <AuthScreen
       eyebrow="Account access"
       title="Log in"
-      subtitle="Pick up your training, cardio, and nutrition history where you left off."
+      subtitle="Pick up your training where you left off."
       showBackButton
       backTo="/SignInLogin/FirstPage"
       scrollable={false}
@@ -287,6 +287,7 @@ function createStyles(
       justifyContent: 'center',
     },
     card: {
+      top: -75,
       borderRadius: 28,
       padding: 22,
       gap: 18,

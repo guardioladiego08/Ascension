@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import {
-  CameraView,
-  type BarcodeScanningResult,
-  useCameraPermissions,
-} from 'expo-camera';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
@@ -22,17 +17,68 @@ import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
 
+type BarcodeScanningResult = {
+  data?: string | null;
+};
+
+type CameraPermissionState = {
+  granted: boolean;
+  canAskAgain?: boolean;
+} | null;
+
+type ExpoCameraModule = typeof import('expo-camera');
+
+function loadExpoCameraModule(): ExpoCameraModule | null {
+  try {
+    return require('expo-camera') as ExpoCameraModule;
+  } catch (error) {
+    console.warn('[ScanFood] expo-camera is unavailable in the current native build', error);
+    return null;
+  }
+}
+
 export default function ScanFood() {
   const router = useRouter();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const cameraModule = useMemo(() => loadExpoCameraModule(), []);
+  const CameraView = cameraModule?.CameraView ?? null;
 
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, setPermission] = useState<CameraPermissionState>(null);
   const [paused, setPaused] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [lastCode, setLastCode] = useState<string | null>(null);
   const [notFoundCode, setNotFoundCode] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [cameraUnavailableReason, setCameraUnavailableReason] = useState<string | null>(
+    cameraModule
+      ? null
+      : 'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!cameraModule) return () => void 0;
+
+    cameraModule
+      .getCameraPermissionsAsync()
+      .then((response) => {
+        if (!mounted) return;
+        setPermission(response);
+      })
+      .catch((error) => {
+        console.warn('[ScanFood] Failed to read camera permissions', error);
+        if (!mounted) return;
+        setCameraUnavailableReason(
+          'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
+        );
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [cameraModule]);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,6 +89,25 @@ export default function ScanFood() {
       setErrorText(null);
     }, [])
   );
+
+  const requestPermission = useCallback(async () => {
+    if (!cameraModule) {
+      setCameraUnavailableReason(
+        'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
+      );
+      return;
+    }
+
+    try {
+      const response = await cameraModule.requestCameraPermissionsAsync();
+      setPermission(response);
+    } catch (error) {
+      console.warn('[ScanFood] Failed to request camera permission', error);
+      setCameraUnavailableReason(
+        'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
+      );
+    }
+  }, [cameraModule]);
 
   const handleBarcodeScanned = useCallback(
     async ({ data }: BarcodeScanningResult) => {
@@ -108,7 +173,24 @@ export default function ScanFood() {
           </View>
 
           <View style={styles.cameraCard}>
-            {!permission ? (
+            {cameraUnavailableReason || !CameraView ? (
+              <View style={styles.centeredState}>
+                <MaterialCommunityIcons
+                  name="camera-off"
+                  size={30}
+                  color={colors.text}
+                />
+                <Text style={styles.stateTitle}>Camera unavailable</Text>
+                <Text style={styles.stateText}>{cameraUnavailableReason}</Text>
+                <TouchableOpacity
+                  style={[globalStyles.buttonSecondary, styles.permissionButton]}
+                  activeOpacity={0.9}
+                  onPress={() => router.push('./addIngredient')}
+                >
+                  <Text style={globalStyles.buttonTextSecondary}>Search Manually</Text>
+                </TouchableOpacity>
+              </View>
+            ) : !permission ? (
               <View style={styles.centeredState}>
                 <ActivityIndicator color={colors.highlight1} />
                 <Text style={styles.stateText}>Checking camera permission...</Text>

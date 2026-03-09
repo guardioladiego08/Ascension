@@ -17,6 +17,7 @@ import AppAlert from '../components/AppAlert';
 import { useOnboardingDraftStore } from '@/lib/onboarding/onboardingDraftStore';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { withAlpha } from '@/constants/Colors';
+import { useUnits } from '@/contexts/UnitsContext';
 
 type MapboxFeature = {
   id: string;
@@ -35,10 +36,21 @@ function safeString(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
+function isUnitedStatesCountry(value: string) {
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, '');
+  return (
+    normalized === 'unitedstates' ||
+    normalized === 'unitedstatesofamerica' ||
+    normalized === 'usa' ||
+    normalized === 'us'
+  );
+}
+
 export default function UserInfo1() {
   const router = useRouter();
   const { draft, setDraft } = useOnboardingDraftStore();
   const { colors, fonts } = useAppTheme();
+  const { setDistanceUnit, setWeightUnit } = useUnits();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [firstName, setFirstName] = useState(draft.first_name ?? '');
@@ -148,10 +160,17 @@ export default function UserInfo1() {
       return;
     }
 
+    const trimmedCountry = country.trim();
+    if (trimmedCountry) {
+      const useImperial = isUnitedStatesCountry(trimmedCountry);
+      void setDistanceUnit(useImperial ? 'mi' : 'km');
+      void setWeightUnit(useImperial ? 'lb' : 'kg');
+    }
+
     setDraft({
       first_name: firstName.trim(),
       last_name: lastName.trim(),
-      country: country.trim() || null,
+      country: trimmedCountry || null,
       state: stateRegion.trim() || null,
       city: city.trim() || null,
     });
@@ -163,7 +182,8 @@ export default function UserInfo1() {
     <AuthScreen
       eyebrow="Step 1 of 4"
       title="Your info"
-      subtitle="Set the basics once so training, nutrition, and analytics have the right starting point."
+      showBackButton
+      backTo="/SignInLogin/Login"
     >
       <View style={styles.card}>
         <View style={styles.fieldGroup}>
