@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   Pressable,
   Alert,
+  Image,
+  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import LogoHeader from '@/components/my components/logoHeader';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
@@ -79,9 +81,16 @@ function makeId() {
 export default function IndoorSession() {
   const router = useRouter();
   const { colors, fonts, globalStyles } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const params = useLocalSearchParams<{ mode?: string }>();
   const { distanceUnit } = useUnits();
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const compact = height - insets.top - insets.bottom < 860;
+  const tight = height - insets.top - insets.bottom < 780;
+  const styles = useMemo(
+    () => createStyles(colors, fonts, { compact, tight, topInset: insets.top }),
+    [colors, fonts, compact, tight, insets.top]
+  );
   const {
     activeSession,
     hydrated: activeSessionHydrated,
@@ -95,6 +104,9 @@ export default function IndoorSession() {
   const lockMode: RunWalkMode = mode; // same values for indoor
 
   const title = mode === 'indoor_walk' ? 'INDOOR WALK' : 'INDOOR RUN';
+  const heroSubtitle = compact
+    ? 'Treadmill controls, live pace, and a cleaner finish.'
+    : 'Treadmill-style controls, live pace, and a cleaner finish flow.';
 
   // session state
   const [isRunning, setIsRunning] = useState(true);
@@ -451,7 +463,13 @@ export default function IndoorSession() {
       style={globalStyles.page}
     >
       <View style={[globalStyles.container, styles.safe]}>
-        <LogoHeader />
+        <View style={styles.brandHeader}>
+          <Image
+            source={require('../../../../../assets/images/TensrLogo.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+          />
+        </View>
 
         <View style={[globalStyles.panel, styles.heroCard]}>
           <View style={styles.headerRow}>
@@ -461,9 +479,16 @@ export default function IndoorSession() {
 
             <View style={styles.headerCenter}>
               <Text style={globalStyles.eyebrow}>Indoor cardio</Text>
-              <Text style={styles.title}>{title}</Text>
-              <Text style={styles.heroSubtitle}>
-                Treadmill-style controls, live pace, and a cleaner finish flow.
+              <Text
+                style={styles.title}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {title}
+              </Text>
+              <Text style={styles.heroSubtitle} numberOfLines={compact ? 2 : 3}>
+                {heroSubtitle}
               </Text>
             </View>
 
@@ -630,24 +655,48 @@ export default function IndoorSession() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  layout: {
+    compact: boolean;
+    tight: boolean;
+    topInset: number;
+  }
 ) {
+  const brandSize = layout.tight ? 44 : layout.compact ? 52 : 64;
+  const verticalPad = layout.tight ? 12 : layout.compact ? 14 : 18;
+  const controlSize = layout.tight ? 44 : layout.compact ? 48 : 52;
+
   return StyleSheet.create({
-    safe: { flex: 1 },
+    safe: {
+      flex: 1,
+      paddingBottom: layout.tight ? 8 : 12,
+    },
+    brandHeader: {
+      paddingTop: Math.max(layout.topInset + (layout.tight ? 4 : 8), 12),
+      paddingBottom: layout.tight ? 8 : 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    brandLogo: {
+      width: brandSize,
+      height: brandSize,
+    },
     heroCard: {
-      marginTop: 8,
-      paddingBottom: 18,
+      marginTop: 0,
+      paddingTop: verticalPad,
+      paddingBottom: verticalPad,
+      paddingHorizontal: layout.tight ? 16 : layout.compact ? 18 : 22,
     },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: 12,
+      gap: layout.tight ? 8 : 12,
     },
     iconBtn: {
-      width: 40,
-      height: 40,
-      borderRadius: 14,
+      width: layout.tight ? 34 : 38,
+      height: layout.tight ? 34 : 38,
+      borderRadius: layout.tight ? 12 : 14,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card2,
@@ -660,32 +709,32 @@ function createStyles(
       paddingTop: 2,
     },
     title: {
-      marginTop: 8,
+      marginTop: layout.tight ? 4 : 6,
       color: colors.highlight1,
       fontFamily: fonts.display,
-      fontSize: 28,
-      lineHeight: 32,
+      fontSize: layout.tight ? 22 : layout.compact ? 24 : 28,
+      lineHeight: layout.tight ? 24 : layout.compact ? 28 : 32,
       letterSpacing: -0.8,
       textAlign: 'center',
     },
     heroSubtitle: {
-      marginTop: 8,
+      marginTop: layout.tight ? 6 : 8,
       color: colors.textMuted,
       fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 19,
+      fontSize: layout.tight ? 12 : 13,
+      lineHeight: layout.tight ? 16 : 19,
       textAlign: 'center',
-      maxWidth: 230,
+      maxWidth: layout.tight ? 190 : layout.compact ? 210 : 230,
     },
     statusPill: {
       borderRadius: 999,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
+      paddingHorizontal: layout.tight ? 8 : 10,
+      paddingVertical: layout.tight ? 6 : 8,
       borderWidth: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      minWidth: 90,
+      gap: layout.tight ? 6 : 8,
+      minWidth: layout.tight ? 76 : 90,
       justifyContent: 'center',
     },
     statusActive: {
@@ -709,8 +758,8 @@ function createStyles(
     },
     statusText: {
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: layout.tight ? 9 : 10,
+      lineHeight: layout.tight ? 12 : 14,
       letterSpacing: 0.6,
       textTransform: 'uppercase',
     },
@@ -722,108 +771,112 @@ function createStyles(
     },
     statsRow: {
       flexDirection: 'row',
-      gap: 10,
-      marginTop: 18,
+      gap: layout.tight ? 8 : 10,
+      marginTop: layout.tight ? 12 : 16,
     },
     statBox: {
       flex: 1,
       backgroundColor: colors.card2,
-      borderRadius: 18,
+      borderRadius: layout.tight ? 16 : 18,
       borderWidth: 1,
       borderColor: colors.border,
-      paddingVertical: 12,
+      paddingVertical: layout.tight ? 10 : 12,
+      paddingHorizontal: 6,
       alignItems: 'center',
     },
     statLabel: {
       color: colors.textOffSt,
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: layout.tight ? 9 : 10,
+      lineHeight: layout.tight ? 12 : 14,
       letterSpacing: 1,
-      marginBottom: 6,
+      marginBottom: layout.tight ? 4 : 6,
       textTransform: 'uppercase',
     },
     statValue: {
       color: colors.text,
       fontFamily: fonts.heading,
-      fontSize: 17,
-      lineHeight: 21,
+      fontSize: layout.tight ? 15 : layout.compact ? 16 : 17,
+      lineHeight: layout.tight ? 19 : 21,
     },
     statUnit: {
       color: colors.textMuted,
       fontFamily: fonts.label,
-      fontSize: 11,
+      fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
     },
     centerBlock: {
       flex: 1,
+      flexShrink: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 14,
-      paddingVertical: 24,
+      marginTop: layout.tight ? 10 : 12,
+      paddingVertical: layout.tight ? 12 : layout.compact ? 16 : 24,
+      paddingHorizontal: layout.tight ? 12 : 14,
     },
     centerBig: {
       color: colors.text,
       fontFamily: fonts.display,
-      fontSize: 58,
-      lineHeight: 62,
+      fontSize: layout.tight ? 42 : layout.compact ? 48 : 58,
+      lineHeight: layout.tight ? 46 : layout.compact ? 52 : 62,
       letterSpacing: -1.2,
     },
     centerUnit: {
       color: colors.textMuted,
       fontFamily: fonts.label,
-      fontSize: 20,
-      lineHeight: 24,
+      fontSize: layout.tight ? 16 : layout.compact ? 18 : 20,
+      lineHeight: layout.tight ? 20 : 24,
     },
     centerLabel: {
       color: colors.textOffSt,
       fontFamily: fonts.label,
-      fontSize: 11,
+      fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
       letterSpacing: 0.9,
-      marginTop: 6,
+      marginTop: layout.tight ? 4 : 6,
       textTransform: 'uppercase',
     },
     centerRow: {
       flexDirection: 'row',
-      gap: 10,
-      marginTop: 14,
+      gap: layout.tight ? 8 : 10,
+      marginTop: layout.tight ? 10 : 14,
+      width: '100%',
     },
     centerMini: {
+      flex: 1,
       backgroundColor: colors.card3,
-      borderRadius: 16,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
+      borderRadius: layout.tight ? 14 : 16,
+      paddingVertical: layout.tight ? 10 : 12,
+      paddingHorizontal: layout.tight ? 10 : 14,
       alignItems: 'center',
-      minWidth: 140,
       borderWidth: 1,
       borderColor: colors.border,
     },
     centerMiniValue: {
       color: colors.text,
       fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
+      fontSize: layout.tight ? 13 : 14,
+      lineHeight: layout.tight ? 16 : 18,
     },
     centerMiniLabel: {
       color: colors.textOffSt,
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: layout.tight ? 9 : 10,
+      lineHeight: layout.tight ? 12 : 14,
       letterSpacing: 0.8,
-      marginTop: 5,
+      marginTop: layout.tight ? 4 : 5,
       textTransform: 'uppercase',
     },
     controls: {
-      paddingTop: 14,
-      gap: 10,
+      paddingTop: layout.tight ? 10 : 12,
+      gap: layout.tight ? 8 : 10,
     },
     controlRow: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.card2,
-      borderRadius: 20,
-      padding: 10,
+      borderRadius: layout.tight ? 18 : 20,
+      padding: layout.tight ? 8 : 10,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -831,9 +884,9 @@ function createStyles(
       marginTop: 0,
     },
     controlBtn: {
-      width: 52,
-      height: 52,
-      borderRadius: 16,
+      width: controlSize,
+      height: controlSize,
+      borderRadius: layout.tight ? 14 : 16,
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.card3,
@@ -843,46 +896,46 @@ function createStyles(
     controlValue: {
       color: colors.text,
       fontFamily: fonts.display,
-      fontSize: 20,
-      lineHeight: 24,
+      fontSize: layout.tight ? 18 : 20,
+      lineHeight: layout.tight ? 22 : 24,
     },
     controlUnit: {
       color: colors.textMuted,
       fontFamily: fonts.label,
-      fontSize: 11,
+      fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
     },
     controlLabel: {
       color: colors.textOffSt,
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 14,
+      fontSize: layout.tight ? 9 : 10,
+      lineHeight: layout.tight ? 12 : 14,
       letterSpacing: 0.9,
-      marginTop: 4,
+      marginTop: layout.tight ? 3 : 4,
       textTransform: 'uppercase',
     },
     bottom: {
-      paddingTop: 14,
-      paddingBottom: 12,
+      paddingTop: layout.tight ? 10 : 12,
+      paddingBottom: 0,
     },
     pauseBtn: {
-      minHeight: 56,
-      gap: 10,
+      minHeight: layout.tight ? 44 : layout.compact ? 48 : 56,
+      gap: layout.tight ? 8 : 10,
     },
     pausedActionsRow: {
       flexDirection: 'row',
-      gap: 12,
-      marginTop: 10,
+      gap: layout.tight ? 8 : 12,
+      marginTop: layout.tight ? 8 : 10,
     },
     actionButton: {
       flex: 1,
-      minHeight: 52,
+      minHeight: layout.tight ? 44 : layout.compact ? 48 : 52,
       gap: 8,
     },
     cancelBtn: {
       flex: 1,
-      minHeight: 52,
-      borderRadius: 16,
+      minHeight: layout.tight ? 44 : layout.compact ? 48 : 52,
+      borderRadius: layout.tight ? 14 : 16,
       borderWidth: 1,
       borderColor: colors.danger,
       backgroundColor: colors.accentSecondarySoft,
@@ -895,8 +948,8 @@ function createStyles(
     cancelText: {
       color: colors.danger,
       fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 19,
+      fontSize: layout.tight ? 14 : 15,
+      lineHeight: layout.tight ? 18 : 19,
     },
   });
 }
