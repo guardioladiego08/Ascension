@@ -67,3 +67,26 @@ For each schema folder, maintain these files:
 4. `changes.md` for dated notes about schema changes and why they were made
 
 Also update `docs/schema/SCHEMA_INDEX.md` so schema information is easy to find quickly.
+
+## Supabase SQL Workflow
+
+For Supabase and Postgres work in this repo, use the local skill at `.agents/skills/supabase-postgres-best-practices/` as the default performance and query-quality reference.
+
+Apply it when writing or reviewing:
+
+1. Migrations
+2. RPC functions
+3. Views
+4. Row-Level Security policies
+5. Indexes
+6. Complex SQL queries
+
+Pair that skill with the project-specific schema docs in `docs/schema/supabase/` and the executable SQL in `supabase/`.
+
+Use this order by default:
+
+1. Read the relevant guidance in `.agents/skills/supabase-postgres-best-practices/SKILL.md` and only the needed reference files
+2. Confirm project assumptions in `docs/schema/supabase/`
+3. Validate against the real schema history in `supabase/migrations/` and related SQL files
+
+Treat the skill as generic guidance and the project schema docs plus SQL files as the source of truth for this codebase.

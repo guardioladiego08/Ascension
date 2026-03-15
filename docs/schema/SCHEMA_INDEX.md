@@ -18,6 +18,7 @@ Use it to find:
 - Context: `docs/schema/supabase/context.md`
 - Source locations: `docs/schema/supabase/locations.md`
 - Change notes: `docs/schema/supabase/changes.md`
+- SQL guidance skill: `.agents/skills/supabase-postgres-best-practices/`
 
 ## Rules
 
