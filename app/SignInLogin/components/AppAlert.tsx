@@ -1,8 +1,10 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import AppPopup from '@/components/ui/AppPopup';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import AuthButton from './AuthButton';
+import { buildAuthDesignSystem } from '../designSystem';
 
 type AppAlertProps = {
   visible: boolean;
@@ -20,7 +22,8 @@ const AppAlert: React.FC<AppAlertProps> = ({
   onClose,
 }) => {
   const { colors, fonts } = useAppTheme();
-  const styles = createStyles(colors, fonts);
+  const ui = buildAuthDesignSystem(colors, fonts);
+  const styles = createStyles(colors, fonts, ui);
 
   return (
     <AppPopup
@@ -35,9 +38,11 @@ const AppAlert: React.FC<AppAlertProps> = ({
       <View>
         <Text style={styles.message}>{message}</Text>
 
-        <TouchableOpacity style={styles.button} onPress={onClose} activeOpacity={0.92}>
-          <Text style={styles.buttonText}>{confirmLabel}</Text>
-        </TouchableOpacity>
+        <AuthButton
+          label={confirmLabel}
+          onPress={onClose}
+          style={styles.button}
+        />
       </View>
     </AppPopup>
   );
@@ -45,7 +50,8 @@ const AppAlert: React.FC<AppAlertProps> = ({
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof buildAuthDesignSystem>
 ) {
   return StyleSheet.create({
     popupCard: {
@@ -61,18 +67,7 @@ function createStyles(
       lineHeight: 20,
     },
     button: {
-      marginTop: 18,
-      height: 48,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-    },
-    buttonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
+      marginTop: ui.spacing.s20,
     },
   });
 }

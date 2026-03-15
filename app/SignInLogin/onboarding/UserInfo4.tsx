@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,14 +10,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import AuthScreen from '../components/AuthScreen';
+import AuthButton from '../components/AuthButton';
 import AppAlert from '../components/AppAlert';
-import { withAlpha } from '@/constants/Colors';
 import {
   useOnboardingDraftStore,
   type JourneyStage,
 } from '@/lib/onboarding/onboardingDraftStore';
-import { submitOnboardingDraftToUserUsers } from '@/lib/onboarding/auth_onboarding_submit';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from '../designSystem';
 
 const JOURNEY_OPTIONS: Array<{
   key: JourneyStage;
@@ -60,14 +59,14 @@ const JOURNEY_OPTIONS: Array<{
 
 export default function UserInfo4() {
   const router = useRouter();
-  const { draft, setDraft, resetDraft } = useOnboardingDraftStore();
+  const { draft, setDraft } = useOnboardingDraftStore();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [journey, setJourney] = useState<JourneyStage | null>(
     draft.fitness_journey_stage ?? null
   );
-  const [saving, setSaving] = useState(false);
 
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -90,37 +89,23 @@ export default function UserInfo4() {
     }
   };
 
-  const canFinish = useMemo(() => Boolean(journey), [journey]);
+  const canContinue = useMemo(() => Boolean(journey), [journey]);
 
-  const handleFinish = async () => {
+  const handleNext = () => {
     if (!journey) {
       showAlert('Select one', 'Please choose your training stage to continue.');
       return;
     }
 
-    setSaving(true);
-    try {
-      setDraft({ fitness_journey_stage: journey });
-
-      await submitOnboardingDraftToUserUsers({
-        ...draft,
-        fitness_journey_stage: journey,
-      });
-
-      resetDraft();
-      router.replace('/(tabs)/home');
-    } catch (error: any) {
-      showAlert('Error', error?.message ?? 'Could not complete onboarding. Please try again.');
-    } finally {
-      setSaving(false);
-    }
+    setDraft({ fitness_journey_stage: journey });
+    router.replace('/SignInLogin/onboarding/UserInfo5');
   };
 
   return (
     <AuthScreen
-      eyebrow="Step 4 of 4"
+      eyebrow="Step 4 of 5"
       title="Your stage"
-      subtitle="This tunes the starting assumptions behind insights, suggestions, and defaults."
+      subtitle="This tunes your defaults. Next you’ll pick the app color palette."
       showBackButton
       backTo="/SignInLogin/onboarding/UserInfo3"
       bodyStyle={styles.body}
@@ -145,7 +130,7 @@ export default function UserInfo4() {
                   <Ionicons
                     name={option.icon}
                     size={22}
-                    color={selected ? colors.blkText : colors.textMuted}
+                    color={selected ? ui.tones.accentStrong : colors.textMuted}
                   />
                 </View>
 
@@ -173,21 +158,12 @@ export default function UserInfo4() {
         })}
       </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, !canFinish ? styles.buttonDisabled : null]}
-        activeOpacity={0.92}
-        onPress={handleFinish}
-        disabled={saving}
-      >
-        {saving ? (
-          <ActivityIndicator color={colors.blkText} />
-        ) : (
-          <>
-            <Text style={styles.primaryButtonText}>Finish</Text>
-            <Ionicons name="checkmark-circle" size={18} color={colors.blkText} />
-          </>
-        )}
-      </TouchableOpacity>
+      <AuthButton
+        label="Continue"
+        icon="arrow-forward"
+        onPress={handleNext}
+        disabled={!canContinue}
+      />
 
       <AppAlert
         visible={alertVisible}
@@ -201,7 +177,8 @@ export default function UserInfo4() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     body: {
@@ -215,15 +192,10 @@ function createStyles(
       paddingBottom: 8,
     },
     cardButton: {
-      borderRadius: 24,
-      padding: 18,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.selectionCard,
     },
     cardButtonSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      ...ui.fragments.selectionCardSelected,
     },
     cardRow: {
       flexDirection: 'row',
@@ -231,71 +203,31 @@ function createStyles(
       gap: 14,
     },
     iconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceRaised,
+      ...ui.fragments.selectionIconWrap,
     },
     iconWrapSelected: {
-      backgroundColor: withAlpha(colors.blkText, 0.12),
+      ...ui.fragments.selectionIconWrapSelected,
     },
     cardCopy: {
       flex: 1,
     },
     cardTitle: {
-      color: colors.text,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.selectionTitle,
     },
     cardTitleSelected: {
-      color: colors.blkText,
+      ...ui.fragments.selectionTitleSelected,
     },
     cardSubtitle: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
-      marginTop: 4,
+      ...ui.fragments.selectionSubtitle,
     },
     cardSubtitleSelected: {
-      color: withAlpha(colors.blkText, 0.72),
+      ...ui.fragments.selectionSubtitleSelected,
     },
     checkPill: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: withAlpha(colors.blkText, 0.12),
+      ...ui.fragments.checkPill,
     },
     unchecked: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      borderWidth: 1.5,
-      borderColor: colors.borderStrong,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      marginTop: 16,
-    },
-    buttonDisabled: {
-      opacity: 0.62,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.unchecked,
     },
   });
 }

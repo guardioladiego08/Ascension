@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -11,9 +10,11 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import AuthScreen from './components/AuthScreen';
-import { withAlpha } from '@/constants/Colors';
+import AuthButton from './components/AuthButton';
+import AuthField from './components/AuthField';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from './designSystem';
 
 type Params = { email?: string };
 
@@ -48,7 +49,8 @@ export default function Login() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const prefillEmail = Array.isArray(params.email) ? params.email[0] : params.email;
 
@@ -227,10 +229,10 @@ export default function Login() {
       backTo="/SignInLogin/FirstPage"
       scrollable={false}
       bodyStyle={styles.body}
+      backgroundImage={require('@/assets/images/login-gym-bg.png')}
     >
       <View style={styles.card}>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Email</Text>
+        <AuthField label="Email">
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -240,10 +242,9 @@ export default function Login() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Password</Text>
+        <AuthField label="Password">
           <TextInput
             value={password}
             onChangeText={setPassword}
@@ -252,20 +253,13 @@ export default function Login() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <TouchableOpacity
-          style={[styles.primaryButton, loadingEmail ? styles.buttonDisabled : null]}
+        <AuthButton
+          label="Continue"
           onPress={handleEmailLogin}
-          disabled={loadingEmail}
-          activeOpacity={0.92}
-        >
-          {loadingEmail ? (
-            <ActivityIndicator color={colors.blkText} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          )}
-        </TouchableOpacity>
+          loading={loadingEmail}
+        />
 
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Don&apos;t have an account?</Text>
@@ -280,75 +274,31 @@ export default function Login() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     body: {
       justifyContent: 'center',
     },
     card: {
-      top: -75,
-      borderRadius: 28,
-      padding: 22,
-      gap: 18,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    fieldGroup: {
-      gap: 8,
-    },
-    label: {
-      color: colors.textMuted,
-      fontFamily: fonts.label,
-      fontSize: 12,
-      lineHeight: 16,
-      letterSpacing: 0.6,
-      textTransform: 'uppercase',
+      ...ui.fragments.card,
+      marginTop: -48,
     },
     input: {
-      minHeight: 54,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
-      paddingHorizontal: 16,
-      color: colors.text,
-      fontFamily: fonts.body,
-      fontSize: 15,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    buttonDisabled: {
-      opacity: 0.72,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.input,
     },
     footerRow: {
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
+      marginTop: 4,
     },
     footerText: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
+      ...ui.fragments.helperText,
     },
     footerLink: {
-      color: colors.accent,
-      fontFamily: fonts.heading,
-      fontSize: 13,
-      lineHeight: 18,
+      ...ui.fragments.linkText,
     },
   });
 }

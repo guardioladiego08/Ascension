@@ -2,7 +2,6 @@ import React from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, TouchableOpacity, View } from 'react-native';
 
-import type { useAppTheme } from '@/providers/AppThemeProvider';
 import type { HomeStyles } from './styles';
 
 export function HomeCompletionCard({
@@ -14,7 +13,6 @@ export function HomeCompletionCard({
   footer,
   onPress,
   styles,
-  globalStyles,
 }: {
   eyebrow: string;
   title: string;
@@ -24,17 +22,16 @@ export function HomeCompletionCard({
   footer: string;
   onPress: () => void;
   styles: HomeStyles;
-  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.94}
-      style={[globalStyles.panelSoft, styles.completionCard]}
+      style={[styles.panelSoft, styles.completionCard]}
       onPress={onPress}
     >
       <View style={styles.completionHeader}>
         <View>
-          <Text style={globalStyles.eyebrow}>{eyebrow}</Text>
+          <Text style={styles.eyebrow}>{eyebrow}</Text>
           <Text style={styles.cardTitle}>{title}</Text>
         </View>
 

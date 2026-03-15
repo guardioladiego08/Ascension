@@ -13,11 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import AppPopup from '@/components/ui/AppPopup';
 import AuthScreen from '../components/AuthScreen';
+import AuthButton from '../components/AuthButton';
+import AuthField from '../components/AuthField';
 import AppAlert from '../components/AppAlert';
 import { useOnboardingDraftStore } from '@/lib/onboarding/onboardingDraftStore';
 import { useAppTheme } from '@/providers/AppThemeProvider';
-import { withAlpha } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAuthDesignSystem } from '../designSystem';
 
 type MapboxFeature = {
   id: string;
@@ -51,7 +53,8 @@ export default function UserInfo1() {
   const { draft, setDraft } = useOnboardingDraftStore();
   const { colors, fonts } = useAppTheme();
   const { setDistanceUnit, setWeightUnit } = useUnits();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [firstName, setFirstName] = useState(draft.first_name ?? '');
   const [lastName, setLastName] = useState(draft.last_name ?? '');
@@ -180,14 +183,13 @@ export default function UserInfo1() {
 
   return (
     <AuthScreen
-      eyebrow="Step 1 of 4"
+      eyebrow="Step 1 of 5"
       title="Your info"
       showBackButton
       backTo="/SignInLogin/Login"
     >
       <View style={styles.card}>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>First name</Text>
+        <AuthField label="First name">
           <TextInput
             value={firstName}
             onChangeText={setFirstName}
@@ -195,10 +197,9 @@ export default function UserInfo1() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Last name</Text>
+        <AuthField label="Last name">
           <TextInput
             value={lastName}
             onChangeText={setLastName}
@@ -206,10 +207,12 @@ export default function UserInfo1() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Location</Text>
+        <AuthField
+          label="Location"
+          helperText="Optional. Used for local trends and relevant defaults."
+        >
           <TouchableOpacity
             activeOpacity={0.92}
             style={styles.selectField}
@@ -223,13 +226,9 @@ export default function UserInfo1() {
             </Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
-          <Text style={styles.helperText}>Optional. Used for local trends and relevant defaults.</Text>
-        </View>
+        </AuthField>
 
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.92} onPress={handleNext}>
-          <Text style={styles.primaryButtonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={18} color={colors.blkText} />
-        </TouchableOpacity>
+        <AuthButton label="Continue" icon="arrow-forward" onPress={handleNext} />
       </View>
 
       <AppPopup
@@ -302,45 +301,22 @@ export default function UserInfo1() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     card: {
-      borderRadius: 28,
-      padding: 22,
-      gap: 18,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    fieldGroup: {
-      gap: 8,
-    },
-    label: {
-      color: colors.textMuted,
-      fontFamily: fonts.label,
-      fontSize: 12,
-      lineHeight: 16,
-      letterSpacing: 0.6,
-      textTransform: 'uppercase',
+      ...ui.fragments.card,
     },
     input: {
-      minHeight: 54,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
-      paddingHorizontal: 16,
-      color: colors.text,
-      fontFamily: fonts.body,
-      fontSize: 15,
+      ...ui.fragments.input,
     },
     selectField: {
-      minHeight: 54,
+      minHeight: 56,
       borderRadius: 18,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
+      backgroundColor: ui.fragments.input.backgroundColor,
       paddingHorizontal: 16,
       flexDirection: 'row',
       alignItems: 'center',
@@ -355,26 +331,7 @@ function createStyles(
       lineHeight: 20,
     },
     helperText: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      marginTop: 4,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.helperText,
     },
     locationPopup: {
       maxHeight: '82%',
@@ -383,15 +340,7 @@ function createStyles(
       paddingTop: 10,
     },
     popupInput: {
-      minHeight: 52,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
-      paddingHorizontal: 16,
-      color: colors.text,
-      fontFamily: fonts.body,
-      fontSize: 15,
+      ...ui.fragments.inputDense,
     },
     popupHint: {
       color: colors.textMuted,

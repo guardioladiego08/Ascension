@@ -1,0 +1,18 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="240" rx="32" fill="#0D1117"/>
+  <path d="M120 28L186 66V154L120 192L54 154V66L120 28Z" fill="#131A22" stroke="#243042" stroke-width="6"/>
+  <mask id="hex-mask" maskUnits="userSpaceOnUse" x="54" y="28" width="132" height="164">
+    <path d="M120 28L186 66V154L120 192L54 154V66L120 28Z" fill="white"/>
+  </mask>
+  <g mask="url(#hex-mask)">
+    <rect x="52" y="90" width="136" height="112" fill="url(#hex-fill)"/>
+    <rect x="52" y="78" width="136" height="16" fill="white" fill-opacity="0.08"/>
+  </g>
+  <text x="120" y="214" fill="#F5F7FA" font-family="SF Pro, Roboto, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Activity 72%</text>
+  <defs>
+    <linearGradient id="hex-fill" x1="120" y1="90" x2="120" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00F5D4" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#00F5D4"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router';
 
 import { withAlpha } from '@/constants/Colors';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import AuthButton from './components/AuthButton';
+import { useAuthDesignSystem } from './designSystem';
 
 const { width } = Dimensions.get('window');
 
@@ -22,21 +24,21 @@ const SLIDES = [
     key: 'strength',
     title: 'Strength',
     eyebrow: 'Progressive overload',
-    subtitle: 'Track exercises, sets, PRs, and progression without leaving the session flow.',
+    subtitle: 'Track lifts and progress.',
     image: require('@/assets/images/bg_strength.png'),
   },
   {
     key: 'endurance',
     title: 'Endurance',
     eyebrow: 'Indoor and outdoor cardio',
-    subtitle: 'Capture pace, distance, routes, and recovery.',
+    subtitle: 'Track pace, distance, and routes.',
     image: require('@/assets/images/bg_endurance.png'),
   },
   {
     key: 'nutrition',
     title: 'Nutrition',
     eyebrow: 'Daily intake',
-    subtitle: 'Log meals, scan food, and review macros in one place tied back to training.',
+    subtitle: 'Log meals and macros.',
     image: require('@/assets/images/bg_nutrition.png'),
   },
 ] as const;
@@ -44,7 +46,8 @@ const SLIDES = [
 export default function FirstPage() {
   const router = useRouter();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [index, setIndex] = useState(0);
   const animatedX = useRef(new Animated.Value(0)).current;
@@ -119,19 +122,16 @@ export default function FirstPage() {
 
       <View style={styles.content}>
         <View style={styles.brandPanel}>
-          <View style={styles.brandBadge}>
-            <Text style={styles.brandBadgeText}>Tensr</Text>
-          </View>
-
           <Image source={require('@/assets/images/TensrLogo.png')} style={styles.logo} />
 
-          <Text style={styles.title}>One place for training, recovery, and nutrition.</Text>
+          <Text style={styles.title}>The Only Fitness App You&apos;ll Ever Need</Text>
 
-
-          <View style={styles.slideCard}>
-            <Text style={styles.slideEyebrow}>{activeSlide.eyebrow}</Text>
-            <Text style={styles.slideTitle}>{activeSlide.title}</Text>
-            <Text style={styles.slideSubtitle}>{activeSlide.subtitle}</Text>
+          <View style={styles.slideCardWrap}>
+            <View style={styles.slideCard}>
+              <Text style={styles.slideEyebrow}>{activeSlide.eyebrow}</Text>
+              <Text style={styles.slideTitle}>{activeSlide.title}</Text>
+              <Text style={styles.slideSubtitle}>{activeSlide.subtitle}</Text>
+            </View>
           </View>
 
           <View style={styles.chipRow}>
@@ -154,21 +154,12 @@ export default function FirstPage() {
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            activeOpacity={0.92}
-            onPress={() => router.push('/SignInLogin/SignupEmail')}
-          >
-            <Text style={styles.primaryButtonText}>Create account</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            activeOpacity={0.92}
+          <AuthButton label="Create account" onPress={() => router.push('/SignInLogin/SignupEmail')} />
+          <AuthButton
+            label="Log in"
+            variant="secondary"
             onPress={() => router.push('/SignInLogin/Login')}
-          >
-            <Text style={styles.secondaryButtonText}>Log in</Text>
-          </TouchableOpacity>
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -177,7 +168,8 @@ export default function FirstPage() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     container: {
@@ -194,67 +186,49 @@ function createStyles(
     },
     overlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(1, 4, 8, 0.7)',
+      backgroundColor: 'rgba(2, 6, 10, 0.46)',
     },
     content: {
       flex: 1,
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 20,
+      paddingHorizontal: ui.screen.horizontalPadding,
+      paddingTop: ui.spacing.s20,
       paddingBottom: 28,
     },
     brandPanel: {
       marginTop: 'auto',
-      gap: 16,
+      gap: ui.spacing.s20,
       borderRadius: 32,
-      paddingHorizontal: 22,
+      paddingHorizontal: 24,
       paddingVertical: 24,
-      backgroundColor: withAlpha(colors.surface, 0.9),
+      backgroundColor: 'rgba(19, 21, 24, 0.7)',
       borderWidth: 1,
       borderColor: colors.border,
-    },
-    brandBadge: {
-      alignSelf: 'flex-start',
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: colors.accentSoft,
-    },
-    brandBadgeText: {
-      color: colors.text,
-      fontFamily: fonts.label,
-      fontSize: 11,
-      lineHeight: 15,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
     },
     logo: {
       width: 88,
       height: 88,
+      alignSelf: 'center',
     },
     title: {
       color: colors.text,
       fontFamily: fonts.display,
-      fontSize: 34,
-      lineHeight: 38,
-      letterSpacing: -1,
+      fontSize: 36,
+      lineHeight: 40,
+      letterSpacing: -1.1,
+      textAlign: 'center',
     },
-    subtitle: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 15,
-      lineHeight: 22,
+    slideCardWrap: {
+      minHeight: 154,
+      justifyContent: 'center',
     },
     slideCard: {
-      borderRadius: 24,
-      padding: 18,
-      backgroundColor: colors.card2,
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.cardSoft,
       gap: 6,
+      backgroundColor: 'rgba(22, 30, 41, 0.86)',
     },
     slideEyebrow: {
-      color: colors.accent,
+      color: ui.tones.accentStrong,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 15,
@@ -275,20 +249,22 @@ function createStyles(
     },
     chipRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
       gap: 10,
+      justifyContent: 'space-between',
     },
     chipButton: {
+      flex: 1,
       borderRadius: 999,
-      paddingHorizontal: 14,
+      paddingHorizontal: 8,
       paddingVertical: 9,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
+      backgroundColor: ui.visuals.hairline,
+      alignItems: 'center',
     },
     chipButtonSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: ui.tones.accentSoft,
+      borderColor: ui.tones.accentBorder,
     },
     chipText: {
       color: colors.text,
@@ -298,39 +274,11 @@ function createStyles(
       letterSpacing: 0.4,
     },
     chipTextSelected: {
-      color: colors.blkText,
+      color: colors.text,
     },
     actions: {
-      gap: 12,
-      marginTop: 20,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
-    },
-    secondaryButton: {
-      height: 54,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: withAlpha(colors.surfaceRaised, 0.95),
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    secondaryButtonText: {
-      color: colors.text,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      gap: ui.spacing.s12,
+      marginTop: ui.spacing.s20,
     },
   });
 }

@@ -1,9 +1,9 @@
 export type ThemePaletteId =
-  | 'orange'
-  | 'red'
-  | 'green'
-  | 'blue'
-  | 'violet';
+  | 'neon_performance'
+  | 'aurora_gradient'
+  | 'solar_activity'
+  | 'cyber_fitness'
+  | 'nature_athlete';
 
 export type HighlightTrio = {
   primary: string;
@@ -19,30 +19,30 @@ export type ThemePaletteOption = {
 };
 
 const DARK_FOUNDATION = {
-  background: '#04070B',
-  backgroundStrong: '#020406',
-  backgroundMuted: '#081018',
-  surface: '#0E141B',
-  surfaceAlt: '#131C25',
-  surfaceRaised: '#18232E',
+  background: '#070809',
+  backgroundStrong: '#040506',
+  backgroundMuted: '#0B0D0F',
+  surface: '#111316',
+  surfaceAlt: '#161A1E',
+  surfaceRaised: '#1C2128',
   border: 'rgba(255,255,255,0.08)',
   borderStrong: 'rgba(255,255,255,0.15)',
-  popUpCard: '#111922F2',
-  card: '#0E141B',
-  card2: '#131C25',
-  card3: '#18232E',
-  offset1: '#273443',
-  txtInBckrnd: '#071015',
+  popUpCard: '#13171CF2',
+  card: '#111316',
+  card2: '#161A1E',
+  card3: '#1C2128',
+  offset1: '#2A313A',
+  txtInBckrnd: '#080B0E',
   text: '#F5F7FA',
   textPrimary: '#F5F7FA',
-  textMuted: '#9AA5B2',
-  textOffSt: '#6F7B88',
+  textMuted: '#A8B0BA',
+  textOffSt: '#7E8895',
   textInput: 'rgba(255,255,255,0.06)',
-  blkText: '#071015',
-  link: '#7FD6FF',
-  tab: '#06090E',
-  cardDark: '#071015',
-} as const;
+  blkText: '#06080B',
+  link: '#DDE3EA',
+  tab: '#090B0E',
+  cardDark: '#0C0F13',
+};
 
 export type DarkThemeColors = typeof DARK_FOUNDATION & {
   highlight1: string;
@@ -73,58 +73,58 @@ export type DarkThemeColors = typeof DARK_FOUNDATION & {
 
 export const THEME_PALETTE_OPTIONS: ThemePaletteOption[] = [
   {
-    id: 'orange',
-    name: 'Orange',
-    description: 'Tangerine, burnt orange, and amber in one warm family.',
+    id: 'neon_performance',
+    name: 'Neon Performance',
+    description: 'Modern athletic energy. Blue endurance, orange effort, green recovery.',
     trio: {
-      primary: '#FF9E3D',
-      secondary: '#FF7A1A',
-      tertiary: '#FFC36B',
+      primary: '#3A86FF',
+      secondary: '#FF7A18',
+      tertiary: '#7CFF6B',
     },
   },
   {
-    id: 'red',
-    name: 'Red',
-    description: 'Signal red, crimson, and rose for a sharper high-energy look.',
+    id: 'aurora_gradient',
+    name: 'Aurora Gradient',
+    description: 'Premium calm energy. Cyan cardio, purple strength, coral intensity.',
     trio: {
-      primary: '#FF6B6B',
-      secondary: '#E63946',
-      tertiary: '#FF9AA2',
+      primary: '#00D1FF',
+      secondary: '#7A5CFF',
+      tertiary: '#FF6B6B',
     },
   },
   {
-    id: 'green',
-    name: 'Green',
-    description: 'Mint, emerald, and lime with a cleaner recovery-style feel.',
+    id: 'solar_activity',
+    name: 'Solar Activity',
+    description: 'Energetic and readable. Amber movement, teal endurance, magenta intensity.',
     trio: {
-      primary: '#7FE7B3',
-      secondary: '#2FBF71',
-      tertiary: '#B7F171',
+      primary: '#FFA62B',
+      secondary: '#2EC4B6',
+      tertiary: '#E71D36',
     },
   },
   {
-    id: 'blue',
-    name: 'Blue',
-    description: 'Sky, cobalt, and indigo for a colder performance palette.',
+    id: 'cyber_fitness',
+    name: 'Cyber Fitness',
+    description: 'Futuristic contrast. Aqua cardio, indigo strength, pink goals.',
     trio: {
-      primary: '#7AD7FF',
-      secondary: '#3B82F6',
-      tertiary: '#8CA2FF',
+      primary: '#00F5D4',
+      secondary: '#4361EE',
+      tertiary: '#F72585',
     },
   },
   {
-    id: 'violet',
-    name: 'Violet',
-    description: 'Lavender, violet, and deep purple in one cooler accent family.',
+    id: 'nature_athlete',
+    name: 'Nature Athlete',
+    description: 'Balanced and calmer. Emerald goals, sky endurance, sunset activity.',
     trio: {
-      primary: '#C6A7FF',
-      secondary: '#9B5DE5',
-      tertiary: '#6D28D9',
+      primary: '#2ECC71',
+      secondary: '#4CC9F0',
+      tertiary: '#FF8C42',
     },
   },
 ];
 
-export const DEFAULT_THEME_PALETTE_ID: ThemePaletteId = 'orange';
+export const DEFAULT_THEME_PALETTE_ID: ThemePaletteId = 'solar_activity';
 
 export function withAlpha(hex: string, alpha: number) {
   const clamped = Math.max(0, Math.min(1, alpha));
@@ -178,6 +178,7 @@ export function buildDarkColors(
     gradientTop: DARK_FOUNDATION.backgroundStrong,
     gradientMid: DARK_FOUNDATION.backgroundMuted,
     gradientBottom: DARK_FOUNDATION.background,
+    link: trio.primary,
     macroProtein: trio.primary,
     macroCarbs: trio.secondary,
     macroFats: trio.tertiary,
@@ -195,3 +196,5 @@ export const Colors = {
   },
   dark: buildDarkColors(),
 };
+
+export default Colors;

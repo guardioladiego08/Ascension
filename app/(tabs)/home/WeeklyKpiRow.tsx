@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
+import { HOME_TONES } from './tokens';
 
 type WeeklySummaryRow = {
   week_start: string;
@@ -54,7 +55,7 @@ function formatMeters(value: number) {
 }
 
 export default function WeeklyKpiRow() {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [loading, setLoading] = useState(false);
@@ -180,7 +181,7 @@ export default function WeeklyKpiRow() {
   const elevGainM = summary?.total_elev_gain_m ?? 0;
 
   return (
-    <View style={[globalStyles.panel, styles.wrapper]}>
+    <View style={[styles.panel, styles.wrapper]}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.dateLabel}>Week of {weekStartISO}</Text>
@@ -196,42 +197,23 @@ export default function WeeklyKpiRow() {
       </View>
 
       <View style={styles.metricRow}>
-        <MetricCard
-          globalStyles={globalStyles}
-          styles={styles}
-          label="Workouts"
-          value={String(workouts)}
-        />
-        <MetricCard
-          globalStyles={globalStyles}
-          styles={styles}
-          label="Hours"
-          value={formatHours(hours)}
-        />
-        <MetricCard
-          globalStyles={globalStyles}
-          styles={styles}
-          label="Calories"
-          value={formatCalories(calories)}
-        />
+        <MetricCard styles={styles} label="Workouts" value={String(workouts)} />
+        <MetricCard styles={styles} label="Hours" value={formatHours(hours)} />
+        <MetricCard styles={styles} label="Calories" value={formatCalories(calories)} />
       </View>
 
       <View style={styles.footerRow}>
-        <View style={[globalStyles.panelSoft, styles.footerCard]}>
+        <View style={[styles.panelSoft, styles.footerCard]}>
           <View style={styles.footerLabelRow}>
-            <View
-              style={[styles.footerDot, { backgroundColor: colors.highlight2 }]}
-            />
+            <View style={[styles.footerDot, { backgroundColor: colors.highlight2 }]} />
             <Text style={styles.footerLabel}>Run + Walk</Text>
           </View>
           <Text style={styles.footerValue}>{formatMeters(runWalkDistanceM)} m</Text>
         </View>
 
-        <View style={[globalStyles.panelSoft, styles.footerCard]}>
+        <View style={[styles.panelSoft, styles.footerCard]}>
           <View style={styles.footerLabelRow}>
-            <View
-              style={[styles.footerDot, { backgroundColor: colors.highlight3 }]}
-            />
+            <View style={[styles.footerDot, { backgroundColor: colors.highlight3 }]} />
             <Text style={styles.footerLabel}>Elevation</Text>
           </View>
           <Text style={styles.footerValue}>{formatMeters(elevGainM)} m</Text>
@@ -244,18 +226,16 @@ export default function WeeklyKpiRow() {
 function MetricCard({
   label,
   value,
-  globalStyles,
   styles,
 }: {
   label: string;
   value: string;
-  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
   styles: ReturnType<typeof createStyles>;
 }) {
   return (
-    <View style={[globalStyles.kpiCard, styles.metricCard]}>
+    <View style={[styles.kpiCard, styles.metricCard]}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={globalStyles.kpiNumber}>{value}</Text>
+      <Text style={styles.kpiNumber}>{value}</Text>
     </View>
   );
 }
@@ -265,6 +245,38 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 16,
+    },
+    kpiCard: {
+      flex: 1,
+      minHeight: 96,
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      paddingVertical: 18,
+      paddingHorizontal: 14,
+      justifyContent: 'space-between',
+    },
+    kpiNumber: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 24,
+      lineHeight: 28,
+      letterSpacing: -0.8,
+    },
     wrapper: {
       gap: 16,
     },
@@ -275,13 +287,13 @@ function createStyles(
       gap: 12,
     },
     dateLabel: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 16,
       lineHeight: 20,
     },
     helperText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 19,
@@ -319,7 +331,7 @@ function createStyles(
       gap: 12,
     },
     metricLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 14,
@@ -345,7 +357,7 @@ function createStyles(
       borderRadius: 4,
     },
     footerLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 14,
@@ -353,7 +365,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     footerValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 20,

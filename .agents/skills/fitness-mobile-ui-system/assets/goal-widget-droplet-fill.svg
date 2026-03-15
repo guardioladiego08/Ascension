@@ -1,0 +1,11 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="240" rx="32" fill="#0D1117"/>
+  <path d="M120 30C120 30 176 98 176 142C176 177.346 151.346 202 116 202C80.6538 202 56 177.346 56 142C56 98 120 30 120 30Z" fill="#131A22" stroke="#243042" stroke-width="6"/>
+  <mask id="drop-mask" maskUnits="userSpaceOnUse" x="56" y="30" width="120" height="172">
+    <path d="M120 30C120 30 176 98 176 142C176 177.346 151.346 202 116 202C80.6538 202 56 177.346 56 142C56 98 120 30 120 30Z" fill="white"/>
+  </mask>
+  <g mask="url(#drop-mask)">
+    <path d="M44 146C60 136 82 132 98 138C115 144 131 154 149 150C166 146 182 132 196 136V214H44V146Z" fill="#00F5D4" fill-opacity="0.92"/>
+  </g>
+  <text x="120" y="214" fill="#F5F7FA" font-family="SF Pro, Roboto, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Hydration 58%</text>
+</svg>

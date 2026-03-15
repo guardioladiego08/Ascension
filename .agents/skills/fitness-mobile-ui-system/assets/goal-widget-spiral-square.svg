@@ -1,0 +1,8 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="240" rx="32" fill="#0D1117"/>
+  <rect x="36" y="36" width="168" height="168" rx="28" fill="#131A22" stroke="#243042" stroke-width="4"/>
+  <path d="M62 62H178V128H110V160H150" stroke="#243042" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M62 62H178V128H110V160H150" stroke="#F72585" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="282" stroke-dashoffset="92"/>
+  <circle cx="150" cy="160" r="8" fill="#F72585"/>
+  <text x="120" y="214" fill="#F5F7FA" font-family="SF Pro, Roboto, sans-serif" font-size="18" font-weight="600" text-anchor="middle">Consistency 67%</text>
+</svg>

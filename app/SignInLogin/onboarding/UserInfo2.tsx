@@ -11,14 +11,15 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import AuthScreen from '../components/AuthScreen';
+import AuthButton from '../components/AuthButton';
 import AppAlert from '../components/AppAlert';
-import { withAlpha } from '@/constants/Colors';
 import {
   useOnboardingDraftStore,
   type DbGender,
 } from '@/lib/onboarding/onboardingDraftStore';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAuthDesignSystem } from '../designSystem';
 
 type GenderUI = 'female' | 'male' | 'non_binary' | 'prefer_not';
 type ActivePanel = 'dob' | 'height' | 'weight' | 'gender';
@@ -86,7 +87,8 @@ export default function UserInfo2() {
   const { draft, setDraft } = useOnboardingDraftStore();
   const { colors, fonts } = useAppTheme();
   const { weightUnit, distanceUnit } = useUnits();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
   const usesImperial = weightUnit === 'lb' || distanceUnit === 'mi';
 
   const initialDOB = useMemo(() => {
@@ -375,7 +377,7 @@ export default function UserInfo2() {
         <Ionicons
           name={icon}
           size={18}
-          color={selected ? colors.blkText : colors.textMuted}
+          color={selected ? ui.tones.accentStrong : colors.textMuted}
         />
         <Text style={[styles.railTitle, selected ? styles.railTitleSelected : null]}>{title}</Text>
         <Text
@@ -405,7 +407,7 @@ export default function UserInfo2() {
 
   return (
     <AuthScreen
-      eyebrow="Step 2 of 4"
+      eyebrow="Step 2 of 5"
       title="Body details"
       showBackButton
       backTo="/SignInLogin/onboarding/UserInfo1"
@@ -624,14 +626,12 @@ export default function UserInfo2() {
         ) : null}
       </Animated.View>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, !canContinue ? styles.buttonDisabled : null]}
-        activeOpacity={0.92}
+      <AuthButton
+        label="Continue"
+        icon="arrow-forward"
         onPress={handleNext}
-      >
-        <Text style={styles.primaryButtonText}>Continue</Text>
-        <Ionicons name="arrow-forward" size={18} color={colors.blkText} />
-      </TouchableOpacity>
+        disabled={!canContinue}
+      />
 
       <AppAlert
         visible={alertVisible}
@@ -645,23 +645,20 @@ export default function UserInfo2() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     rail: {
       gap: 10,
     },
     railButton: {
-      borderRadius: 20,
+      ...ui.fragments.selectionCard,
       paddingVertical: 14,
       paddingHorizontal: 16,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     railButtonSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      ...ui.fragments.selectionCardSelected,
     },
     railTopRow: {
       flexDirection: 'row',
@@ -669,13 +666,12 @@ function createStyles(
       gap: 10,
     },
     railTitle: {
-      color: colors.text,
-      fontFamily: fonts.heading,
+      ...ui.fragments.selectionTitle,
       fontSize: 14,
       lineHeight: 18,
     },
     railTitleSelected: {
-      color: colors.blkText,
+      color: colors.text,
     },
     railValue: {
       marginLeft: 'auto',
@@ -687,17 +683,13 @@ function createStyles(
       textTransform: 'capitalize',
     },
     railValueSelected: {
-      color: colors.blkText,
+      color: colors.text,
       fontFamily: fonts.heading,
     },
     panel: {
       marginTop: 14,
       minHeight: 240,
-      borderRadius: 28,
-      padding: 22,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.card,
     },
     panelTitle: {
       color: colors.text,
@@ -714,10 +706,7 @@ function createStyles(
       marginTop: 14,
     },
     dobSummaryCard: {
-      borderRadius: 20,
-      backgroundColor: colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.cardSoft,
       paddingHorizontal: 16,
       paddingVertical: 14,
       marginBottom: 14,
@@ -751,13 +740,13 @@ function createStyles(
       paddingVertical: 12,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.surfaceRaised,
+      backgroundColor: ui.fragments.input.backgroundColor,
       borderWidth: 1,
       borderColor: colors.border,
     },
     monthChipSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: ui.fragments.selectionCardSelected.backgroundColor,
+      borderColor: ui.fragments.selectionCardSelected.borderColor,
     },
     monthChipText: {
       color: colors.text,
@@ -766,7 +755,7 @@ function createStyles(
       lineHeight: 17,
     },
     monthChipTextSelected: {
-      color: colors.blkText,
+      color: colors.text,
     },
     measurementRow: {
       marginTop: 18,
@@ -776,7 +765,7 @@ function createStyles(
     measurementField: {
       flex: 1,
       borderRadius: 20,
-      backgroundColor: colors.surfaceRaised,
+      backgroundColor: ui.fragments.input.backgroundColor,
       borderWidth: 1,
       borderColor: colors.border,
       paddingHorizontal: 16,
@@ -827,13 +816,13 @@ function createStyles(
       borderRadius: 18,
       paddingVertical: 16,
       paddingHorizontal: 16,
-      backgroundColor: colors.surfaceRaised,
+      backgroundColor: ui.fragments.input.backgroundColor,
       borderWidth: 1,
       borderColor: colors.border,
     },
     choiceButtonSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: ui.fragments.selectionCardSelected.backgroundColor,
+      borderColor: ui.fragments.selectionCardSelected.borderColor,
     },
     choiceButtonText: {
       color: colors.text,
@@ -842,26 +831,7 @@ function createStyles(
       lineHeight: 18,
     },
     choiceButtonTextSelected: {
-      color: colors.blkText,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      marginTop: 16,
-    },
-    buttonDisabled: {
-      opacity: 0.62,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      color: colors.text,
     },
   });
 }

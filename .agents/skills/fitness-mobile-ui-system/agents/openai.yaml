@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fitness Mobile UI System"
+  short_description: "Dark fitness UI system spec"
+  default_prompt: "Use $fitness-mobile-ui-system to design a dark-theme fitness app UI system for iOS and Android with tokens, blueprints, assets, and implementation-ready code snippets."

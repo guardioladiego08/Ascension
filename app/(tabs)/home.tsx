@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useUnits } from '@/contexts/UnitsContext';
@@ -18,6 +17,7 @@ import { HomeGoalLanesCard } from './home/HomeGoalLanesCard';
 import { HomeNutritionCard } from './home/HomeNutritionCard';
 import { HomeSectionHeader } from './home/HomeSectionHeader';
 import { createHomeStyles } from './home/styles';
+import { HOME_TONES } from './home/tokens';
 import { type HomeGoalLaneItem } from './home/types';
 import { useHomeDashboard } from './home/useHomeDashboard';
 import {
@@ -35,7 +35,7 @@ import {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const { distanceUnit, weightUnit } = useUnits();
   const styles = useMemo(() => createHomeStyles(colors, fonts), [colors, fonts]);
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
@@ -312,26 +312,17 @@ export default function HomeScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, '#09121A', colors.gradientBottom]}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <ScrollView
-        contentContainerStyle={[globalStyles.container, styles.content]}
+        contentContainerStyle={[styles.container, styles.content]}
         showsVerticalScrollIndicator={false}
       >
         <LogoHeader />
 
-        <View style={[globalStyles.panel, styles.heroCard]}>
-          <View style={[styles.heroBackdropBand, styles.heroBackdropBandPrimary]} />
-          <View style={[styles.heroBackdropBand, styles.heroBackdropBandSecondary]} />
-          <View style={styles.heroBackdropGrid} />
-
+        <View style={[styles.panel, styles.heroCard]}>
           <View style={styles.heroTopRow}>
             <View style={styles.heroCopy}>
-              <Text style={globalStyles.eyebrow}>{todayLabel}</Text>
+              <Text style={styles.eyebrow}>{todayLabel}</Text>
               <Text style={styles.heroHeading}>
                 Good {getDaySegment()}, {loading ? 'loading...' : firstName}
               </Text>
@@ -360,12 +351,11 @@ export default function HomeScreen() {
               activeGoalCount={activeGoalCount}
               closedGoalCount={closedGoalCount}
               styles={styles}
-              colors={colors}
               fonts={fonts}
             />
 
             <View style={styles.heroSide}>
-              <View style={[globalStyles.panelSoft, styles.heroMetricCard]}>
+              <View style={[styles.panelSoft, styles.heroMetricCard]}>
                 <Text style={styles.heroMetricLabel}>Completed today</Text>
                 <Text style={styles.heroMetricValue}>{completedSessionCount}</Text>
                 <Text style={styles.heroMetricHint}>
@@ -373,7 +363,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
 
-              <View style={[globalStyles.panelSoft, styles.heroMetricCard]}>
+              <View style={[styles.panelSoft, styles.heroMetricCard]}>
                 <Text style={styles.heroMetricLabel}>Nutrition pace</Text>
                 <Text style={styles.heroMetricValue}>
                   {caloriesGoal ? `${Math.round(clamp01(caloriesActual / caloriesGoal) * 100)}%` : '--'}
@@ -382,18 +372,18 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.heroFooterRow}>
-                <View style={[globalStyles.chip, styles.heroChip]}>
+                <View style={[styles.chip, styles.heroChip]}>
                   <Ionicons name="person-outline" size={14} color={colors.highlight1} />
-                  <Text style={[globalStyles.chipText, styles.heroChipText]}>{displayName}</Text>
+                  <Text style={[styles.chipText, styles.heroChipText]}>{displayName}</Text>
                 </View>
 
-                <View style={[globalStyles.chip, styles.heroChip]}>
+                <View style={[styles.chip, styles.heroChip]}>
                   <Ionicons
                     name={ringState?.allClosed ? 'sparkles-outline' : 'flash-outline'}
                     size={14}
                     color={colors.highlight3}
                   />
-                  <Text style={[globalStyles.chipText, styles.heroChipText]}>
+                  <Text style={[styles.chipText, styles.heroChipText]}>
                     {activeGoalCount ? `${closedGoalCount}/${activeGoalCount} closed` : 'Rings idle'}
                   </Text>
                 </View>
@@ -407,7 +397,6 @@ export default function HomeScreen() {
           title="Start from the home tab"
           subtitle="Strength, cardio, nutrition logging, and the bike placeholder are all one tap away."
           styles={styles}
-          globalStyles={globalStyles}
         />
 
         <View style={styles.actionGrid}>
@@ -417,7 +406,6 @@ export default function HomeScreen() {
             icon={<MaterialCommunityIcons name="dumbbell" size={22} color={colors.highlight1} />}
             accentColor={colors.accentSoft}
             styles={styles}
-            globalStyles={globalStyles}
             onPress={() => router.push('/add/Strength/StrengthTrain')}
           />
 
@@ -427,7 +415,6 @@ export default function HomeScreen() {
             icon={<Ionicons name="walk-outline" size={22} color={colors.highlight2} />}
             accentColor={colors.accentSecondarySoft}
             styles={styles}
-            globalStyles={globalStyles}
             onPress={() => setShowRunWalkModal(true)}
           />
 
@@ -437,17 +424,15 @@ export default function HomeScreen() {
             icon={<Ionicons name="restaurant-outline" size={22} color={colors.highlight3} />}
             accentColor={colors.accentTertiarySoft}
             styles={styles}
-            globalStyles={globalStyles}
             onPress={() => router.push('/add/Nutrition/logMeal')}
           />
 
           <HomeActionTile
             title="Bike session"
             subtitle="Reserved for the upcoming dedicated ride-tracking flow."
-            icon={<Ionicons name="bicycle-outline" size={22} color={colors.link} />}
-            accentColor={colors.glowSecondary}
+            icon={<Ionicons name="bicycle-outline" size={22} color={colors.textMuted} />}
+            accentColor={HOME_TONES.panelOverlayStrong}
             styles={styles}
-            globalStyles={globalStyles}
             onPress={() => router.push('/add/Cardio/bike')}
           />
         </View>
@@ -459,7 +444,6 @@ export default function HomeScreen() {
               title="Completed sessions"
               subtitle="Each card appears only after you’ve finished that session type for the day."
               styles={styles}
-              globalStyles={globalStyles}
             />
 
             <View style={styles.statsGrid}>
@@ -479,7 +463,6 @@ export default function HomeScreen() {
                   footer="Open strength history"
                   onPress={() => router.push('/progress/strength/allStrengthWorkouts')}
                   styles={styles}
-                  globalStyles={globalStyles}
                 />
               )}
 
@@ -499,7 +482,6 @@ export default function HomeScreen() {
                   footer="Open cardio history"
                   onPress={() => router.push('/progress/cardio/allSessions')}
                   styles={styles}
-                  globalStyles={globalStyles}
                 />
               )}
             </View>
@@ -511,7 +493,6 @@ export default function HomeScreen() {
           title="Calories and macros"
           subtitle="Daily calorie pace on the left, actual-vs-goal macro bars on the right."
           styles={styles}
-          globalStyles={globalStyles}
         />
 
         <HomeNutritionCard
@@ -519,9 +500,9 @@ export default function HomeScreen() {
           caloriesActual={caloriesActual}
           caloriesGoal={caloriesGoal}
           macroRows={macroRows}
+          accentColor={colors.highlight1}
+          actionIconColor={colors.blkText}
           styles={styles}
-          colors={colors}
-          globalStyles={globalStyles}
           onOpenSummary={handleOpenNutritionSummary}
         />
       </ScrollView>
@@ -560,6 +541,6 @@ export default function HomeScreen() {
           }
         }}
       />
-    </LinearGradient>
+    </View>
   );
 }

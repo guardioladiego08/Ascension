@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,13 +10,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import AuthScreen from '../components/AuthScreen';
+import AuthButton from '../components/AuthButton';
 import AppAlert from '../components/AppAlert';
-import { withAlpha } from '@/constants/Colors';
 import {
   useOnboardingDraftStore,
   type AppUsageReason,
 } from '@/lib/onboarding/onboardingDraftStore';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from '../designSystem';
 
 const USAGE_OPTIONS: Array<{
   key: AppUsageReason;
@@ -61,7 +61,8 @@ export default function UserInfo3() {
   const router = useRouter();
   const { draft, setUsageReasons } = useOnboardingDraftStore();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [usage, setUsage] = useState<AppUsageReason[]>(
     Array.isArray(draft.app_usage_reasons) ? draft.app_usage_reasons : []
@@ -114,7 +115,7 @@ export default function UserInfo3() {
 
   return (
     <AuthScreen
-      eyebrow="Step 3 of 4"
+      eyebrow="Step 3 of 5"
       title="Why Tensr?"
       subtitle="Select the jobs you want this app to do well so the experience starts in the right place."
       showBackButton
@@ -141,7 +142,7 @@ export default function UserInfo3() {
                   <Ionicons
                     name={option.icon}
                     size={22}
-                    color={selected ? colors.blkText : colors.textMuted}
+                    color={selected ? ui.tones.accentStrong : colors.textMuted}
                   />
                 </View>
 
@@ -169,21 +170,13 @@ export default function UserInfo3() {
         })}
       </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, !canContinue ? styles.buttonDisabled : null]}
-        activeOpacity={0.92}
+      <AuthButton
+        label="Continue"
+        icon="arrow-forward"
         onPress={handleNext}
-        disabled={saving}
-      >
-        {saving ? (
-          <ActivityIndicator color={colors.blkText} />
-        ) : (
-          <>
-            <Text style={styles.primaryButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.blkText} />
-          </>
-        )}
-      </TouchableOpacity>
+        disabled={!canContinue}
+        loading={saving}
+      />
 
       <AppAlert
         visible={alertVisible}
@@ -197,7 +190,8 @@ export default function UserInfo3() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     body: {
@@ -211,15 +205,10 @@ function createStyles(
       paddingBottom: 8,
     },
     cardButton: {
-      borderRadius: 24,
-      padding: 18,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.selectionCard,
     },
     cardButtonSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      ...ui.fragments.selectionCardSelected,
     },
     cardRow: {
       flexDirection: 'row',
@@ -227,71 +216,31 @@ function createStyles(
       gap: 14,
     },
     iconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceRaised,
+      ...ui.fragments.selectionIconWrap,
     },
     iconWrapSelected: {
-      backgroundColor: withAlpha(colors.blkText, 0.12),
+      ...ui.fragments.selectionIconWrapSelected,
     },
     cardCopy: {
       flex: 1,
     },
     cardTitle: {
-      color: colors.text,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.selectionTitle,
     },
     cardTitleSelected: {
-      color: colors.blkText,
+      ...ui.fragments.selectionTitleSelected,
     },
     cardSubtitle: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
-      marginTop: 4,
+      ...ui.fragments.selectionSubtitle,
     },
     cardSubtitleSelected: {
-      color: withAlpha(colors.blkText, 0.72),
+      ...ui.fragments.selectionSubtitleSelected,
     },
     checkPill: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: withAlpha(colors.blkText, 0.12),
+      ...ui.fragments.checkPill,
     },
     unchecked: {
-      width: 22,
-      height: 22,
-      borderRadius: 11,
-      borderWidth: 1.5,
-      borderColor: colors.borderStrong,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      marginTop: 16,
-    },
-    buttonDisabled: {
-      opacity: 0.62,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
+      ...ui.fragments.unchecked,
     },
   });
 }

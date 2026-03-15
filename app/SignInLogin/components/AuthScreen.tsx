@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   Image,
+  ImageSourcePropType,
   ScrollView,
   StyleProp,
   StyleSheet,
@@ -14,8 +15,8 @@ import { Href, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { withAlpha } from '@/constants/Colors';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from '../designSystem';
 
 type AuthScreenProps = {
   children: React.ReactNode;
@@ -32,6 +33,7 @@ type AuthScreenProps = {
   bodyStyle?: StyleProp<ViewStyle>;
   footer?: React.ReactNode;
   headerRight?: React.ReactNode;
+  backgroundImage?: ImageSourcePropType;
 };
 
 export default function AuthScreen({
@@ -49,10 +51,12 @@ export default function AuthScreen({
   bodyStyle,
   footer,
   headerRight,
+  backgroundImage,
 }: AuthScreenProps) {
   const router = useRouter();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const handleBack = () => {
     if (onBackPress) {
@@ -125,6 +129,10 @@ export default function AuthScreen({
       end={{ x: 0.8, y: 1 }}
       style={styles.gradient}
     >
+      {backgroundImage ? (
+        <Image source={backgroundImage} style={styles.backgroundImage} resizeMode="cover" />
+      ) : null}
+      {backgroundImage ? <View pointerEvents="none" style={styles.backgroundOverlay} /> : null}
       <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
         {scrollable ? (
           <ScrollView
@@ -144,29 +152,37 @@ export default function AuthScreen({
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     gradient: {
       flex: 1,
     },
+    backgroundImage: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    backgroundOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(4, 8, 12, 0.58)',
+    },
     safeArea: {
       flex: 1,
     },
     scrollContent: {
-      paddingHorizontal: 20,
-      paddingBottom: 32,
-      paddingTop: 8,
+      paddingHorizontal: ui.screen.horizontalPadding,
+      paddingBottom: ui.screen.bottomPadding,
+      paddingTop: ui.screen.topPadding,
       flexGrow: 1,
     },
     staticContent: {
       flex: 1,
-      paddingHorizontal: 20,
-      paddingBottom: 32,
-      paddingTop: 8,
+      paddingHorizontal: ui.screen.horizontalPadding,
+      paddingBottom: ui.screen.bottomPadding,
+      paddingTop: ui.screen.topPadding,
     },
     headerBlock: {
-      gap: 18,
+      gap: ui.spacing.s20,
     },
     brandRow: {
       minHeight: 72,
@@ -180,7 +196,7 @@ function createStyles(
       borderRadius: 22,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: withAlpha(colors.surfaceRaised, 0.9),
+      backgroundColor: ui.visuals.heroCard,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -205,36 +221,37 @@ function createStyles(
       marginLeft: 8,
     },
     copyBlock: {
-      gap: 8,
+      gap: ui.spacing.s8,
+      paddingHorizontal: 2,
     },
     eyebrow: {
       color: colors.textOffSt,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 16,
-      letterSpacing: 1.4,
+      letterSpacing: 1.2,
       textTransform: 'uppercase',
     },
     title: {
       color: colors.text,
       fontFamily: fonts.display,
-      fontSize: 34,
-      lineHeight: 38,
-      letterSpacing: -1,
+      fontSize: 36,
+      lineHeight: 40,
+      letterSpacing: -1.1,
     },
     subtitle: {
       color: colors.textMuted,
       fontFamily: fonts.body,
       fontSize: 15,
       lineHeight: 22,
-      maxWidth: 420,
+      maxWidth: 440,
     },
     body: {
       flex: 1,
-      marginTop: 24,
+      marginTop: ui.spacing.s24,
     },
     footer: {
-      marginTop: 18,
+      marginTop: ui.spacing.s20,
     },
   });
 }

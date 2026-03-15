@@ -2,24 +2,22 @@ import React from 'react';
 import Svg, { Circle } from 'react-native-svg';
 import { Text, View } from 'react-native';
 
-import type { useAppTheme } from '@/providers/AppThemeProvider';
 import type { HomeStyles } from './styles';
 import type { HomeGoalLaneItem } from './types';
+import { HOME_TONES } from './tokens';
 
 export function HomeGoalLanesCard({
   items,
   activeGoalCount,
   closedGoalCount,
   styles,
-  colors,
   fonts,
 }: {
   items: HomeGoalLaneItem[];
   activeGoalCount: number;
   closedGoalCount: number;
   styles: HomeStyles;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  fonts: ReturnType<typeof useAppTheme>['fonts'];
+  fonts: { label: string };
 }) {
   const size = 176;
   const strokeWidth = 18;
@@ -60,7 +58,7 @@ export function HomeGoalLanesCard({
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
-                    stroke={colors.card3}
+                    stroke={HOME_TONES.surface3}
                     strokeWidth={strokeWidth}
                     strokeLinecap="butt"
                     fill="none"
@@ -109,7 +107,10 @@ export function HomeGoalLanesCard({
                   <Text
                     style={[
                       styles.ringsLegendStatus,
-                      { color: item.closed ? item.color : colors.textMuted, fontFamily: fonts.label },
+                      {
+                        color: item.closed ? item.color : HOME_TONES.textTertiary,
+                        fontFamily: fonts.label,
+                      },
                     ]}
                   >
                     {item.active ? (item.closed ? 'Closed' : `${Math.round(item.progress * 100)}%`) : 'Off'}

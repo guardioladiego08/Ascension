@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import AppPopup from '@/components/ui/AppPopup';
+import { HOME_TONES } from './tokens';
 
 export type RunWalkExerciseType =
   | 'outdoor_run'
@@ -23,7 +24,7 @@ type Props = {
 };
 
 export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   return (
@@ -44,7 +45,6 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           detail="GPS route, outdoor pace, and distance."
           onPress={() => onSelect('outdoor_run')}
           styles={styles}
-          globalStyles={globalStyles}
         />
         <OptionRow
           icon="footsteps-outline"
@@ -54,7 +54,6 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           detail="Track a lower-intensity outdoor session."
           onPress={() => onSelect('outdoor_walk')}
           styles={styles}
-          globalStyles={globalStyles}
         />
         <OptionRow
           icon="speedometer-outline"
@@ -64,7 +63,6 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           detail="Treadmill-style tracking without GPS."
           onPress={() => onSelect('indoor_run')}
           styles={styles}
-          globalStyles={globalStyles}
         />
         <OptionRow
           icon="analytics-outline"
@@ -74,16 +72,15 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           detail="Quick indoor walking session flow."
           onPress={() => onSelect('indoor_walk')}
           styles={styles}
-          globalStyles={globalStyles}
         />
       </View>
 
       <TouchableOpacity
         activeOpacity={0.92}
-        style={[globalStyles.buttonSecondary, styles.closeButton]}
+        style={[styles.buttonSecondary, styles.closeButton]}
         onPress={onClose}
       >
-        <Text style={globalStyles.buttonTextSecondary}>Close</Text>
+        <Text style={styles.buttonTextSecondary}>Close</Text>
       </TouchableOpacity>
     </AppPopup>
   );
@@ -97,7 +94,6 @@ function OptionRow({
   iconBg,
   onPress,
   styles,
-  globalStyles,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -106,12 +102,11 @@ function OptionRow({
   iconBg: string;
   onPress: () => void;
   styles: ReturnType<typeof createStyles>;
-  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.92}
-      style={[globalStyles.panelSoft, styles.row]}
+      style={[styles.panelSoft, styles.row]}
       onPress={onPress}
     >
       <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>
@@ -133,6 +128,29 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+    },
+    buttonTextSecondary: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     list: {
       gap: 10,
       marginTop: 18,
@@ -154,13 +172,13 @@ function createStyles(
       flex: 1,
     },
     rowTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 19,
     },
     rowDetail: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 18,

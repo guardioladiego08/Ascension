@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "name": "Ascension Dark Fitness UI",
+    "defaultAccentPalette": "D",
+    "platforms": ["iOS", "Android", "Web"],
+    "baselineGrid": 8
+  },
+  "color": {
+    "foundation": {
+      "background": "#05070A",
+      "surface1": "#0D1117",
+      "surface2": "#131A22",
+      "surfaceElevated": "#192330",
+      "borderDivider": "#243042",
+      "textPrimary": "#F5F7FA",
+      "textSecondary": "#B6C2CF",
+      "textTertiary": "#8A96A3",
+      "textDisabled": "#5E6875",
+      "iconDefault": "#EAF0F6",
+      "iconMuted": "#7D8895"
+    },
+    "accentPalettes": {
+      "A": { "accent1": "#3A86FF", "accent2": "#FF7A18", "accent3": "#7CFF6B" },
+      "B": { "accent1": "#00D1FF", "accent2": "#7A5CFF", "accent3": "#FF6B6B" },
+      "C": { "accent1": "#FFA62B", "accent2": "#2EC4B6", "accent3": "#E71D36" },
+      "D": { "accent1": "#00F5D4", "accent2": "#4361EE", "accent3": "#F72585" },
+      "E": { "accent1": "#2ECC71", "accent2": "#4CC9F0", "accent3": "#FF8C42" }
+    },
+    "charts": {
+      "distance": "#00F5D4",
+      "pace": "#4361EE",
+      "elevation": "#FF8C42",
+      "heartRate": "#F72585",
+      "colorBlindSafeAlt": "#FFD166"
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "ios": "SF Pro",
+      "android": "Roboto",
+      "premiumAlt1": "\"Sohne\", \"SF Pro\", \"Roboto\", sans-serif",
+      "premiumAlt2": "\"TT Norms Pro\", \"SF Pro\", \"Roboto\", sans-serif",
+      "numeric": "\"SF Mono\", \"Roboto Mono\", monospace"
+    },
+    "styles": {
+      "display": { "size": 48, "lineHeight": 56, "weight": 700, "tracking": -0.02 },
+      "h1": { "size": 32, "lineHeight": 38, "weight": 700, "tracking": -0.01 },
+      "h2": { "size": 28, "lineHeight": 34, "weight": 600, "tracking": -0.01 },
+      "h3": { "size": 22, "lineHeight": 28, "weight": 600, "tracking": -0.005 },
+      "body": { "size": 16, "lineHeight": 24, "weight": 400, "tracking": 0.0 },
+      "caption": { "size": 13, "lineHeight": 18, "weight": 500, "tracking": 0.01 },
+      "button": { "size": 17, "lineHeight": 20, "weight": 600, "tracking": 0.01 },
+      "micro": { "size": 11, "lineHeight": 14, "weight": 600, "tracking": 0.08 }
+    }
+  },
+  "spacing": {
+    "s4": 4,
+    "s8": 8,
+    "s12": 12,
+    "s16": 16,
+    "s20": 20,
+    "s24": 24,
+    "s32": 32,
+    "s40": 40
+  },
+  "radius": {
+    "xs": 8,
+    "sm": 12,
+    "md": 16,
+    "lg": 20,
+    "xl": 28,
+    "pill": 999
+  },
+  "layout": {
+    "compactMax": 599,
+    "mediumMax": 839,
+    "expandedMax": 1199,
+    "phoneColumns": 4,
+    "tabletColumns": 8,
+    "desktopColumns": 12,
+    "compactPadding": 16,
+    "mediumPadding": 24,
+    "expandedPadding": 32
+  },
+  "motion": {
+    "durationFast": 120,
+    "durationDefault": 220,
+    "durationSlow": 360,
+    "durationProgress": 420,
+    "easingStandard": [0.2, 0.0, 0.0, 1.0],
+    "easingEntrance": [0.05, 0.7, 0.1, 1.0],
+    "easingExit": [0.3, 0.0, 1.0, 1.0],
+    "easingEmphasized": [0.2, 0.8, 0.2, 1.0]
+  }
+}

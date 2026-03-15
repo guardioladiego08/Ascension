@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -11,9 +10,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import AuthScreen from '../components/AuthScreen';
-import { withAlpha } from '@/constants/Colors';
+import AuthButton from '../components/AuthButton';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from '../designSystem';
 
 export default function Paywall() {
   const router = useRouter();
@@ -22,7 +22,8 @@ export default function Paywall() {
     ? params.authUserId[0]
     : params.authUserId;
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [finishing, setFinishing] = useState(false);
 
@@ -88,7 +89,7 @@ export default function Paywall() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.iconWrap}>
-            <Ionicons name="star-outline" size={24} color={colors.primary} />
+            <Ionicons name="star-outline" size={24} color={ui.tones.accentStrong} />
           </View>
           <Text style={styles.cardTitle}>Premium gives your training more context.</Text>
         </View>
@@ -100,46 +101,36 @@ export default function Paywall() {
 
         <View style={styles.featureList}>
           <View style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={18} color={ui.tones.accentStrong} />
             <Text style={styles.featureText}>Unlimited workout and run history</Text>
           </View>
           <View style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={18} color={ui.tones.accentStrong} />
             <Text style={styles.featureText}>Advanced performance charts</Text>
           </View>
           <View style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={18} color={ui.tones.accentStrong} />
             <Text style={styles.featureText}>Social leaderboards and badges</Text>
           </View>
           <View style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+            <Ionicons name="checkmark-circle" size={18} color={ui.tones.accentStrong} />
             <Text style={styles.featureText}>Priority access to new features</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.primaryButton, finishing ? styles.buttonDisabled : null]}
+        <AuthButton
+          label="Continue with Premium"
           onPress={handleSubscribe}
-          disabled={finishing}
-          activeOpacity={0.92}
-        >
-          {finishing ? (
-            <ActivityIndicator color={colors.blkText} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Continue with Premium</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.secondaryButton, finishing ? styles.buttonDisabled : null]}
+          loading={finishing}
+        />
+        <AuthButton
+          label="Continue with free plan"
+          variant="secondary"
           onPress={handleSkip}
           disabled={finishing}
-          activeOpacity={0.92}
-        >
-          <Text style={styles.secondaryButtonText}>Continue with free plan</Text>
-        </TouchableOpacity>
+        />
       </View>
     </AuthScreen>
   );
@@ -147,7 +138,8 @@ export default function Paywall() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     body: {
@@ -162,12 +154,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     card: {
-      borderRadius: 28,
-      padding: 22,
-      gap: 16,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.card,
     },
     cardHeader: {
       gap: 14,
@@ -178,7 +165,7 @@ function createStyles(
       borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.accentSoft,
+      backgroundColor: ui.tones.accentSoft,
     },
     cardTitle: {
       color: colors.text,
@@ -212,37 +199,6 @@ function createStyles(
     actions: {
       gap: 12,
       marginTop: 18,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-    },
-    secondaryButton: {
-      height: 54,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.surfaceRaised,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    buttonDisabled: {
-      opacity: 0.7,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
-    },
-    secondaryButtonText: {
-      color: colors.text,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
     },
   });
 }

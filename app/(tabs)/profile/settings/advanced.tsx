@@ -46,8 +46,8 @@ export default function AdvancedSettingsScreen() {
             <View style={styles.cardIntro}>
               <Text style={styles.cardTitle}>Highlight color family</Text>
               <Text style={styles.cardDescription}>
-                Choose one accent family for the app. Each option uses three
-                shades of the same color and is saved globally.
+                Choose one 3-color performance palette for the app. Your
+                selection is applied globally and saved on this device.
               </Text>
             </View>
 

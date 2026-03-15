@@ -12,10 +12,12 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 
 import AuthScreen from './components/AuthScreen';
+import AuthButton from './components/AuthButton';
+import AuthField from './components/AuthField';
 import AppAlert from './components/AppAlert';
-import { withAlpha } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from './designSystem';
 
 function sanitizeUsername(raw: string) {
   let u = (raw ?? '')
@@ -43,7 +45,8 @@ async function checkUsernameAgainstUserUsers(desired: string) {
 export default function SignupEmail() {
   const router = useRouter();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [email, setEmail] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
@@ -228,8 +231,7 @@ export default function SignupEmail() {
       backTo="/SignInLogin/FirstPage"
     >
       <View style={styles.card}>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Email</Text>
+        <AuthField label="Email">
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -239,10 +241,9 @@ export default function SignupEmail() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Username</Text>
+        <AuthField label="Username">
           <View style={styles.usernameRow}>
             <TextInput
               value={usernameInput}
@@ -272,7 +273,7 @@ export default function SignupEmail() {
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        </AuthField>
 
         {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() ? (
           <Text style={styles.helperText}>
@@ -289,8 +290,7 @@ export default function SignupEmail() {
           </Text>
         ) : null}
 
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Password</Text>
+        <AuthField label="Password">
           <TextInput
             value={password}
             onChangeText={setPassword}
@@ -299,23 +299,14 @@ export default function SignupEmail() {
             placeholderTextColor={colors.textMuted}
             style={styles.input}
           />
-        </View>
+        </AuthField>
 
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            (loadingEmail || checkingUsername) && styles.buttonDisabled,
-          ]}
+        <AuthButton
+          label="Create account"
           onPress={handleEmailSignup}
-          disabled={loadingEmail || checkingUsername}
-          activeOpacity={0.92}
-        >
-          {loadingEmail ? (
-            <ActivityIndicator color={colors.blkText} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Create account</Text>
-          )}
-        </TouchableOpacity>
+          disabled={checkingUsername}
+          loading={loadingEmail}
+        />
 
         <Text style={styles.termsNote}>
           By clicking Create account, you agree to our{' '}
@@ -345,27 +336,12 @@ export default function SignupEmail() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     card: {
-      borderRadius: 28,
-      padding: 22,
-      gap: 16,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    fieldGroup: {
-      gap: 8,
-    },
-    label: {
-      color: colors.textMuted,
-      fontFamily: fonts.label,
-      fontSize: 12,
-      lineHeight: 16,
-      letterSpacing: 0.6,
-      textTransform: 'uppercase',
+      ...ui.fragments.card,
     },
     usernameRow: {
       flexDirection: 'row',
@@ -373,26 +349,18 @@ function createStyles(
       alignItems: 'center',
     },
     input: {
-      minHeight: 54,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceRaised,
-      paddingHorizontal: 16,
-      color: colors.text,
-      fontFamily: fonts.body,
-      fontSize: 15,
+      ...ui.fragments.input,
     },
     usernameInput: {
       flex: 1,
     },
     inlineButton: {
       minWidth: 96,
-      height: 54,
+      minHeight: 56,
       borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.primary,
+      backgroundColor: ui.tones.accentStrong,
       paddingHorizontal: 16,
     },
     inlineButtonDisabled: {
@@ -420,23 +388,6 @@ function createStyles(
     helperDanger: {
       color: colors.danger,
     },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 4,
-    },
-    buttonDisabled: {
-      opacity: 0.72,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
-    },
     termsNote: {
       color: colors.textMuted,
       fontFamily: fonts.body,
@@ -447,7 +398,7 @@ function createStyles(
       marginTop: -4,
     },
     termsLink: {
-      color: colors.accent,
+      color: ui.tones.accentStrong,
       fontFamily: fonts.heading,
     },
     footerRow: {
@@ -456,16 +407,10 @@ function createStyles(
       alignItems: 'center',
     },
     footerText: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
+      ...ui.fragments.helperText,
     },
     footerLink: {
-      color: colors.accent,
-      fontFamily: fonts.heading,
-      fontSize: 13,
-      lineHeight: 18,
+      ...ui.fragments.linkText,
     },
   });
 }

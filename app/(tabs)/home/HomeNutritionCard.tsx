@@ -3,9 +3,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-import type { useAppTheme } from '@/providers/AppThemeProvider';
 import type { HomeStyles } from './styles';
 import type { MacroRow } from './types';
+import { HOME_TONES } from './tokens';
 
 function CalorieDonut({
   progress,
@@ -108,28 +108,25 @@ export function HomeNutritionCard({
   caloriesActual,
   caloriesGoal,
   macroRows,
+  accentColor,
+  actionIconColor,
   styles,
-  colors,
-  globalStyles,
   onOpenSummary,
 }: {
   todayLabel: string;
   caloriesActual: number;
   caloriesGoal: number;
   macroRows: MacroRow[];
+  accentColor: string;
+  actionIconColor: string;
   styles: HomeStyles;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  globalStyles: ReturnType<typeof useAppTheme>['globalStyles'];
   onOpenSummary: () => void;
 }) {
   return (
-    <View style={[globalStyles.panel, styles.nutritionCard]}>
-      <View style={styles.nutritionBackdropFrame} />
-      <View style={styles.nutritionBackdropStripe} />
-
+    <View style={[styles.panel, styles.nutritionCard]}>
       <View style={styles.nutritionHeader}>
         <View>
-          <Text style={globalStyles.eyebrow}>Daily fuel</Text>
+          <Text style={styles.eyebrow}>Daily fuel</Text>
           <Text style={styles.cardTitle}>Nutrition for {todayLabel}</Text>
         </View>
       </View>
@@ -140,8 +137,8 @@ export function HomeNutritionCard({
             progress={caloriesGoal ? Math.max(0, Math.min(1, caloriesActual / caloriesGoal)) : 0}
             valueLabel={Math.round(caloriesActual).toLocaleString()}
             secondaryLabel={caloriesGoal ? `${Math.round(caloriesGoal).toLocaleString()} goal` : 'No goal'}
-            accentColor={colors.highlight1}
-            trackColor={colors.card3}
+            accentColor={accentColor}
+            trackColor={HOME_TONES.surface3}
             styles={styles}
           />
         </View>
@@ -163,11 +160,11 @@ export function HomeNutritionCard({
       <View style={styles.nutritionActions}>
         <TouchableOpacity
           activeOpacity={0.92}
-          style={[globalStyles.buttonPrimary, styles.nutritionButton, styles.nutritionButtonFull]}
+          style={[styles.buttonPrimary, styles.nutritionButton, styles.nutritionButtonFull]}
           onPress={onOpenSummary}
         >
-          <Ionicons name="analytics-outline" size={16} color={colors.blkText} />
-          <Text style={globalStyles.buttonTextPrimary}>Daily summary</Text>
+          <Ionicons name="analytics-outline" size={16} color={actionIconColor} />
+          <Text style={styles.buttonTextPrimary}>Daily summary</Text>
         </TouchableOpacity>
       </View>
     </View>

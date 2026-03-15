@@ -13,10 +13,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import AuthScreen from '../components/AuthScreen';
+import AuthButton from '../components/AuthButton';
 import AppAlert from '../components/AppAlert';
-import { withAlpha } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useAuthDesignSystem } from '../designSystem';
 
 type Params = {
   nextPath?: string;
@@ -79,7 +80,8 @@ export default function TermsAndPrivacy() {
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
   const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const ui = useAuthDesignSystem();
+  const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const nextPath = Array.isArray(params.nextPath) ? params.nextPath[0] : params.nextPath;
 
@@ -233,7 +235,7 @@ export default function TermsAndPrivacy() {
     >
       {loadingState ? (
         <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={ui.tones.accentStrong} />
         </View>
       ) : (
         <View style={styles.content}>
@@ -307,22 +309,12 @@ export default function TermsAndPrivacy() {
         </View>
       )}
 
-      <TouchableOpacity
-        style={[
-          styles.primaryButton,
-          !canContinue ? styles.buttonDisabled : null,
-          saving ? styles.buttonDisabled : null,
-        ]}
-        activeOpacity={0.92}
+      <AuthButton
+        label="Accept and continue"
         onPress={handleSaveAndContinue}
-        disabled={!canContinue || saving}
-      >
-        {saving ? (
-          <ActivityIndicator color={colors.blkText} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Accept and continue</Text>
-        )}
-      </TouchableOpacity>
+        disabled={!canContinue}
+        loading={saving}
+      />
 
       <AppAlert
         visible={alertVisible}
@@ -336,7 +328,8 @@ export default function TermsAndPrivacy() {
 
 function createStyles(
   colors: ReturnType<typeof useAppTheme>['colors'],
-  fonts: ReturnType<typeof useAppTheme>['fonts']
+  fonts: ReturnType<typeof useAppTheme>['fonts'],
+  ui: ReturnType<typeof useAuthDesignSystem>
 ) {
   return StyleSheet.create({
     body: {
@@ -356,37 +349,21 @@ function createStyles(
       gap: 10,
     },
     tabButton: {
-      flex: 1,
-      height: 48,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
+      ...ui.fragments.tabButton,
     },
     tabButtonActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      ...ui.fragments.tabButtonActive,
     },
     tabText: {
-      color: colors.textMuted,
-      fontFamily: fonts.label,
-      fontSize: 12,
-      lineHeight: 16,
-      letterSpacing: 0.6,
-      textTransform: 'uppercase',
+      ...ui.fragments.tabText,
     },
     tabTextActive: {
-      color: colors.blkText,
+      ...ui.fragments.tabTextActive,
     },
     docCard: {
+      ...ui.fragments.card,
       flex: 1,
-      borderRadius: 28,
       padding: 20,
-      backgroundColor: withAlpha(colors.surface, 0.92),
-      borderWidth: 1,
-      borderColor: colors.border,
     },
     docText: {
       color: colors.textMuted,
@@ -403,7 +380,7 @@ function createStyles(
       gap: 14,
       borderRadius: 22,
       padding: 16,
-      backgroundColor: withAlpha(colors.surface, 0.92),
+      backgroundColor: ui.fragments.selectionCard.backgroundColor,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -421,8 +398,8 @@ function createStyles(
       backgroundColor: 'transparent',
     },
     checkboxChecked: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: ui.tones.accentStrong,
+      borderColor: ui.tones.accentStrong,
     },
     acceptCopy: {
       flex: 1,
@@ -439,23 +416,6 @@ function createStyles(
       fontSize: 12,
       lineHeight: 17,
       marginTop: 4,
-    },
-    primaryButton: {
-      height: 54,
-      borderRadius: 18,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 16,
-    },
-    buttonDisabled: {
-      opacity: 0.62,
-    },
-    primaryButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 15,
-      lineHeight: 20,
     },
   });
 }
