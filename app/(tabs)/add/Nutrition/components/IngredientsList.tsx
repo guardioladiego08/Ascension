@@ -1,27 +1,38 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../../home/tokens';
-
-type Ingredient = {
-  food_id: string;
-  description: string;
-  baseKcal: number;
-  baseProtein: number;
-  baseCarbs: number;
-  baseFat: number;
-  serving_size: number | null;
-  serving_unit: string | null;
-  quantity: number;
-};
+import type { MealDraftIngredientComputed } from '@/lib/nutrition/mealBuilder';
 
 type Props = {
-  ingredients: Ingredient[];
-  onChangeQuantity: (index: number, value: string) => void;
+  ingredients: MealDraftIngredientComputed[];
+  onChangeQuantity: (ingredientId: string, value: string) => void;
+  onIncrementQuantity: (ingredientId: string, delta: number) => void;
+  onChangeUnit: (ingredientId: string, value: string) => void;
+  onChangeGramsPerUnit: (ingredientId: string, value: string) => void;
+  onMoveUp: (ingredientId: string) => void;
+  onMoveDown: (ingredientId: string) => void;
+  onRemove: (ingredientId: string) => void;
 };
 
-const IngredientsList: React.FC<Props> = ({ ingredients, onChangeQuantity }) => {
+const IngredientsList: React.FC<Props> = ({
+  ingredients,
+  onChangeQuantity,
+  onIncrementQuantity,
+  onChangeUnit,
+  onChangeGramsPerUnit,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}) => {
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
@@ -29,69 +40,129 @@ const IngredientsList: React.FC<Props> = ({ ingredients, onChangeQuantity }) => 
     return (
       <View style={[styles.panelSoft, styles.emptyWrap]}>
         <Text style={styles.emptyTitle}>No ingredients added</Text>
-        <Text style={styles.emptyText}>Use “Add Ingredient” to build the meal and preview macros.</Text>
+        <Text style={styles.emptyText}>Search foods below to build your meal.</Text>
       </View>
     );
   }
 
   return (
-    <FlatList
-      data={ingredients}
-      keyExtractor={(item, index) => `${item.food_id}-${index}`}
-      renderItem={({ item, index }) => {
-        const quantity = item.quantity || 0;
-        const kcal = item.baseKcal * quantity;
-        const protein = item.baseProtein * quantity;
-        const carbs = item.baseCarbs * quantity;
-        const fat = item.baseFat * quantity;
-
-        const defaultServing =
-          item.serving_size && item.serving_unit
-            ? `${item.serving_size}${item.serving_unit}`
-            : null;
+    <View style={styles.list}>
+      {ingredients.map((item, index) => {
+        const isFirst = index === 0;
+        const isLast = index === ingredients.length - 1;
 
         return (
-          <View style={styles.row}>
+          <View key={item.id} style={styles.row}>
             <View style={styles.rowHeader}>
               <View style={styles.titleWrap}>
                 <Text style={styles.title} numberOfLines={2}>
-                  {item.description}
+                  {item.name}
                 </Text>
-                <Text style={styles.servingText}>
-                  {defaultServing ? `Default serving: ${defaultServing}` : 'No default serving provided'}
-                </Text>
+                {item.brand ? <Text style={styles.brand}>{item.brand}</Text> : null}
               </View>
 
-              <View style={styles.portionBox}>
-                <Text style={styles.portionLabel}>Portion</Text>
-                <TextInput
-                  style={styles.portionInput}
-                  value={
-                    item.quantity === 0 || Number.isNaN(item.quantity)
-                      ? ''
-                      : String(item.quantity)
-                  }
-                  onChangeText={(value) => onChangeQuantity(index, value)}
-                  keyboardType="decimal-pad"
-                  placeholder="1.0"
-                  placeholderTextColor={HOME_TONES.textTertiary}
-                />
-                <Text style={styles.portionUnit}>x serving</Text>
+              <View style={styles.iconActions}>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  activeOpacity={0.85}
+                  onPress={() => onMoveUp(item.id)}
+                  disabled={isFirst}
+                >
+                  <Ionicons
+                    name="arrow-up"
+                    size={14}
+                    color={isFirst ? HOME_TONES.textTertiary : HOME_TONES.textPrimary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  activeOpacity={0.85}
+                  onPress={() => onMoveDown(item.id)}
+                  disabled={isLast}
+                >
+                  <Ionicons
+                    name="arrow-down"
+                    size={14}
+                    color={isLast ? HOME_TONES.textTertiary : HOME_TONES.textPrimary}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  activeOpacity={0.85}
+                  onPress={() => onRemove(item.id)}
+                >
+                  <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                </TouchableOpacity>
               </View>
             </View>
 
+            <View style={styles.controlsRow}>
+              <View style={styles.quantityWrap}>
+                <Text style={styles.controlLabel}>Qty</Text>
+                <View style={styles.stepper}>
+                  <TouchableOpacity
+                    style={styles.stepperButton}
+                    activeOpacity={0.9}
+                    onPress={() => onIncrementQuantity(item.id, -0.5)}
+                  >
+                    <Ionicons name="remove" size={14} color={HOME_TONES.textPrimary} />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.quantityInput}
+                    value={item.quantityInput}
+                    onChangeText={(value) => onChangeQuantity(item.id, value)}
+                    keyboardType="decimal-pad"
+                    placeholder="1"
+                    placeholderTextColor={HOME_TONES.textTertiary}
+                  />
+                  <TouchableOpacity
+                    style={styles.stepperButton}
+                    activeOpacity={0.9}
+                    onPress={() => onIncrementQuantity(item.id, 0.5)}
+                  >
+                    <Ionicons name="add" size={14} color={HOME_TONES.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.unitWrap}>
+                <Text style={styles.controlLabel}>Unit</Text>
+                <TextInput
+                  style={styles.controlInput}
+                  value={item.unit}
+                  onChangeText={(value) => onChangeUnit(item.id, value)}
+                  placeholder="serving"
+                  placeholderTextColor={HOME_TONES.textTertiary}
+                />
+              </View>
+
+              <View style={styles.gramsWrap}>
+                <Text style={styles.controlLabel}>g / unit</Text>
+                <TextInput
+                  style={styles.controlInput}
+                  value={item.gramsPerUnitInput}
+                  onChangeText={(value) => onChangeGramsPerUnit(item.id, value)}
+                  keyboardType="decimal-pad"
+                  placeholder="100"
+                  placeholderTextColor={HOME_TONES.textTertiary}
+                />
+              </View>
+            </View>
+
+            <Text style={styles.servingText}>
+              {item.totalGrams.toFixed(1)}g total ({item.quantity.toFixed(2)} {item.unit})
+            </Text>
+
             <View style={styles.chipRow}>
-              <MetricChip label="kcal" value={String(Math.round(kcal))} styles={styles} />
-              <MetricChip label="P" value={protein.toFixed(1)} styles={styles} />
-              <MetricChip label="C" value={carbs.toFixed(1)} styles={styles} />
-              <MetricChip label="F" value={fat.toFixed(1)} styles={styles} />
+              <MetricChip label="kcal" value={String(Math.round(item.kcal))} styles={styles} />
+              <MetricChip label="P" value={item.protein.toFixed(1)} styles={styles} />
+              <MetricChip label="C" value={item.carbs.toFixed(1)} styles={styles} />
+              <MetricChip label="F" value={item.fat.toFixed(1)} styles={styles} />
             </View>
           </View>
         );
-      }}
-      ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-      scrollEnabled={false}
-    />
+      })}
+    </View>
   );
 };
 
@@ -140,6 +211,9 @@ function createStyles(
       fontSize: 13,
       lineHeight: 18,
     },
+    list: {
+      gap: 12,
+    },
     row: {
       borderRadius: 22,
       borderWidth: 1,
@@ -162,51 +236,98 @@ function createStyles(
       fontSize: 15,
       lineHeight: 20,
     },
-    servingText: {
-      marginTop: 4,
+    brand: {
+      marginTop: 3,
       color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
     },
-    portionBox: {
-      width: 86,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface3,
-      paddingHorizontal: 10,
-      paddingVertical: 10,
-      alignItems: 'center',
+    iconActions: {
+      flexDirection: 'row',
+      gap: 6,
     },
-    portionLabel: {
-      color: HOME_TONES.textTertiary,
-      fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 12,
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-    },
-    portionInput: {
-      width: '100%',
-      marginTop: 8,
+    iconButton: {
+      width: 30,
+      height: 30,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
       backgroundColor: HOME_TONES.surface3,
-      paddingHorizontal: 8,
-      paddingVertical: 8,
-      color: HOME_TONES.textPrimary,
-      fontFamily: fonts.heading,
-      fontSize: 14,
-      textAlign: 'center',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    portionUnit: {
-      marginTop: 6,
+    controlsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'flex-end',
+    },
+    quantityWrap: {
+      flex: 1.3,
+      gap: 5,
+    },
+    unitWrap: {
+      flex: 1,
+      gap: 5,
+    },
+    gramsWrap: {
+      flex: 1,
+      gap: 5,
+    },
+    controlLabel: {
       color: HOME_TONES.textTertiary,
-      fontFamily: fonts.body,
+      fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    controlInput: {
+      height: 38,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
+      paddingHorizontal: 10,
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.body,
+      fontSize: 13,
+    },
+    stepper: {
+      height: 38,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
+      flexDirection: 'row',
+      alignItems: 'center',
+      overflow: 'hidden',
+    },
+    stepperButton: {
+      width: 30,
+      height: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quantityInput: {
+      flex: 1,
+      height: '100%',
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      paddingHorizontal: 8,
+      textAlign: 'center',
+      backgroundColor: HOME_TONES.surface3,
+    },
+    servingText: {
+      marginTop: 2,
+      color: HOME_TONES.textSecondary,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
     },
     chipRow: {
       flexDirection: 'row',

@@ -14,7 +14,7 @@ const HEALTH_DEBUG_PREFIX = '[HealthDebug]';
 const HEART_RATE_QUERY_BUFFER_MS = 2 * 60 * 1000;
 let healthKitLoadLogged = false;
 let healthKitLoadErrorMessage: string | null = null;
-let healthKitLoadFailed = false;
+let cachedHealthKitModule: HealthKitModule | null = null;
 
 type HealthKitQuantitySample = {
   uuid?: unknown;
@@ -35,9 +35,12 @@ type HealthKitQuantitySample = {
 };
 
 type HealthKitModule = {
-  isHealthDataAvailable: () => boolean;
-  requestAuthorization: (params: { toRead?: string[]; toShare?: string[] }) => Promise<boolean>;
-  queryQuantitySamples: (
+  isHealthDataAvailable?: () => boolean;
+  requestAuthorization?: (params: {
+    toRead?: string[];
+    toShare?: string[];
+  }) => Promise<boolean>;
+  queryQuantitySamples?: (
     identifier: string,
     options: {
       unit?: string;
@@ -59,28 +62,75 @@ function asStringOrNull(value: unknown): string | null {
   return next.length > 0 ? next : null;
 }
 
-function getHealthKitModule(): HealthKitModule | null {
-  if (Platform.OS !== 'ios') return null;
-  if (healthKitLoadFailed) return null;
+function getHealthKitModuleCandidates(value: unknown): Array<Record<string, unknown>> {
+  if (!value || typeof value !== 'object') return [];
 
-  const turboModuleProxy = (
-    globalThis as typeof globalThis & {
-      __turboModuleProxy?: unknown;
+  const record = value as Record<string, unknown>;
+  const candidates: Array<Record<string, unknown>> = [record];
+
+  if (record.default && typeof record.default === 'object') {
+    candidates.push(record.default as Record<string, unknown>);
+  }
+
+  return candidates;
+}
+
+function getFunctionFromCandidates<T extends (...args: any[]) => any>(
+  candidates: Array<Record<string, unknown>>,
+  key: string
+): T | undefined {
+  for (const candidate of candidates) {
+    const value = candidate[key];
+    if (typeof value === 'function') {
+      return value as T;
     }
-  ).__turboModuleProxy;
+  }
 
-  if (typeof turboModuleProxy !== 'function') {
-    healthKitLoadFailed = true;
-    healthKitLoadErrorMessage =
-      'This iOS build does not include the Nitro/TurboModules runtime required for Apple Health.';
+  return undefined;
+}
+
+function normalizeHealthKitModule(value: unknown): HealthKitModule | null {
+  const candidates = getHealthKitModuleCandidates(value);
+  if (candidates.length === 0) return null;
+
+  const isHealthDataAvailable = getFunctionFromCandidates<
+    NonNullable<HealthKitModule['isHealthDataAvailable']>
+  >(candidates, 'isHealthDataAvailable');
+  const requestAuthorization = getFunctionFromCandidates<
+    NonNullable<HealthKitModule['requestAuthorization']>
+  >(candidates, 'requestAuthorization');
+  const queryQuantitySamples = getFunctionFromCandidates<
+    NonNullable<HealthKitModule['queryQuantitySamples']>
+  >(candidates, 'queryQuantitySamples');
+
+  if (!isHealthDataAvailable || !requestAuthorization || !queryQuantitySamples) {
     return null;
   }
 
+  return {
+    isHealthDataAvailable,
+    requestAuthorization,
+    queryQuantitySamples,
+  };
+}
+
+function getHealthKitModule(): HealthKitModule | null {
+  if (Platform.OS !== 'ios') return null;
+  if (cachedHealthKitModule) return cachedHealthKitModule;
+
   try {
+    const module = normalizeHealthKitModule(require('@kingstinct/react-native-healthkit'));
+
+    if (!module) {
+      healthKitLoadErrorMessage =
+        'The Apple Health native module loaded without the required API surface.';
+      return null;
+    }
+
+    cachedHealthKitModule = module;
     healthKitLoadErrorMessage = null;
-    return require('@kingstinct/react-native-healthkit') as HealthKitModule;
+    return module;
   } catch (error) {
-    healthKitLoadFailed = true;
     const asErrString = asStringOrNull(
       error && typeof error === 'object' && 'message' in error
         ? (error as { message?: unknown }).message
@@ -151,7 +201,7 @@ function overlapsRange(
 
 export function isAppleHealthKitAvailable(): boolean {
   const healthKit = getHealthKitModule();
-  if (!healthKit) return false;
+  if (!healthKit?.isHealthDataAvailable) return false;
 
   try {
     return healthKit.isHealthDataAvailable();
@@ -217,7 +267,7 @@ export function inferAppleHealthAuthorizationStatusFromError(
 
 export async function requestAppleHeartRateAuthorization(): Promise<HealthAuthorizationResult> {
   const healthKit = getHealthKitModule();
-  if (!healthKit || !isAppleHealthKitAvailable()) {
+  if (!healthKit?.requestAuthorization || !isAppleHealthKitAvailable()) {
     console.log(`${HEALTH_DEBUG_PREFIX} request auth skipped: unavailable`);
     return {
       status: 'unavailable',
@@ -263,7 +313,7 @@ export async function getAppleHeartRateSamplesForRange(params: {
   endDate: string;
 }): Promise<HealthHeartRateSample[]> {
   const healthKit = getHealthKitModule();
-  if (!healthKit || !isAppleHealthKitAvailable()) {
+  if (!healthKit?.queryQuantitySamples || !isAppleHealthKitAvailable()) {
     throw new Error(getAppleHealthUnavailableMessage());
   }
 

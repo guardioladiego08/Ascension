@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import MealsFoodsList from './components/MealsFoodsList';
+import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
 
@@ -73,7 +74,7 @@ export default function LogMeal() {
             <TouchableOpacity
               style={[styles.buttonPrimary, styles.actionPrimary]}
               activeOpacity={0.9}
-              onPress={() => router.push('./createMeal')}
+              onPress={() => router.push(NUTRITION_ROUTES.createMeal)}
             >
               <Ionicons name="add-circle" size={18} color={colors.blkText} />
               <Text style={styles.buttonTextPrimary}>Create Meal</Text>
@@ -82,16 +83,25 @@ export default function LogMeal() {
             <TouchableOpacity
               style={[styles.buttonSecondary, styles.actionSecondary]}
               activeOpacity={0.9}
-              onPress={() => router.push('./scanFood')}
+              onPress={() => router.push(NUTRITION_ROUTES.scanFood)}
             >
               <MaterialCommunityIcons
                 name="barcode-scan"
                 size={18}
                 color={colors.text}
               />
-              <Text style={styles.buttonTextSecondary}>Scan Food</Text>
+              <Text style={styles.buttonTextSecondary}>Scan Barcode</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={[styles.buttonSecondary, styles.quickLogButton]}
+            activeOpacity={0.9}
+            onPress={() => router.push(NUTRITION_ROUTES.logFood)}
+          >
+            <Ionicons name="search" size={16} color={HOME_TONES.textPrimary} />
+            <Text style={styles.buttonTextSecondary}>Quick Log Food</Text>
+          </TouchableOpacity>
 
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
@@ -244,6 +254,10 @@ function createStyles(
     },
     actionSecondary: {
       flex: 1,
+      flexDirection: 'row',
+      gap: 8,
+    },
+    quickLogButton: {
       flexDirection: 'row',
       gap: 8,
     },

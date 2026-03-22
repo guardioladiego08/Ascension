@@ -5,8 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -17,6 +19,7 @@ import {
   isGoalCategoryClosed,
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
+import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
 
@@ -64,6 +67,7 @@ type DisplayItem = {
 };
 
 export default function DailyNutritionSummary() {
+  const router = useRouter();
   const { date } = useLocalSearchParams<{ date?: string }>();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
@@ -244,6 +248,35 @@ export default function DailyNutritionSummary() {
             <Text style={styles.eyebrow}>Nutrition History</Text>
             <Text style={styles.header}>Daily nutrition</Text>
             <Text style={styles.heroText}>{dayLabel}</Text>
+          </View>
+
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionButtonPrimary]}
+              activeOpacity={0.9}
+              onPress={() => router.push(NUTRITION_ROUTES.logFood)}
+            >
+              <Ionicons name="search" size={15} color={colors.blkText} />
+              <Text style={styles.actionPrimaryText}>Log Food</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionButtonSecondary]}
+              activeOpacity={0.9}
+              onPress={() => router.push(NUTRITION_ROUTES.scanFood)}
+            >
+              <Ionicons name="barcode-outline" size={15} color={HOME_TONES.textPrimary} />
+              <Text style={styles.actionSecondaryText}>Scan Barcode</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.actionButtonSecondary]}
+              activeOpacity={0.9}
+              onPress={() => router.push(NUTRITION_ROUTES.logHub)}
+            >
+              <Ionicons name="restaurant-outline" size={15} color={HOME_TONES.textPrimary} />
+              <Text style={styles.actionSecondaryText}>Saved Meals</Text>
+            </TouchableOpacity>
           </View>
 
           {loading ? (
@@ -439,6 +472,41 @@ function createStyles(
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    actionButton: {
+      minHeight: 40,
+      borderRadius: 14,
+      borderWidth: 1,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    actionButtonPrimary: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    actionButtonSecondary: {
+      backgroundColor: HOME_TONES.surface2,
+      borderColor: HOME_TONES.borderSoft,
+    },
+    actionPrimaryText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    actionSecondaryText: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
     },
     scrollContent: {
       paddingBottom: 40,

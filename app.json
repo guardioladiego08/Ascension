@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ascension",
     "slug": "Ascension",
-    "version": "1.0.0",
+    "version": "0.8.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "ascension",

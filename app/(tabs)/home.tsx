@@ -9,6 +9,7 @@ import LogoHeader from '@/components/my components/logoHeader';
 import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 import { toLocalISODate } from '@/lib/goals/client';
 import { caloriesEnabled, computeRings } from '@/lib/goals/goalLogic';
+import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 
 import RunWalkTypeModal, { RunWalkExerciseType } from './home/RunWalkTypeModal';
 import { HomeActionTile } from './home/HomeActionTile';
@@ -423,7 +424,7 @@ export default function HomeScreen() {
             icon={<Ionicons name="restaurant-outline" size={22} color={colors.highlight3} />}
             accentColor={colors.accentTertiarySoft}
             styles={styles}
-            onPress={() => router.push('/add/Nutrition/logMeal')}
+            onPress={() => router.push(NUTRITION_ROUTES.logHub)}
           />
         </View>
 

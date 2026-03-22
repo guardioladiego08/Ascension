@@ -1,155 +1,71 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import { findFoodByBarcode } from '@/lib/nutrition/foodLookup';
+import { NUTRITION_BARCODE_TYPES } from '@/lib/nutrition/barcode';
+import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
+import { useNutritionBarcodeScanner } from './hooks/useNutritionBarcodeScanner';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
-
-const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
-
-type BarcodeScanningResult = {
-  data?: string | null;
-};
-
-type CameraPermissionState = {
-  granted: boolean;
-  canAskAgain?: boolean;
-} | null;
-
-type ExpoCameraModule = typeof import('expo-camera');
-
-function loadExpoCameraModule(): ExpoCameraModule | null {
-  try {
-    return require('expo-camera') as ExpoCameraModule;
-  } catch (error) {
-    console.warn('[ScanFood] expo-camera is unavailable in the current native build', error);
-    return null;
-  }
-}
 
 export default function ScanFood() {
   const router = useRouter();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
-  const cameraModule = useMemo(() => loadExpoCameraModule(), []);
-  const CameraView = cameraModule?.CameraView ?? null;
 
-  const [permission, setPermission] = useState<CameraPermissionState>(null);
-  const [paused, setPaused] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-  const [lastCode, setLastCode] = useState<string | null>(null);
-  const [notFoundCode, setNotFoundCode] = useState<string | null>(null);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  const [cameraUnavailableReason, setCameraUnavailableReason] = useState<string | null>(
-    cameraModule
-      ? null
-      : 'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
-  );
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (!cameraModule) return () => void 0;
-
-    cameraModule
-      .getCameraPermissionsAsync()
-      .then((response) => {
-        if (!mounted) return;
-        setPermission(response);
-      })
-      .catch((error) => {
-        console.warn('[ScanFood] Failed to read camera permissions', error);
-        if (!mounted) return;
-        setCameraUnavailableReason(
-          'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
-        );
+  const {
+    CameraView,
+    permission,
+    paused,
+    isSearching,
+    lastCode,
+    notFoundCode,
+    errorText,
+    cameraSessionId,
+    cameraUnavailableReason,
+    requestPermission,
+    handleBarcodeScanned,
+    resetScanner,
+  } = useNutritionBarcodeScanner({
+    onMatch: (food, scannedCode) => {
+      router.replace({
+        pathname: NUTRITION_ROUTES.logFood,
+        params: {
+          foodId: food.id,
+          barcode: scannedCode,
+        },
       });
-
-    return () => {
-      mounted = false;
-    };
-  }, [cameraModule]);
+    },
+    onNotFound: () => {},
+  });
 
   useFocusEffect(
     useCallback(() => {
-      setPaused(false);
-      setIsSearching(false);
-      setLastCode(null);
-      setNotFoundCode(null);
-      setErrorText(null);
-    }, [])
-  );
-
-  const requestPermission = useCallback(async () => {
-    if (!cameraModule) {
-      setCameraUnavailableReason(
-        'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
-      );
-      return;
-    }
-
-    try {
-      const response = await cameraModule.requestCameraPermissionsAsync();
-      setPermission(response);
-    } catch (error) {
-      console.warn('[ScanFood] Failed to request camera permission', error);
-      setCameraUnavailableReason(
-        'Camera scanning is unavailable in this iOS build. Rebuild the app after including expo-camera.'
-      );
-    }
-  }, [cameraModule]);
-
-  const handleBarcodeScanned = useCallback(
-    async ({ data }: BarcodeScanningResult) => {
-      const scannedCode = data?.trim();
-      if (!scannedCode || paused || isSearching) return;
-
-      setPaused(true);
-      setIsSearching(true);
-      setLastCode(scannedCode);
-      setNotFoundCode(null);
-      setErrorText(null);
-
-      try {
-        const match = await findFoodByBarcode(scannedCode);
-        if (!match) {
-          setNotFoundCode(scannedCode);
-          return;
-        }
-
-        router.push({
-          pathname: './scanFoodResult',
-          params: {
-            foodId: match.id,
-            barcode: scannedCode,
-          },
-        });
-      } catch (error: any) {
-        console.warn('Error looking up scanned food barcode', error);
-        setErrorText(error?.message ?? 'Could not search foods right now.');
-      } finally {
-        setIsSearching(false);
-      }
-    },
-    [isSearching, paused, router]
+      resetScanner();
+    }, [resetScanner])
   );
 
   const handleScanAgain = () => {
-    setPaused(false);
-    setIsSearching(false);
-    setLastCode(null);
-    setNotFoundCode(null);
-    setErrorText(null);
+    resetScanner();
+  };
+
+  const handleCaptureLabels = () => {
+    const barcode = notFoundCode ?? lastCode ?? undefined;
+
+    router.replace({
+      pathname: NUTRITION_ROUTES.scanFoodFallback,
+      params: barcode ? { barcode } : {},
+    });
   };
 
   return (
@@ -157,13 +73,17 @@ export default function ScanFood() {
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
-        <View style={styles.main}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.main}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           <View style={styles.hero}>
             <Text style={styles.eyebrow}>Barcode Scanner</Text>
             <Text style={styles.header}>Scan food</Text>
             <Text style={styles.heroText}>
-              Scan packaged items and jump straight into the nutrition record if a
-              match exists in your food database.
+              Scan packaged items or jump to nutrition label capture any time.
             </Text>
           </View>
 
@@ -180,7 +100,7 @@ export default function ScanFood() {
                 <TouchableOpacity
                   style={[styles.buttonSecondary, styles.permissionButton]}
                   activeOpacity={0.9}
-                  onPress={() => router.push('./addIngredient')}
+                  onPress={() => router.replace(NUTRITION_ROUTES.logFood)}
                 >
                   <Text style={styles.buttonTextSecondary}>Search Manually</Text>
                 </TouchableOpacity>
@@ -212,9 +132,10 @@ export default function ScanFood() {
             ) : (
               <View style={styles.cameraWrap}>
                 <CameraView
+                  key={`nutrition-camera-${cameraSessionId}`}
                   style={styles.camera}
                   facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: [...BARCODE_TYPES] }}
+                  barcodeScannerSettings={{ barcodeTypes: [...NUTRITION_BARCODE_TYPES] }}
                   onBarcodeScanned={paused || isSearching ? undefined : handleBarcodeScanned}
                 />
                 <View pointerEvents="none" style={styles.scanFrame}>
@@ -229,7 +150,9 @@ export default function ScanFood() {
             {isSearching ? (
               <View style={styles.statusRow}>
                 <ActivityIndicator color={colors.highlight1} />
-                <Text style={styles.statusText}>Matching barcode with your foods database...</Text>
+                <Text style={styles.statusText}>
+                  Matching barcode with the canonical food catalog...
+                </Text>
               </View>
             ) : null}
 
@@ -248,7 +171,7 @@ export default function ScanFood() {
             ) : null}
 
             <Text style={styles.hintText}>
-              For loose ingredients or unpackaged items, switch to manual search.
+              If a barcode does not match, capture the nutrition label and submit it.
             </Text>
           </View>
 
@@ -264,15 +187,24 @@ export default function ScanFood() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.buttonSecondary, styles.actionButton]}
+              style={[styles.buttonPrimary, styles.actionButton]}
               activeOpacity={0.9}
-              onPress={() => router.push('./addIngredient')}
+              onPress={handleCaptureLabels}
             >
-              <Ionicons name="search" size={16} color={colors.text} />
-              <Text style={styles.buttonTextSecondary}>Search Manually</Text>
+              <Ionicons name="camera-outline" size={16} color={colors.blkText} />
+              <Text style={styles.buttonTextPrimary}>Capture Nutrition Facts</Text>
             </TouchableOpacity>
           </View>
-        </View>
+
+          <TouchableOpacity
+            style={styles.manualLink}
+            activeOpacity={0.9}
+            onPress={() => router.replace(NUTRITION_ROUTES.logFood)}
+          >
+            <Ionicons name="search" size={14} color={HOME_TONES.textSecondary} />
+            <Text style={styles.manualLinkText}>Search manually instead</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     </View>
   );
@@ -287,6 +219,9 @@ function createStyles(
       flex: 1,
       backgroundColor: HOME_TONES.background,
     },
+    scroll: {
+      flex: 1,
+    },
     eyebrow: {
       color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
@@ -298,9 +233,9 @@ function createStyles(
     header: {
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
-      fontSize: 32,
-      lineHeight: 36,
-      letterSpacing: -0.8,
+      fontSize: 28,
+      lineHeight: 31,
+      letterSpacing: -0.6,
     },
     buttonPrimary: {
       height: 48,
@@ -337,36 +272,37 @@ function createStyles(
       lineHeight: 18,
     },
     main: {
-      flex: 1,
-      paddingTop: 8,
-      gap: 14,
+      paddingTop: 6,
+      paddingBottom: 18,
+      gap: 10,
     },
     hero: {
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface1,
-      padding: 22,
-      gap: 8,
-    },
-    heroText: {
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.body,
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    cameraCard: {
       borderRadius: 24,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
       backgroundColor: HOME_TONES.surface1,
+      paddingHorizontal: 18,
+      paddingVertical: 16,
+      gap: 6,
+    },
+    heroText: {
+      color: HOME_TONES.textSecondary,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    cameraCard: {
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
       overflow: 'hidden',
-      minHeight: 340,
+      minHeight: 250,
     },
     cameraWrap: {
       position: 'relative',
       width: '100%',
-      height: 340,
+      height: 250,
     },
     camera: {
       flex: 1,
@@ -377,26 +313,26 @@ function createStyles(
       justifyContent: 'center',
     },
     scanCorners: {
-      width: '74%',
-      height: '34%',
-      borderRadius: 18,
+      width: '72%',
+      height: '36%',
+      borderRadius: 16,
       borderWidth: 2,
       borderColor: colors.highlight1,
       backgroundColor: 'rgba(0,0,0,0.14)',
     },
     scanHint: {
-      marginTop: 16,
+      marginTop: 12,
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
-      fontSize: 13,
-      lineHeight: 17,
+      fontSize: 12,
+      lineHeight: 16,
     },
     centeredState: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 24,
-      paddingVertical: 28,
+      paddingHorizontal: 20,
+      paddingVertical: 18,
     },
     stateTitle: {
       marginTop: 12,
@@ -415,16 +351,17 @@ function createStyles(
       textAlign: 'center',
     },
     permissionButton: {
-      marginTop: 16,
+      marginTop: 12,
       minWidth: 160,
     },
     statusCard: {
-      borderRadius: 22,
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
       backgroundColor: HOME_TONES.surface2,
-      padding: 16,
-      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 6,
     },
     statusRow: {
       flexDirection: 'row',
@@ -451,7 +388,7 @@ function createStyles(
       color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 12,
-      lineHeight: 17,
+      lineHeight: 16,
     },
     actionRow: {
       flexDirection: 'row',
@@ -460,6 +397,19 @@ function createStyles(
     actionButton: {
       flex: 1,
       gap: 8,
+    },
+    manualLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingTop: 2,
+    },
+    manualLinkText: {
+      color: HOME_TONES.textSecondary,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
     },
   });
 }

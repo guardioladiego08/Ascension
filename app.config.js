@@ -20,7 +20,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     slug: 'tensr-fitness',
     owner: 'dguardiola01',
     scheme: 'tensr',
-    version: '1.0.0',
+    version: '0.8.1',
     orientation: 'portrait',
     userInterfaceStyle: 'automatic',
 
@@ -142,6 +142,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
       EXPO_PUBLIC_SUPABASE_URL: SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+      EXPO_PUBLIC_NUTRITION_OCR_FUNCTION_NAME:
+        process.env.EXPO_PUBLIC_NUTRITION_OCR_FUNCTION_NAME,
 
       ANDROID_MAPS_API_KEY: process.env.ANDROID_MAPS_API_KEY,
 

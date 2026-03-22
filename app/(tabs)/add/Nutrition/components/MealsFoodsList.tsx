@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,31 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
-import { supabase } from '@/lib/supabase';
 import {
-  getDeviceTimezone,
-  syncAndFetchMyDailyGoalResult,
-  toLocalISODate,
-} from '@/lib/goals/client';
+  copyDiaryEntryToDate,
+  copyMealSlotFromDate,
+  createDiaryEntry,
+  getRecentMealSlotCopyOptions,
+  getRecentMeals,
+  getUserFavoriteMealIds,
+  getUserMeals,
+  setMealFavorite,
+  type MealSlotCopyOption,
+  type RecentMealRow,
+  type UserMealWithIngredients,
+} from '@/lib/nutrition/dataAccess';
+import {
+  getDefaultMealSlotForNow,
+  mealSlotLabel,
+  mealSlotToMealType,
+} from '@/lib/nutrition/logging';
+import {
+  NUTRITION_ROUTES,
+  nutritionDailySummaryHref,
+} from '@/lib/nutrition/navigation';
+import { syncAndFetchMyDailyGoalResult, toLocalISODate } from '@/lib/goals/client';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../../home/tokens';
 
@@ -26,42 +44,20 @@ type MealsFoodsListProps = {
   searchQuery: string;
 };
 
-type RawRecipeRow = { [key: string]: any };
+type ActionKey = 'log' | 'edit-log' | 'edit' | 'copy-entry' | 'copy-slot' | 'favorite';
 
-type ListItem = {
-  id: string;
-  name: string;
-  calories?: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  defaultPortionGrams?: number;
-  subtitle?: string;
-  tag: 'Meal' | 'Food';
-  ownerId: string | null;
-};
+function shiftDateByDays(dateOnly: string, offsetDays: number) {
+  const parsed = new Date(`${dateOnly}T12:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return dateOnly;
+  parsed.setUTCDate(parsed.getUTCDate() + offsetDays);
+  return parsed.toISOString().slice(0, 10);
+}
 
-const getRecipeDisplayFields = (row: RawRecipeRow) => {
-  const name = (row.name ?? 'Untitled meal') as string;
-  const kcal = row.kcal ?? null;
-  const protein = row.protein ?? null;
-  const carbs = row.carbs ?? null;
-  const fat = row.fat ?? null;
-
-  const parts: string[] = [];
-  if (protein != null) parts.push(`${Number(protein)}g P`);
-  if (carbs != null) parts.push(`${Number(carbs)}g C`);
-  if (fat != null) parts.push(`${Number(fat)}g F`);
-
-  return {
-    name,
-    kcal: kcal != null ? Number(kcal) : undefined,
-    protein: protein != null ? Number(protein) : undefined,
-    carbs: carbs != null ? Number(carbs) : undefined,
-    fat: fat != null ? Number(fat) : undefined,
-    subtitle: parts.join(' • ') || undefined,
-  };
-};
+function formatShortDate(dateOnly: string) {
+  const parsed = new Date(`${dateOnly}T12:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return dateOnly;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
   activeTab,
@@ -71,192 +67,230 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
-  const [userId, setUserId] = useState<string | null>(null);
-  const [meals, setMeals] = useState<ListItem[]>([]);
+  const [meals, setMeals] = useState<UserMealWithIngredients[]>([]);
+  const [recentMeals, setRecentMeals] = useState<RecentMealRow[]>([]);
+  const [slotCopyOptions, setSlotCopyOptions] = useState<MealSlotCopyOption[]>([]);
+  const [favoriteMealIds, setFavoriteMealIds] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [actionState, setActionState] = useState<{ mealId: string; action: ActionKey } | null>(
+    null
+  );
+  const [slotCopyActionKey, setSlotCopyActionKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const todayDate = useMemo(() => toLocalISODate(), []);
+  const yesterdayDate = useMemo(() => shiftDateByDays(todayDate, -1), [todayDate]);
+  const favoriteMealIdSet = useMemo(() => new Set(favoriteMealIds), [favoriteMealIds]);
 
-    const fetchRecipes = async () => {
-      try {
-        setLoading(true);
-        setErrorMsg(null);
-
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) throw userError;
-        if (!user) throw new Error('No authenticated user found.');
-        if (isMounted) setUserId(user.id);
-
-        const { data, error } = await supabase
-          .schema('nutrition')
-          .from('recipes')
-          .select('*');
-
-        if (error) throw error;
-
-        const items: ListItem[] =
-          data?.map((row: RawRecipeRow) => {
-            const { name, kcal, protein, carbs, fat, subtitle } =
-              getRecipeDisplayFields(row);
-
-            return {
-              id: String(row.id ?? name),
-              name,
-              calories: kcal,
-              protein,
-              carbs,
-              fat,
-              defaultPortionGrams:
-                row.default_portion_grams != null
-                  ? Number(row.default_portion_grams)
-                  : undefined,
-              subtitle,
-              tag: 'Meal' as const,
-              ownerId: row.user_id ?? null,
-            };
-          }) ?? [];
-
-        items.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-        if (isMounted) setMeals(items);
-      } catch (err: any) {
-        console.warn('Error loading meals list', err);
-        if (isMounted) {
-          setErrorMsg(err?.message ?? 'Something went wrong while loading meals.');
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchRecipes();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  const visibleItems = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    const filterByQuery = (items: ListItem[]) => {
-      if (!query) return items;
-      return items.filter((item) => item.name.toLowerCase().includes(query));
-    };
-
-    if (!userId) {
-      if (activeTab === 'My Foods') return [];
-      return filterByQuery(meals);
-    }
-
-    switch (activeTab) {
-      case 'My Meals':
-        return filterByQuery(meals.filter((meal) => meal.ownerId === userId));
-      case 'All':
-        return filterByQuery(meals);
-      case 'My Foods':
-      default:
-        return [];
-    }
-  }, [activeTab, meals, searchQuery, userId]);
-
-  const handleAddMealToDiary = async (item: ListItem) => {
+  const fetchMeals = useCallback(async () => {
     try {
-      setSavingId(item.id);
+      setLoading(true);
+      setErrorMsg(null);
 
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      const [rows, recentRows, favoriteIds, slotOptions] = await Promise.all([
+        getUserMeals(),
+        getRecentMeals(undefined, 8),
+        getUserFavoriteMealIds(),
+        getRecentMealSlotCopyOptions(undefined, todayDate, 10, 8),
+      ]);
 
-      if (userError) throw userError;
-      if (!user) throw new Error('No authenticated user found.');
+      setMeals(rows);
+      setRecentMeals(recentRows);
+      setFavoriteMealIds(favoriteIds);
+      setSlotCopyOptions(slotOptions);
+    } catch (err) {
+      console.warn('Error loading meals list', err);
+      setErrorMsg(
+        err instanceof Error ? err.message : 'Something went wrong while loading meals.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [todayDate]);
 
-      const dateStr = toLocalISODate();
-      const timezoneStr = getDeviceTimezone();
+  useFocusEffect(
+    useCallback(() => {
+      fetchMeals();
+    }, [fetchMeals])
+  );
 
-      const { data: existingDay, error: dayErr } = await supabase
-        .schema('nutrition')
-        .from('diary_days')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('date', dateStr)
-        .maybeSingle();
+  const recentMealsById = useMemo(() => {
+    return new Map(recentMeals.map((row) => [row.meal.id, row] as const));
+  }, [recentMeals]);
 
-      let diaryDay = existingDay;
+  const visibleMeals = useMemo(() => {
+    if (activeTab === 'My Foods') return [];
 
-      if (dayErr && dayErr.code !== 'PGRST116') throw dayErr;
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query
+      ? meals.filter((meal) => meal.name.toLowerCase().includes(query))
+      : meals;
 
-      if (!diaryDay) {
-        const { data: newDay, error: insertDayErr } = await supabase
-          .schema('nutrition')
-          .from('diary_days')
-          .insert({
-            user_id: user.id,
-            date: dateStr,
-            timezone_str: timezoneStr,
-          })
-          .select()
-          .single();
-
-        if (insertDayErr) throw insertDayErr;
-        diaryDay = newDay;
+    return [...filtered].sort((a, b) => {
+      const aFavorite = favoriteMealIdSet.has(a.id);
+      const bFavorite = favoriteMealIdSet.has(b.id);
+      if (aFavorite !== bFavorite) {
+        return aFavorite ? -1 : 1;
       }
 
-      if (!diaryDay) {
-        throw new Error('Failed to create or fetch diary day.');
+      const aRecentScore = recentMealsById.get(a.id)?.relevanceScore ?? 0;
+      const bRecentScore = recentMealsById.get(b.id)?.relevanceScore ?? 0;
+      if (aRecentScore !== bRecentScore) {
+        return bRecentScore - aRecentScore;
       }
 
-      const protein = item.protein ?? 0;
-      const carbs = item.carbs ?? 0;
-      const fat = item.fat ?? 0;
-      const kcal = item.calories ?? Math.round(protein * 4 + carbs * 4 + fat * 9);
+      return Date.parse(b.updated_at) - Date.parse(a.updated_at);
+    });
+  }, [activeTab, favoriteMealIdSet, meals, recentMealsById, searchQuery]);
 
-      const { error: itemErr } = await supabase
-        .schema('nutrition')
-        .from('diary_items')
-        .insert({
-          user_id: user.id,
-          diary_day_id: diaryDay.id,
-          meal_type: 'dinner',
-          food_id: null,
-          recipe_id: item.id,
-          quantity: 1,
-          unit_label: 'serving',
-          grams: item.defaultPortionGrams ?? 0,
-          kcal,
-          protein,
-          carbs,
-          fat,
-          fiber: null,
-          sugar: null,
-          sodium: null,
-          note: null,
-        });
+  const visibleRecentMeals = useMemo(() => {
+    if (activeTab === 'My Foods') return [];
+    const query = searchQuery.trim().toLowerCase();
+    return recentMeals
+      .filter((row) =>
+        query ? row.meal.name.toLowerCase().includes(query) : true
+      );
+  }, [activeTab, recentMeals, searchQuery]);
 
-      if (itemErr) throw itemErr;
+  const yesterdayRepeatOptions = useMemo(
+    () =>
+      slotCopyOptions.filter(
+        (option) =>
+          option.sourceDate === yesterdayDate &&
+          (option.mealSlot === 'breakfast' ||
+            option.mealSlot === 'lunch' ||
+            option.mealSlot === 'dinner')
+      ),
+    [slotCopyOptions, yesterdayDate]
+  );
+
+  const extraSlotCopyOptions = useMemo(
+    () => slotCopyOptions.filter((option) => option.sourceDate !== yesterdayDate).slice(0, 5),
+    [slotCopyOptions, yesterdayDate]
+  );
+
+  const handleLogAsIs = async (meal: UserMealWithIngredients) => {
+    const dateStr = toLocalISODate();
+    const mealSlot = getDefaultMealSlotForNow();
+    setActionState({ mealId: meal.id, action: 'log' });
+
+    try {
+      await createDiaryEntry({
+        date: dateStr,
+        mealId: meal.id,
+        mealSlot,
+        mealType: mealSlotToMealType(mealSlot),
+        quantity: 1,
+        unitLabel: 'meal',
+      });
 
       try {
         await syncAndFetchMyDailyGoalResult(dateStr);
       } catch (goalErr) {
-        console.warn('Error refreshing goal results after meal log', goalErr);
+        console.warn('Error refreshing goals after meal log', goalErr);
       }
 
-      router.push({
-        pathname: '../../../progress/nutrition/dailyNutritionSummary',
-        params: { date: dateStr },
-      });
-    } catch (err: any) {
-      console.warn('Error adding meal to diary', err);
-      Alert.alert('Error', err?.message ?? 'Could not add meal to diary.');
+      router.push(nutritionDailySummaryHref(dateStr));
+    } catch (error) {
+      console.warn('Error adding meal to diary', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Could not add meal to diary.'
+      );
     } finally {
-      setSavingId(null);
+      setActionState(null);
+    }
+  };
+
+  const handleEditMeal = (meal: UserMealWithIngredients, intent: 'edit' | 'edit-log') => {
+    setActionState({ mealId: meal.id, action: intent === 'edit' ? 'edit' : 'edit-log' });
+    router.push({
+      pathname: NUTRITION_ROUTES.createMeal,
+      params: {
+        recipeId: meal.id,
+        intent,
+      },
+    });
+    setActionState(null);
+  };
+
+  const handleCopyRecentEntry = async (recent: RecentMealRow) => {
+    const dateStr = toLocalISODate();
+    setActionState({ mealId: recent.meal.id, action: 'copy-entry' });
+
+    try {
+      const copied = await copyDiaryEntryToDate(recent.lastUsage.entryId, dateStr);
+      if (!copied) {
+        throw new Error('Could not find the original meal entry to copy.');
+      }
+
+      try {
+        await syncAndFetchMyDailyGoalResult(dateStr);
+      } catch (goalErr) {
+        console.warn('Error refreshing goals after meal copy', goalErr);
+      }
+
+      router.push(nutritionDailySummaryHref(dateStr));
+    } catch (error) {
+      console.warn('Error copying recent meal entry', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Could not copy this meal entry.'
+      );
+    } finally {
+      setActionState(null);
+    }
+  };
+
+  const handleToggleFavoriteMeal = async (mealId: string) => {
+    setActionState({ mealId, action: 'favorite' });
+    try {
+      const nextFavoriteState = !favoriteMealIdSet.has(mealId);
+      await setMealFavorite(mealId, nextFavoriteState);
+      const nextFavoriteIds = await getUserFavoriteMealIds();
+      setFavoriteMealIds(nextFavoriteIds);
+    } catch (error) {
+      console.warn('Error updating favorite meal', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Could not update meal favorites.'
+      );
+    } finally {
+      setActionState(null);
+    }
+  };
+
+  const handleCopyMealSlotOption = async (option: MealSlotCopyOption) => {
+    const dateStr = toLocalISODate();
+    const actionKey = `${option.sourceDate}::${option.mealSlot}`;
+    setSlotCopyActionKey(actionKey);
+
+    try {
+      const rows = await copyMealSlotFromDate(
+        option.sourceDate,
+        dateStr,
+        option.mealSlot
+      );
+      if (!rows.length) {
+        Alert.alert('Nothing to copy', 'No entries were found for that meal slot.');
+        return;
+      }
+
+      try {
+        await syncAndFetchMyDailyGoalResult(dateStr);
+      } catch (goalErr) {
+        console.warn('Error refreshing goals after slot copy', goalErr);
+      }
+
+      router.push(nutritionDailySummaryHref(dateStr));
+    } catch (error) {
+      console.warn('Error copying meal slot', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Could not copy that meal slot.'
+      );
+    } finally {
+      setSlotCopyActionKey(null);
     }
   };
 
@@ -282,20 +316,8 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
       <View style={[styles.panelSoft, styles.stateContainer]}>
         <Ionicons name="fast-food-outline" size={22} color={colors.textMuted} />
         <Text style={styles.stateText}>
-          My Foods is still pending. Once your personal foods table is wired up, it
-          will appear here with the same theme.
-        </Text>
-      </View>
-    );
-  }
-
-  if (visibleItems.length === 0) {
-    return (
-      <View style={[styles.panelSoft, styles.stateContainer]}>
-        <Text style={styles.stateText}>
-          {searchQuery.trim()
-            ? 'No meals match your search.'
-            : 'No meals found. Create a meal to get started.'}
+          My Foods is still pending. Use Quick Log Food to search public foods and log
+          directly.
         </Text>
       </View>
     );
@@ -303,50 +325,270 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   return (
     <View style={styles.list}>
-      {visibleItems.map((item) => {
-        const isSaving = savingId === item.id;
-
-        return (
-          <View key={item.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={styles.copyWrap}>
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>{item.tag}</Text>
-                </View>
-                <Text style={styles.title}>{item.name}</Text>
-                {item.subtitle ? <Text style={styles.subtitle}>{item.subtitle}</Text> : null}
+      {yesterdayRepeatOptions.length > 0 || extraSlotCopyOptions.length > 0 ? (
+        <View style={styles.panelSoft}>
+          {yesterdayRepeatOptions.length > 0 ? (
+            <View style={styles.quickSection}>
+              <Text style={styles.quickTitle}>Repeat Yesterday</Text>
+              <View style={styles.quickChipRow}>
+                {yesterdayRepeatOptions.map((option) => {
+                  const optionKey = `${option.sourceDate}::${option.mealSlot}`;
+                  const isCopying = slotCopyActionKey === optionKey;
+                  return (
+                    <TouchableOpacity
+                      key={optionKey}
+                      activeOpacity={0.9}
+                      style={styles.quickChip}
+                      onPress={() => handleCopyMealSlotOption(option)}
+                      disabled={isCopying}
+                    >
+                      {isCopying ? (
+                        <ActivityIndicator size="small" color={HOME_TONES.textPrimary} />
+                      ) : (
+                        <Text style={styles.quickChipText}>
+                          {mealSlotLabel(option.mealSlot)}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              {typeof item.calories === 'number' ? (
-                <View style={styles.kcalPill}>
-                  <Text style={styles.kcalValue}>{item.calories} kcal</Text>
+            </View>
+          ) : null}
+
+          {extraSlotCopyOptions.length > 0 ? (
+            <View style={styles.quickSection}>
+              <Text style={styles.quickTitle}>Copy A Previous Slot</Text>
+              <View style={styles.quickChipRow}>
+                {extraSlotCopyOptions.map((option) => {
+                  const optionKey = `${option.sourceDate}::${option.mealSlot}`;
+                  const isCopying = slotCopyActionKey === optionKey;
+                  return (
+                    <TouchableOpacity
+                      key={optionKey}
+                      activeOpacity={0.9}
+                      style={styles.quickChip}
+                      onPress={() => handleCopyMealSlotOption(option)}
+                      disabled={isCopying}
+                    >
+                      {isCopying ? (
+                        <ActivityIndicator size="small" color={HOME_TONES.textPrimary} />
+                      ) : (
+                        <Text style={styles.quickChipText}>
+                          {mealSlotLabel(option.mealSlot)} • {formatShortDate(option.sourceDate)}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {visibleRecentMeals.length > 0 ? (
+        <View style={styles.sectionBlock}>
+          <Text style={styles.sectionTitle}>Recent Meals</Text>
+          <View style={styles.list}>
+            {visibleRecentMeals.map((recent) => {
+              const isCopying =
+                actionState?.mealId === recent.meal.id && actionState.action === 'copy-entry';
+              const isFavoriting =
+                actionState?.mealId === recent.meal.id && actionState.action === 'favorite';
+
+              return (
+                <View key={recent.lastUsage.entryId} style={styles.cardCompact}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.copyWrap}>
+                      <View style={styles.tag}>
+                        <Text style={styles.tagText}>Recent</Text>
+                      </View>
+                      <Text style={styles.title}>{recent.meal.name}</Text>
+                      <Text style={styles.subtitle}>
+                        {mealSlotLabel(recent.lastUsage.mealSlot)} •{' '}
+                        {Math.round(recent.meal.kcal)} kcal
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={styles.favoriteButton}
+                      onPress={() => handleToggleFavoriteMeal(recent.meal.id)}
+                      disabled={isFavoriting}
+                    >
+                      {isFavoriting ? (
+                        <ActivityIndicator size="small" color={colors.highlight1} />
+                      ) : (
+                        <Ionicons
+                          name={
+                            favoriteMealIdSet.has(recent.meal.id) ? 'star' : 'star-outline'
+                          }
+                          size={16}
+                          color={
+                            favoriteMealIdSet.has(recent.meal.id)
+                              ? colors.highlight1
+                              : HOME_TONES.textTertiary
+                          }
+                        />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={[styles.buttonSecondary, styles.secondaryAction]}
+                    onPress={() => handleCopyRecentEntry(recent)}
+                    disabled={isCopying}
+                  >
+                    {isCopying ? (
+                      <ActivityIndicator color={HOME_TONES.textPrimary} />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="duplicate-outline"
+                          size={15}
+                          color={HOME_TONES.textPrimary}
+                        />
+                        <Text style={styles.buttonTextSecondary}>Copy Today</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 </View>
-              ) : null}
-            </View>
-
-            <View style={styles.metaRow}>
-              <MiniMetric label="Protein" value={`${Math.round(item.protein ?? 0)}g`} styles={styles} />
-              <MiniMetric label="Carbs" value={`${Math.round(item.carbs ?? 0)}g`} styles={styles} />
-              <MiniMetric label="Fat" value={`${Math.round(item.fat ?? 0)}g`} styles={styles} />
-            </View>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.buttonPrimary, styles.addButton]}
-              onPress={() => handleAddMealToDiary(item)}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator color={colors.blkText} />
-              ) : (
-                <>
-                  <Ionicons name="add-circle" size={16} color={colors.blkText} />
-                  <Text style={styles.buttonTextPrimary}>Add to diary</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              );
+            })}
           </View>
-        );
-      })}
+        </View>
+      ) : null}
+
+      <View style={styles.sectionBlock}>
+        <Text style={styles.sectionTitle}>Saved Meals</Text>
+        {visibleMeals.length === 0 ? (
+          <View style={[styles.panelSoft, styles.stateContainer]}>
+            <Text style={styles.stateText}>
+              {searchQuery.trim()
+                ? 'No meals match your search.'
+                : 'No saved meals yet. Build one with Create Meal.'}
+            </Text>
+          </View>
+        ) : (
+          visibleMeals.map((meal) => {
+            const isLogging = actionState?.mealId === meal.id && actionState.action === 'log';
+            const isEditLog =
+              actionState?.mealId === meal.id && actionState.action === 'edit-log';
+            const isEditing = actionState?.mealId === meal.id && actionState.action === 'edit';
+            const isFavoriting =
+              actionState?.mealId === meal.id && actionState.action === 'favorite';
+
+            return (
+              <View key={meal.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.copyWrap}>
+                    <View style={styles.tag}>
+                      <Text style={styles.tagText}>Meal</Text>
+                    </View>
+                    <Text style={styles.title}>{meal.name}</Text>
+                    <Text style={styles.subtitle}>
+                      {meal.ingredients.length} ingredient
+                      {meal.ingredients.length === 1 ? '' : 's'} • {Math.round(meal.kcal)} kcal
+                    </Text>
+                  </View>
+
+                  <View style={styles.trailingWrap}>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={styles.favoriteButton}
+                      onPress={() => handleToggleFavoriteMeal(meal.id)}
+                      disabled={isFavoriting}
+                    >
+                      {isFavoriting ? (
+                        <ActivityIndicator size="small" color={colors.highlight1} />
+                      ) : (
+                        <Ionicons
+                          name={favoriteMealIdSet.has(meal.id) ? 'star' : 'star-outline'}
+                          size={16}
+                          color={
+                            favoriteMealIdSet.has(meal.id)
+                              ? colors.highlight1
+                              : HOME_TONES.textTertiary
+                          }
+                        />
+                      )}
+                    </TouchableOpacity>
+                    <View style={styles.kcalPill}>
+                      <Text style={styles.kcalValue}>{Math.round(meal.kcal)} kcal</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.metaRow}>
+                  <MiniMetric
+                    label="Protein"
+                    value={`${Math.round(meal.protein)}g`}
+                    styles={styles}
+                  />
+                  <MiniMetric label="Carbs" value={`${Math.round(meal.carbs)}g`} styles={styles} />
+                  <MiniMetric label="Fat" value={`${Math.round(meal.fat)}g`} styles={styles} />
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.buttonPrimary, styles.primaryAction]}
+                  onPress={() => handleLogAsIs(meal)}
+                  disabled={isLogging}
+                >
+                  {isLogging ? (
+                    <ActivityIndicator color={colors.blkText} />
+                  ) : (
+                    <>
+                      <Ionicons name="flash" size={16} color={colors.blkText} />
+                      <Text style={styles.buttonTextPrimary}>Log As-Is</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.secondaryActions}>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={[styles.buttonSecondary, styles.secondaryAction]}
+                    onPress={() => handleEditMeal(meal, 'edit-log')}
+                    disabled={isEditLog}
+                  >
+                    {isEditLog ? (
+                      <ActivityIndicator color={HOME_TONES.textPrimary} />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="create-outline"
+                          size={15}
+                          color={HOME_TONES.textPrimary}
+                        />
+                        <Text style={styles.buttonTextSecondary}>Edit & Log</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={[styles.buttonSecondary, styles.secondaryAction]}
+                    onPress={() => handleEditMeal(meal, 'edit')}
+                    disabled={isEditing}
+                  >
+                    {isEditing ? (
+                      <ActivityIndicator color={HOME_TONES.textPrimary} />
+                    ) : (
+                      <>
+                        <Ionicons name="pencil" size={15} color={HOME_TONES.textPrimary} />
+                        <Text style={styles.buttonTextSecondary}>Edit Meal</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
     </View>
   );
 };
@@ -390,6 +632,19 @@ function createStyles(
       borderWidth: 1,
       borderColor: colors.highlight1,
       flexDirection: 'row',
+      gap: 6,
+    },
+    buttonSecondary: {
+      height: 44,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface1,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+      gap: 6,
     },
     buttonTextPrimary: {
       color: colors.blkText,
@@ -397,8 +652,55 @@ function createStyles(
       fontSize: 14,
       lineHeight: 18,
     },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 17,
+    },
     list: {
       gap: 12,
+    },
+    sectionBlock: {
+      gap: 10,
+    },
+    sectionTitle: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    quickSection: {
+      gap: 8,
+    },
+    quickTitle: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    quickChipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    quickChip: {
+      minHeight: 36,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickChipText: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 12,
+      lineHeight: 16,
     },
     stateContainer: {
       alignItems: 'center',
@@ -426,7 +728,15 @@ function createStyles(
       borderColor: HOME_TONES.borderSoft,
       backgroundColor: HOME_TONES.surface2,
       padding: 15,
-      gap: 14,
+      gap: 12,
+    },
+    cardCompact: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
+      padding: 13,
+      gap: 10,
     },
     cardHeader: {
       flexDirection: 'row',
@@ -434,9 +744,23 @@ function createStyles(
       justifyContent: 'space-between',
       gap: 12,
     },
+    trailingWrap: {
+      alignItems: 'flex-end',
+      gap: 6,
+    },
     copyWrap: {
       flex: 1,
-      gap: 6,
+      gap: 5,
+    },
+    favoriteButton: {
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     tag: {
       alignSelf: 'flex-start',
@@ -462,14 +786,14 @@ function createStyles(
     subtitle: {
       color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: 12,
+      lineHeight: 16,
     },
     kcalPill: {
-      borderRadius: 16,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface3,
+      backgroundColor: HOME_TONES.surface1,
       paddingHorizontal: 10,
       paddingVertical: 8,
     },
@@ -477,7 +801,7 @@ function createStyles(
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 12,
-      lineHeight: 15,
+      lineHeight: 16,
     },
     metaRow: {
       flexDirection: 'row',
@@ -485,29 +809,37 @@ function createStyles(
     },
     metricChip: {
       flex: 1,
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface3,
+      backgroundColor: HOME_TONES.surface1,
       paddingHorizontal: 10,
-      paddingVertical: 10,
+      paddingVertical: 8,
+      gap: 3,
     },
     metricLabel: {
       color: HOME_TONES.textTertiary,
-      fontFamily: fonts.body,
-      fontSize: 11,
-      lineHeight: 14,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
     },
     metricValue: {
-      marginTop: 4,
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 13,
       lineHeight: 16,
     },
-    addButton: {
-      gap: 8,
+    primaryAction: {
+      width: '100%',
+    },
+    secondaryActions: {
       flexDirection: 'row',
+      gap: 8,
+    },
+    secondaryAction: {
+      flex: 1,
     },
   });
 }

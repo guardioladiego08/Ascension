@@ -5,6 +5,7 @@
   },
   "build": {
     "development": {
+      "autoIncrement": true,
       "developmentClient": true,
       "distribution": "internal"
     },
@@ -15,6 +16,7 @@
       }
     },    
     "preview": {
+      "autoIncrement": true,
       "distribution": "internal"
     },
     "production": {
