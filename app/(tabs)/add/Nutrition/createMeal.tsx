@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import MealSummaryCard from './components/MealSummaryCard';
@@ -24,6 +23,7 @@ import {
   toLocalISODate,
 } from '@/lib/goals/client';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 type Ingredient = {
   food_id: string;
@@ -300,12 +300,7 @@ export default function CreateMeal() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
@@ -315,8 +310,8 @@ export default function CreateMeal() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <Text style={globalStyles.eyebrow}>Recipe Builder</Text>
-            <Text style={globalStyles.header}>Create meal</Text>
+            <Text style={styles.eyebrow}>Recipe Builder</Text>
+            <Text style={styles.header}>Create meal</Text>
             <Text style={styles.heroText}>
               Build a reusable meal, tune portions, and save it as a recipe or log it
               into today&apos;s diary immediately.
@@ -328,7 +323,7 @@ export default function CreateMeal() {
             <TextInput
               style={styles.textInput}
               placeholder="Name your recipe"
-              placeholderTextColor={colors.textOffSt}
+              placeholderTextColor={HOME_TONES.textTertiary}
               value={recipeName}
               onChangeText={setRecipeName}
             />
@@ -337,7 +332,7 @@ export default function CreateMeal() {
             <TextInput
               style={[styles.textInput, styles.descriptionInput]}
               placeholder="Add a short description (optional)"
-              placeholderTextColor={colors.textOffSt}
+              placeholderTextColor={HOME_TONES.textTertiary}
               value={recipeDescription}
               onChangeText={setRecipeDescription}
               multiline
@@ -353,17 +348,17 @@ export default function CreateMeal() {
 
           <View style={styles.sectionHeader}>
             <View>
-              <Text style={globalStyles.eyebrow}>Ingredients</Text>
+              <Text style={styles.eyebrow}>Ingredients</Text>
               <Text style={styles.sectionTitle}>Meal composition</Text>
             </View>
             <TouchableOpacity
-              style={[globalStyles.buttonSecondary, styles.inlineButton]}
+              style={[styles.buttonSecondary, styles.inlineButton]}
               activeOpacity={0.9}
               onPress={() => router.push('./addIngredient')}
               disabled={saving}
             >
               <Ionicons name="add" size={16} color={colors.text} />
-              <Text style={globalStyles.buttonTextSecondary}>Add Ingredient</Text>
+              <Text style={styles.buttonTextSecondary}>Add Ingredient</Text>
             </TouchableOpacity>
           </View>
 
@@ -375,16 +370,16 @@ export default function CreateMeal() {
 
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[globalStyles.buttonSecondary, styles.footerButton]}
+            style={[styles.buttonSecondary, styles.footerButton]}
             activeOpacity={0.9}
             onPress={() => setShowCancelConfirm(true)}
             disabled={saving}
           >
-            <Text style={globalStyles.buttonTextSecondary}>Cancel</Text>
+            <Text style={styles.buttonTextSecondary}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[globalStyles.buttonPrimary, styles.footerButton]}
+            style={[styles.buttonPrimary, styles.footerButton]}
             activeOpacity={0.9}
             onPress={handleSubmitPress}
             disabled={saving}
@@ -392,7 +387,7 @@ export default function CreateMeal() {
             {saving ? (
               <ActivityIndicator color={colors.blkText} />
             ) : (
-              <Text style={globalStyles.buttonTextPrimary}>Save Recipe</Text>
+              <Text style={styles.buttonTextPrimary}>Save Recipe</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -407,23 +402,23 @@ export default function CreateMeal() {
           footer={
             <View style={styles.popupFooterStack}>
               <TouchableOpacity
-                style={globalStyles.buttonSecondary}
+                style={styles.buttonSecondary}
                 onPress={() => setShowSubmitConfirm(false)}
               >
-                <Text style={globalStyles.buttonTextSecondary}>Go Back</Text>
+                <Text style={styles.buttonTextSecondary}>Go Back</Text>
               </TouchableOpacity>
               <View style={styles.popupFooterRow}>
                 <TouchableOpacity
-                  style={[globalStyles.buttonSecondary, styles.popupFooterButton]}
+                  style={[styles.buttonSecondary, styles.popupFooterButton]}
                   onPress={handleSubmitRecipeOnly}
                 >
-                  <Text style={globalStyles.buttonTextSecondary}>Save Only</Text>
+                  <Text style={styles.buttonTextSecondary}>Save Only</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[globalStyles.buttonPrimary, styles.popupFooterButton]}
+                  style={[styles.buttonPrimary, styles.popupFooterButton]}
                   onPress={handleCreateAndAdd}
                 >
-                  <Text style={globalStyles.buttonTextPrimary}>Create & Add</Text>
+                  <Text style={styles.buttonTextPrimary}>Create & Add</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -451,16 +446,16 @@ export default function CreateMeal() {
           footer={
             <View style={styles.popupFooterRow}>
               <TouchableOpacity
-                style={[globalStyles.buttonSecondary, styles.popupFooterButton]}
+                style={[styles.buttonSecondary, styles.popupFooterButton]}
                 onPress={() => setShowCancelConfirm(false)}
               >
-                <Text style={globalStyles.buttonTextSecondary}>Keep Editing</Text>
+                <Text style={styles.buttonTextSecondary}>Keep Editing</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[globalStyles.buttonPrimary, styles.popupFooterButton, styles.dangerButton]}
+                style={[styles.buttonPrimary, styles.popupFooterButton, styles.dangerButton]}
                 onPress={confirmCancel}
               >
-                <Text style={globalStyles.buttonTextPrimary}>Discard</Text>
+                <Text style={styles.buttonTextPrimary}>Discard</Text>
               </TouchableOpacity>
             </View>
           }
@@ -470,7 +465,7 @@ export default function CreateMeal() {
           </Text>
         </AppPopup>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -479,6 +474,59 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     scroll: {
       flex: 1,
     },
@@ -490,13 +538,13 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -504,12 +552,12 @@ function createStyles(
     formCard: {
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
     },
     fieldLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 13,
@@ -523,9 +571,9 @@ function createStyles(
       marginTop: 8,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
-      color: colors.text,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
+      color: HOME_TONES.textPrimary,
       paddingHorizontal: 14,
       paddingVertical: 13,
       fontFamily: fonts.body,
@@ -543,7 +591,7 @@ function createStyles(
     },
     sectionTitle: {
       marginTop: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 20,
       lineHeight: 24,
@@ -572,12 +620,12 @@ function createStyles(
       flex: 1,
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 14,
     },
     popupMetricLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -586,7 +634,7 @@ function createStyles(
     },
     popupMetricValue: {
       marginTop: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 19,
@@ -602,7 +650,7 @@ function createStyles(
       flex: 1,
     },
     popupBodyText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,

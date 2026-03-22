@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,18 +14,9 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/Colors';
 import { supabase } from '@/lib/supabase';
 import { uploadMyProfilePhotoFromUri } from '@/lib/profile';
-
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
-const SUCCESS = '#86EFAC';
-const WARNING = '#FCA5A5';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type EditableProfile = {
   user_id: string;
@@ -59,6 +50,8 @@ function formatProfileError(err: any) {
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -318,7 +311,7 @@ export default function EditProfileScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centerWrapper}>
-          <ActivityIndicator size="small" color={ACCENT} />
+          <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.subtleText}>Loading profile...</Text>
         </View>
       </SafeAreaView>
@@ -362,7 +355,7 @@ export default function EditProfileScreen() {
             value={firstName}
             onChangeText={setFirstName}
             placeholder="First name"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
           />
         </View>
 
@@ -373,7 +366,7 @@ export default function EditProfileScreen() {
             value={lastName}
             onChangeText={setLastName}
             placeholder="Last name"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
           />
         </View>
 
@@ -397,7 +390,7 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             placeholder="username"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
           />
 
           {!!username.trim() && sanitizedUsername !== username.trim() && (
@@ -424,7 +417,7 @@ export default function EditProfileScreen() {
             value={bio}
             onChangeText={setBio}
             placeholder="Tell people about your training, goals, etc."
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={4}
           />
@@ -435,7 +428,11 @@ export default function EditProfileScreen() {
           onPress={handleSave}
           disabled={saving}
         >
-          {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Save</Text>}
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.blkText} />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} disabled={saving}>
@@ -446,61 +443,158 @@ export default function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: BG },
-  container: { flex: 1, backgroundColor: BG },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
-  centerWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG },
-  subtleText: { color: TEXT_MUTED, marginTop: 8, fontSize: 13 },
-  title: { color: TEXT_PRIMARY, fontSize: 20, fontWeight: '700', marginBottom: 16 },
-  errorText: { color: WARNING, fontSize: 13, marginBottom: 12 },
-
-  avatarSection: { alignItems: 'center', marginBottom: 20 },
-  avatar: { width: 96, height: 96, borderRadius: 48 },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 1,
-    borderColor: BORDER,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarPlaceholderText: { color: TEXT_MUTED, fontSize: 12 },
-  avatarButtonsRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
-
-  smallButton: {
-    flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  smallButtonText: { color: TEXT_PRIMARY, fontSize: 12, fontWeight: '500' },
-
-  fieldGroup: { marginBottom: 14 },
-  label: { color: TEXT_MUTED, fontSize: 12, marginBottom: 4 },
-  input: {
-    backgroundColor: CARD,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    color: TEXT_PRIMARY,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  inputMultiline: { height: 100, textAlignVertical: 'top' },
-  helperText: { color: TEXT_MUTED, fontSize: 12, marginTop: 6 },
-  helperSuccess: { color: SUCCESS },
-  helperError: { color: WARNING },
-
-  saveButton: { backgroundColor: ACCENT, borderRadius: 999, paddingVertical: 12, alignItems: 'center', marginTop: 12 },
-  saveButtonText: { color: '#FFFFFF', fontWeight: '600', fontSize: 15 },
-
-  cancelButton: { marginTop: 10, alignItems: 'center' },
-  cancelButtonText: { color: TEXT_MUTED, fontSize: 13 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 32,
+    },
+    centerWrapper: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+    },
+    subtleText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      marginTop: 8,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 20,
+      lineHeight: 24,
+      marginBottom: 16,
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      marginBottom: 12,
+    },
+    avatarSection: {
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    avatar: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+    },
+    avatarPlaceholder: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.card2,
+    },
+    avatarPlaceholderText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    avatarButtonsRow: {
+      flexDirection: 'row',
+      marginTop: 12,
+      gap: 8,
+    },
+    smallButton: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    smallButtonText: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    fieldGroup: {
+      marginBottom: 14,
+    },
+    label: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginBottom: 4,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      color: colors.text,
+      fontFamily: fonts.body,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    inputMultiline: {
+      height: 100,
+      textAlignVertical: 'top',
+    },
+    helperText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 6,
+    },
+    helperSuccess: {
+      color: colors.success,
+    },
+    helperError: {
+      color: colors.danger,
+    },
+    saveButton: {
+      backgroundColor: colors.highlight1,
+      borderRadius: 999,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginTop: 12,
+    },
+    saveButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+    cancelButton: {
+      marginTop: 10,
+      alignItems: 'center',
+    },
+    cancelButtonText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+  });
+}

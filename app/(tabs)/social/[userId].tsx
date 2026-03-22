@@ -10,15 +10,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import dayjs, { Dayjs } from 'dayjs';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import ProfileHeaderSection, {
   type ProfileStats,
@@ -51,13 +50,6 @@ import {
 } from '@/lib/goals/goalLogic';
 import SocialPostCard from './components/SocialPostCard';
 
-// ----- Constants -----
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
 const POSTS_PAGE_SIZE = 12;
 
 type DetailTab = 'posts' | 'stats' | 'lifetime' | 'calendar';
@@ -84,6 +76,8 @@ function formatSupabaseErr(err: any) {
 
 export default function ViewProfileScreen() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit, weightUnit } = useUnits();
   const params = useLocalSearchParams();
 
@@ -523,7 +517,7 @@ export default function ViewProfileScreen() {
       >
         {renderHeaderBlock()}
         <View style={styles.privateWrap}>
-          <Ionicons name="lock-closed-outline" size={60} color={TEXT_MUTED} />
+          <Ionicons name="lock-closed-outline" size={60} color={colors.textMuted} />
           <Text style={styles.privateTitle}>This account is private</Text>
           <Text style={styles.privateDesc}>
             Follow @{profile.username} to see their activity.
@@ -537,7 +531,7 @@ export default function ViewProfileScreen() {
     if (loading) {
       return (
         <View style={styles.stateWrap}>
-          <ActivityIndicator size="small" color={ACCENT} />
+          <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.stateText}>Loading profile…</Text>
         </View>
       );
@@ -615,7 +609,7 @@ export default function ViewProfileScreen() {
           ListFooterComponent={
             postsLoadingMore ? (
               <View style={styles.footerLoading}>
-                <ActivityIndicator size="small" color={TEXT_MUTED} />
+                <ActivityIndicator size="small" color={colors.textMuted} />
               </View>
             ) : (
               <View style={{ height: 24 }} />
@@ -625,12 +619,12 @@ export default function ViewProfileScreen() {
             <View style={styles.stateWrap}>
               {postsLoading ? (
                 <>
-                  <ActivityIndicator size="small" color={ACCENT} />
+                  <ActivityIndicator size="small" color={colors.highlight1} />
                   <Text style={styles.stateText}>Loading posts…</Text>
                 </>
               ) : (
                 <>
-                  <Ionicons name="albums-outline" size={24} color={TEXT_MUTED} />
+                  <Ionicons name="albums-outline" size={24} color={colors.textMuted} />
                   <Text style={styles.stateText}>No posts for this filter yet.</Text>
                   {postsError ? <Text style={styles.errorText}>{postsError}</Text> : null}
                 </>
@@ -669,7 +663,11 @@ export default function ViewProfileScreen() {
 
         {goalsBlocked ? (
           <View style={styles.blockedNote}>
-            <Ionicons name="information-circle-outline" size={16} color={TEXT_MUTED} />
+            <Ionicons
+              name="information-circle-outline"
+              size={16}
+              color={colors.textMuted}
+            />
             <Text style={styles.blockedNoteText}>
               Goals aren’t available to view for this user yet.
             </Text>
@@ -685,25 +683,20 @@ export default function ViewProfileScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={styles.container}
-    >
+    <View style={[globalStyles.page, styles.container]}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.headerTop}>
           <LogoHeader />
           <View style={styles.topBarIcons} pointerEvents="box-none">
             <TouchableOpacity onPress={goBack} style={styles.iconButton}>
-              <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+              <Ionicons name="chevron-back" size={22} color={colors.text} />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.body}>{renderContent()}</View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -718,9 +711,16 @@ function TabButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
     <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
-      <Ionicons name={icon} size={18} color={active ? TEXT_PRIMARY : TEXT_MUTED} />
+      <Ionicons
+        name={icon}
+        size={18}
+        color={active ? colors.blkText : colors.textMuted}
+      />
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -737,13 +737,22 @@ function PostFilterChip({
   active: boolean;
   onPress: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
       style={[styles.filterChip, active && styles.filterChipActive]}
     >
-      {icon ? <Ionicons name={icon} size={14} color={active ? TEXT_PRIMARY : TEXT_MUTED} /> : null}
+      {icon ? (
+        <Ionicons
+          name={icon}
+          size={14}
+          color={active ? colors.blkText : colors.textMuted}
+        />
+      ) : null}
       <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -760,6 +769,20 @@ function UserGoalCalendar({
   initialMonth?: Dayjs;
   onBlocked?: () => void;
 }) {
+  const { colors, fonts } = useAppTheme();
+  const calendarStyles = useMemo(
+    () => createCalendarStyles(colors, fonts),
+    [colors, fonts]
+  );
+  const goalColors = useMemo(
+    () => ({
+      strength: colors.highlight1,
+      cardio: colors.highlight2,
+      nutrition: colors.highlight3,
+    }),
+    [colors.highlight1, colors.highlight2, colors.highlight3]
+  );
+
   const [currentMonth, setCurrentMonth] = useState<Dayjs>(initialMonth ?? dayjs());
   const [goalData, setGoalData] = useState<Record<string, Rings>>({});
   const [loadingGoals, setLoadingGoals] = useState(false);
@@ -828,7 +851,7 @@ function UserGoalCalendar({
           onPress={() => setCurrentMonth((m) => m.subtract(1, 'month'))}
           style={calendarStyles.monthNavBtn}
         >
-          <Ionicons name="chevron-back" size={18} color={TEXT_MUTED} />
+          <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
         </TouchableOpacity>
 
         <Text style={calendarStyles.monthTitle}>{currentMonth.format('MMMM YYYY')}</Text>
@@ -837,7 +860,7 @@ function UserGoalCalendar({
           onPress={() => setCurrentMonth((m) => m.add(1, 'month'))}
           style={calendarStyles.monthNavBtn}
         >
-          <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -851,7 +874,7 @@ function UserGoalCalendar({
 
       {loadingGoals && (
         <View style={calendarStyles.loadingRow}>
-          <ActivityIndicator size="small" color={TEXT_MUTED} />
+          <ActivityIndicator size="small" color={colors.textMuted} />
           <Text style={calendarStyles.loadingText}>Syncing goals…</Text>
         </View>
       )}
@@ -870,7 +893,13 @@ function UserGoalCalendar({
 
               return (
                 <View key={`day-${wi}-${di}`} style={calendarStyles.calendarCell}>
-                  <GoalRings rings={flags} />
+                  <GoalRings
+                    rings={flags}
+                    styles={calendarStyles}
+                    colors={goalColors}
+                    borderColor={colors.border}
+                    baseBg={colors.cardDark}
+                  />
                   <Text style={calendarStyles.calendarDayText}>{day}</Text>
                 </View>
               );
@@ -880,9 +909,21 @@ function UserGoalCalendar({
       </View>
 
       <View style={calendarStyles.legendRow}>
-        <LegendItem color={GOAL_COLORS.strength} label="Strength ring closed" />
-        <LegendItem color={GOAL_COLORS.cardio} label="Cardio ring closed" />
-        <LegendItem color={GOAL_COLORS.nutrition} label="Nutrition ring closed" />
+        <LegendItem
+          color={goalColors.strength}
+          label="Strength ring closed"
+          styles={calendarStyles}
+        />
+        <LegendItem
+          color={goalColors.cardio}
+          label="Cardio ring closed"
+          styles={calendarStyles}
+        />
+        <LegendItem
+          color={goalColors.nutrition}
+          label="Nutrition ring closed"
+          styles={calendarStyles}
+        />
       </View>
     </View>
   );
@@ -890,25 +931,52 @@ function UserGoalCalendar({
 
 // ---- Goal ring logic ----
 
-const GOAL_COLORS = {
-  strength: '#F97373',
-  cardio: '#38BDF8',
-  nutrition: '#FACC15',
-};
-
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-function GoalRings({ rings }: { rings?: Rings }) {
+function GoalRings({
+  rings,
+  styles,
+  colors,
+  borderColor,
+  baseBg,
+}: {
+  rings?: Rings;
+  styles: ReturnType<typeof createCalendarStyles>;
+  colors: { strength: string; cardio: string; nutrition: string };
+  borderColor: string;
+  baseBg: string;
+}) {
   const strength = rings?.strength ?? { active: false, closed: false };
   const cardio = rings?.cardio ?? { active: false, closed: false };
   const nutrition = rings?.nutrition ?? { active: false, closed: false };
 
   return (
-    <View style={calendarStyles.ringsWrap}>
+    <View style={[styles.ringsWrap, { backgroundColor: baseBg }]}>
       <Svg width={26} height={26} viewBox="0 0 32 32">
-        <Ring r={13} strokeWidth={3} active={strength.active} closed={strength.closed} color={GOAL_COLORS.strength} />
-        <Ring r={9} strokeWidth={3} active={cardio.active} closed={cardio.closed} color={GOAL_COLORS.cardio} />
-        <Ring r={5} strokeWidth={3} active={nutrition.active} closed={nutrition.closed} color={GOAL_COLORS.nutrition} />
+        <Ring
+          r={13}
+          strokeWidth={3}
+          active={strength.active}
+          closed={strength.closed}
+          color={colors.strength}
+          borderColor={borderColor}
+        />
+        <Ring
+          r={9}
+          strokeWidth={3}
+          active={cardio.active}
+          closed={cardio.closed}
+          color={colors.cardio}
+          borderColor={borderColor}
+        />
+        <Ring
+          r={5}
+          strokeWidth={3}
+          active={nutrition.active}
+          closed={nutrition.closed}
+          color={colors.nutrition}
+          borderColor={borderColor}
+        />
       </Svg>
     </View>
   );
@@ -920,187 +988,333 @@ function Ring({
   active,
   closed,
   color,
+  borderColor,
 }: {
   r: number;
   strokeWidth: number;
   active: boolean;
   closed: boolean;
   color: string;
+  borderColor: string;
 }) {
   const baseOpacity = active ? 0.85 : 0.35;
   return (
     <>
-      <Circle cx={16} cy={16} r={r} fill="none" stroke={BORDER} strokeWidth={strokeWidth} opacity={baseOpacity} />
+      <Circle
+        cx={16}
+        cy={16}
+        r={r}
+        fill="none"
+        stroke={borderColor}
+        strokeWidth={strokeWidth}
+        opacity={baseOpacity}
+      />
       {closed ? <Circle cx={16} cy={16} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} /> : null}
     </>
   );
 }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
+function LegendItem({
+  color,
+  label,
+  styles,
+}: {
+  color: string;
+  label: string;
+  styles: ReturnType<typeof createCalendarStyles>;
+}) {
   return (
-    <View style={calendarStyles.legendItem}>
-      <View style={[calendarStyles.legendDot, { backgroundColor: color }]} />
-      <Text style={calendarStyles.legendLabel}>{label}</Text>
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
     </View>
   );
 }
 
 // ----- Styles -----
-const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: { flex: 1 },
-  flex: { flex: 1 },
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+    },
+    flex: {
+      flex: 1,
+    },
+    headerTop: {
+      paddingBottom: 4,
+    },
+    topBarIcons: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      position: 'absolute',
+      right: 20,
+      top: 10,
+    },
+    iconButton: {
+      padding: 6,
+      borderRadius: 20,
+    },
+    body: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+    },
+    postsListContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 26,
+    },
+    postsHeader: {
+      marginBottom: 12,
+    },
+    postFiltersRow: {
+      paddingTop: 10,
+      gap: 10,
+    },
+    footerLoading: {
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    stateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+      gap: 10,
+    },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      paddingHorizontal: 16,
+      textAlign: 'center',
+    },
+    detailTabs: {
+      flexDirection: 'row',
+      marginTop: 16,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 4,
+    },
+    tabButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      borderRadius: 10,
+      gap: 6,
+    },
+    tabButtonActive: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    tabLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 15,
+    },
+    tabLabelActive: {
+      color: colors.blkText,
+    },
+    filterChip: {
+      height: 34,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    filterChipActive: {
+      backgroundColor: colors.highlight1,
+      borderColor: colors.highlight1,
+    },
+    filterChipText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12.5,
+      lineHeight: 16,
+    },
+    filterChipTextActive: {
+      color: colors.blkText,
+    },
+    headerDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginTop: 12,
+    },
+    privateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 40,
+      paddingHorizontal: 16,
+      gap: 12,
+    },
+    privateTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    privateDesc: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+    blockedNote: {
+      marginTop: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    blockedNoteText: {
+      flex: 1,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+  });
+}
 
-  headerTop: { paddingBottom: 4 },
-  topBarIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'absolute',
-    right: 20,
-    top: 10,
-  },
-  iconButton: { padding: 6, borderRadius: 20 },
-
-  body: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32 },
-  postsListContent: { paddingHorizontal: 16, paddingBottom: 26 },
-  postsHeader: { marginBottom: 12 },
-  postFiltersRow: { paddingTop: 10, gap: 10 },
-  footerLoading: { paddingVertical: 14, alignItems: 'center' },
-
-  stateWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BG,
-    gap: 10,
-  },
-  stateText: { color: TEXT_MUTED, fontSize: 13 },
-  errorText: { color: '#FCA5A5', fontSize: 13, paddingHorizontal: 16, textAlign: 'center' },
-
-  detailTabs: {
-    flexDirection: 'row',
-    marginTop: 16,
-    backgroundColor: CARD,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: BORDER,
-    gap: 4,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 6,
-  },
-  tabButtonActive: {
-    backgroundColor: Colors.dark.card2 ?? 'rgba(255,255,255,0.06)',
-  },
-  tabLabel: { color: TEXT_MUTED, fontSize: 12, fontWeight: '600' },
-  tabLabelActive: { color: TEXT_PRIMARY },
-
-  filterChip: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  filterChipActive: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  filterChipText: { color: TEXT_MUTED, fontSize: 12.5, fontWeight: '700' },
-  filterChipTextActive: { color: TEXT_PRIMARY },
-
-  headerDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    marginTop: 12,
-  },
-
-  privateWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 40,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  privateTitle: { color: TEXT_PRIMARY, fontSize: 16, fontWeight: '800' },
-  privateDesc: { color: TEXT_MUTED, fontSize: 13, textAlign: 'center' },
-
-  blockedNote: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  blockedNoteText: {
-    flex: 1,
-    color: TEXT_MUTED,
-    fontSize: 12,
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-});
-
-const calendarStyles = StyleSheet.create({
-  calendarContainer: {
-    marginTop: 16,
-    backgroundColor: CARD,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  monthTitle: { color: TEXT_PRIMARY, fontSize: 14, fontWeight: '600' },
-  monthNavBtn: { padding: 4, borderRadius: 999 },
-
-  weekdayRow: { flexDirection: 'row', marginTop: 8 },
-  weekdayLabel: { flex: 1, textAlign: 'center', color: TEXT_MUTED, fontSize: 11 },
-
-  loadingRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
-  loadingText: { color: TEXT_MUTED, fontSize: 11 },
-
-  weeksWrapper: { marginTop: 6 },
-  calendarRow: { flexDirection: 'row', marginBottom: 6 },
-
-  calendarCellEmpty: { flex: 1, aspectRatio: 1, marginHorizontal: 2 },
-  calendarCell: {
-    flex: 1,
-    aspectRatio: 1,
-    marginHorizontal: 2,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-
-  ringsWrap: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
-  calendarDayText: { color: TEXT_PRIMARY, fontSize: 11, marginTop: 2 },
-
-  legendRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendLabel: { color: TEXT_MUTED, fontSize: 10, fontWeight: '600' },
-});
+function createCalendarStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    calendarContainer: {
+      marginTop: 16,
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    calendarHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    monthTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    monthNavBtn: {
+      padding: 4,
+      borderRadius: 999,
+    },
+    weekdayRow: {
+      flexDirection: 'row',
+      marginTop: 8,
+    },
+    weekdayLabel: {
+      flex: 1,
+      textAlign: 'center',
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 6,
+      gap: 6,
+    },
+    loadingText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+    },
+    weeksWrapper: {
+      marginTop: 6,
+    },
+    calendarRow: {
+      flexDirection: 'row',
+      marginBottom: 6,
+    },
+    calendarCellEmpty: {
+      flex: 1,
+      aspectRatio: 1,
+      marginHorizontal: 2,
+    },
+    calendarCell: {
+      flex: 1,
+      aspectRatio: 1,
+      marginHorizontal: 2,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    ringsWrap: {
+      width: 26,
+      height: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 13,
+    },
+    calendarDayText: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 14,
+      marginTop: 2,
+    },
+    legendRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 12,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    legendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+    },
+    legendLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 10,
+      lineHeight: 13,
+    },
+  });
+}

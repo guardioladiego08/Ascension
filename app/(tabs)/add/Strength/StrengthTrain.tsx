@@ -11,7 +11,6 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { v4 as uuidv4 } from 'uuid';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -19,6 +18,7 @@ import { useUnits } from '@/contexts/UnitsContext';
 import type { ExerciseDraft, UnitMass } from '@/lib/strength/types';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 import SessionHeader from './components/SessionHeader';
 import ExerciseCard from './components/ExerciseCard';
@@ -442,28 +442,18 @@ export default function StrengthTrain() {
 
   if (loading && !workoutId) {
     return (
-      <LinearGradient
-        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={globalStyles.page}
-      >
+      <View style={styles.page}>
         <View style={styles.loadingState}>
           <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.loadingText}>Preparing your session…</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={globalStyles.page}
-    >
-      <View style={[globalStyles.container, styles.page]}>
+    <View style={styles.page}>
+      <View style={[globalStyles.container, styles.screen]}>
         <LogoHeader showBackButton />
 
         <ScrollView
@@ -481,7 +471,7 @@ export default function StrengthTrain() {
 
           <View style={styles.sectionHeaderRow}>
             <View>
-              <Text style={globalStyles.eyebrow}>Exercises</Text>
+              <Text style={styles.eyebrow}>Exercises</Text>
               <Text style={styles.sectionSubtitle}>Build the session one movement at a time.</Text>
             </View>
 
@@ -495,7 +485,7 @@ export default function StrengthTrain() {
           </View>
 
           {exercises.length === 0 ? (
-            <View style={[globalStyles.panelSoft, styles.empty]}>
+            <View style={[styles.panelSoft, styles.empty]}>
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="barbell-outline" size={20} color={colors.highlight1} />
               </View>
@@ -518,7 +508,7 @@ export default function StrengthTrain() {
 
         <TouchableOpacity
           activeOpacity={0.92}
-          style={[globalStyles.buttonPrimary, styles.finishBtn, loading ? styles.finishBtnBusy : null]}
+          style={[styles.buttonPrimary, styles.finishBtn, loading ? styles.finishBtnBusy : null]}
           disabled={loading}
           onPress={() => setFinishModalOpen(true)}
         >
@@ -527,7 +517,7 @@ export default function StrengthTrain() {
           ) : (
             <>
               <Ionicons name="checkmark-circle-outline" size={18} color={colors.blkText} />
-              <Text style={globalStyles.buttonTextPrimary}>Finish workout</Text>
+              <Text style={styles.buttonTextPrimary}>Finish workout</Text>
             </>
           )}
         </TouchableOpacity>
@@ -586,7 +576,7 @@ export default function StrengthTrain() {
           }}
         />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -597,6 +587,42 @@ function createStyles(
   return StyleSheet.create({
     page: {
       flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    screen: {
+      flex: 1,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
     },
     loadingState: {
       flex: 1,
@@ -606,7 +632,7 @@ function createStyles(
       paddingHorizontal: 24,
     },
     loadingText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -624,7 +650,7 @@ function createStyles(
     },
     sectionSubtitle: {
       marginTop: 6,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -653,14 +679,14 @@ function createStyles(
       marginBottom: 14,
     },
     emptyTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 18,
       lineHeight: 22,
     },
     emptyText: {
       marginTop: 8,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,

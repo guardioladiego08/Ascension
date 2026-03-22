@@ -9,15 +9,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
 import LogoHeader from '@/components/my components/logoHeader';
-import { Colors } from '@/constants/Colors';
-import { GlobalStyles } from '@/constants/GlobalStyles';
 import { useUnits } from '@/contexts/UnitsContext';
 import { supabase } from '@/lib/supabase';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import {
   getAuthenticatedUserId,
   type StrengthWorkoutRow,
@@ -34,9 +32,6 @@ import {
 import HistoryFilterModal from '../components/HistoryFilterModal';
 import HistoryListItem from '../components/HistoryListItem';
 
-const BG = Colors.dark.background;
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
 const DEBUG_QUERY_LIMIT = 5000;
 
 function FilterInput({
@@ -44,12 +39,16 @@ function FilterInput({
   value,
   onChangeText,
   placeholder,
+  styles,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
+  styles: ReturnType<typeof createStyles>;
 }) {
+  const { colors } = useAppTheme();
+
   return (
     <View style={styles.inputGroup}>
       <Text style={styles.inputLabel}>{label}</Text>
@@ -57,7 +56,7 @@ function FilterInput({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#6B7280"
+        placeholderTextColor={colors.textOffSt}
         keyboardType="decimal-pad"
         autoCapitalize="none"
         autoCorrect={false}
@@ -71,11 +70,15 @@ function DateInput({
   label,
   value,
   onChangeText,
+  styles,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
+  const { colors } = useAppTheme();
+
   return (
     <View style={styles.inputGroup}>
       <Text style={styles.inputLabel}>{label}</Text>
@@ -83,7 +86,7 @@ function DateInput({
         value={value}
         onChangeText={onChangeText}
         placeholder="YYYY-MM-DD"
-        placeholderTextColor="#6B7280"
+        placeholderTextColor={colors.textOffSt}
         autoCapitalize="none"
         autoCorrect={false}
         style={styles.input}
@@ -93,6 +96,8 @@ function DateInput({
 }
 
 export default function AllStrengthWorkoutsScreen() {
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { weightUnit } = useUnits();
 
   const [workouts, setWorkouts] = useState<StrengthWorkoutRow[]>([]);
@@ -263,7 +268,7 @@ export default function AllStrengthWorkoutsScreen() {
           activeOpacity={0.88}
           onPress={() => setFilterModalVisible(true)}
         >
-          <Ionicons name="funnel-outline" size={16} color="#E5E7F5" />
+          <Ionicons name="funnel-outline" size={16} color={colors.text} />
           {activeFilterCount > 0 ? (
             <View style={styles.filterBadge}>
               <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
@@ -275,14 +280,9 @@ export default function AllStrengthWorkoutsScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#3a3a3bff', '#1e1e1eff', BG]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={{ flex: 1 }}
-    >
-      <View style={GlobalStyles.safeArea}>
-        <LogoHeader showBackButton usePreviousRoute />
+    <View style={globalStyles.page}>
+      <View style={globalStyles.safeArea}>
+        <LogoHeader showBackButton />
 
         <FlatList
           data={filteredWorkouts}
@@ -336,8 +336,18 @@ export default function AllStrengthWorkoutsScreen() {
           onReset={resetFilters}
         >
           <View style={styles.inputRow}>
-            <DateInput label="Start date" value={startDate} onChangeText={setStartDate} />
-            <DateInput label="End date" value={endDate} onChangeText={setEndDate} />
+            <DateInput
+              label="Start date"
+              value={startDate}
+              onChangeText={setStartDate}
+              styles={styles}
+            />
+            <DateInput
+              label="End date"
+              value={endDate}
+              onChangeText={setEndDate}
+              styles={styles}
+            />
           </View>
 
           <View style={styles.inputRow}>
@@ -346,12 +356,14 @@ export default function AllStrengthWorkoutsScreen() {
               value={minDuration}
               onChangeText={setMinDuration}
               placeholder="0"
+              styles={styles}
             />
             <FilterInput
               label="Max time (min)"
               value={maxDuration}
               onChangeText={setMaxDuration}
               placeholder="Any"
+              styles={styles}
             />
           </View>
 
@@ -361,12 +373,14 @@ export default function AllStrengthWorkoutsScreen() {
               value={minVolume}
               onChangeText={setMinVolume}
               placeholder="0"
+              styles={styles}
             />
             <FilterInput
               label={`Max volume (${weightUnit})`}
               value={maxVolume}
               onChangeText={setMaxVolume}
               placeholder="Any"
+              styles={styles}
             />
           </View>
 
@@ -375,102 +389,119 @@ export default function AllStrengthWorkoutsScreen() {
           </Text>
         </HistoryFilterModal>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  headerContent: {
-    paddingTop: 6,
-    paddingBottom: 14,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerTextWrap: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: TEXT,
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    color: MUTED,
-  },
-  filterButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: Colors.dark.card,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterBadge: {
-    position: 'absolute',
-    right: -2,
-    top: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4F46E5',
-    paddingHorizontal: 4,
-  },
-  filterBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  listContent: {
-    paddingBottom: 28,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: MUTED,
-    textAlign: 'center',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inputGroup: {
-    flex: 1,
-  },
-  inputLabel: {
-    marginBottom: 6,
-    fontSize: 11,
-    color: '#9CA3AF',
-  },
-  input: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#111827',
-    color: TEXT,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-  },
-  helperText: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#94A3B8',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    headerContent: {
+      paddingTop: 6,
+      paddingBottom: 14,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    headerTextWrap: {
+      flex: 1,
+      paddingRight: 8,
+    },
+    title: {
+      fontSize: 24,
+      lineHeight: 28,
+      color: colors.text,
+      fontFamily: fonts.heading,
+    },
+    subtitle: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+    },
+    filterButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.card2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterBadge: {
+      position: 'absolute',
+      right: -2,
+      top: -2,
+      minWidth: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      paddingHorizontal: 4,
+    },
+    filterBadgeText: {
+      fontSize: 10,
+      lineHeight: 12,
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+    },
+    listContent: {
+      paddingBottom: 28,
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+      gap: 8,
+    },
+    emptyText: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textMuted,
+      textAlign: 'center',
+      fontFamily: fonts.body,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    inputGroup: {
+      flex: 1,
+    },
+    inputLabel: {
+      marginBottom: 6,
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.textOffSt,
+      fontFamily: fonts.label,
+      letterSpacing: 0.6,
+      textTransform: 'uppercase',
+    },
+    input: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      color: colors.text,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      fontSize: 13,
+      lineHeight: 17,
+      fontFamily: fonts.body,
+    },
+    helperText: {
+      fontSize: 11,
+      lineHeight: 16,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+    },
+  });
+}

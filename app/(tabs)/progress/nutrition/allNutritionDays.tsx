@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -27,6 +26,7 @@ import {
 import HistoryFilterModal from '../components/HistoryFilterModal';
 import HistoryListItem from '../components/HistoryListItem';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 function FilterInput({
   label,
@@ -35,7 +35,6 @@ function FilterInput({
   placeholder,
   keyboardType = 'decimal-pad',
   styles,
-  colors,
 }: {
   label: string;
   value: string;
@@ -43,7 +42,6 @@ function FilterInput({
   placeholder: string;
   keyboardType?: 'default' | 'decimal-pad' | 'number-pad';
   styles: ReturnType<typeof createStyles>;
-  colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={styles.inputGroup}>
@@ -52,7 +50,7 @@ function FilterInput({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.textOffSt}
+        placeholderTextColor={HOME_TONES.textTertiary}
         keyboardType={keyboardType}
         autoCapitalize="none"
         autoCorrect={false}
@@ -206,8 +204,8 @@ export default function AllNutritionDaysScreen() {
       <View style={styles.hero}>
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
-            <Text style={globalStyles.eyebrow}>Nutrition History</Text>
-            <Text style={globalStyles.header}>All nutrition days</Text>
+            <Text style={styles.eyebrow}>Nutrition History</Text>
+            <Text style={styles.header}>All nutrition days</Text>
             <Text style={styles.heroText}>
               Review logged calorie and macro totals, then drill into any day for the
               full nutrition summary.
@@ -232,12 +230,7 @@ export default function AllNutritionDaysScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
@@ -247,7 +240,7 @@ export default function AllNutritionDaysScreen() {
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
-            <View style={[globalStyles.panelSoft, styles.emptyState]}>
+            <View style={[styles.panelSoft, styles.emptyState]}>
               {loading ? (
                 <>
                   <ActivityIndicator color={colors.highlight1} />
@@ -293,7 +286,6 @@ export default function AllNutritionDaysScreen() {
               placeholder="YYYY-MM-DD"
               keyboardType="default"
               styles={styles}
-              colors={colors}
             />
             <FilterInput
               label="End date"
@@ -302,7 +294,6 @@ export default function AllNutritionDaysScreen() {
               placeholder="YYYY-MM-DD"
               keyboardType="default"
               styles={styles}
-              colors={colors}
             />
           </View>
 
@@ -313,7 +304,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMinCalories}
               placeholder="0"
               styles={styles}
-              colors={colors}
             />
             <FilterInput
               label="Max calories"
@@ -321,7 +311,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMaxCalories}
               placeholder="Any"
               styles={styles}
-              colors={colors}
             />
           </View>
 
@@ -332,7 +321,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMinProtein}
               placeholder="0"
               styles={styles}
-              colors={colors}
             />
             <FilterInput
               label="Max protein (g)"
@@ -340,7 +328,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMaxProtein}
               placeholder="Any"
               styles={styles}
-              colors={colors}
             />
           </View>
 
@@ -351,7 +338,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMinCarbs}
               placeholder="0"
               styles={styles}
-              colors={colors}
             />
             <FilterInput
               label="Max carbs (g)"
@@ -359,7 +345,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMaxCarbs}
               placeholder="Any"
               styles={styles}
-              colors={colors}
             />
           </View>
 
@@ -370,7 +355,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMinFat}
               placeholder="0"
               styles={styles}
-              colors={colors}
             />
             <FilterInput
               label="Max fat (g)"
@@ -378,7 +362,6 @@ export default function AllNutritionDaysScreen() {
               onChangeText={setMaxFat}
               placeholder="Any"
               styles={styles}
-              colors={colors}
             />
           </View>
 
@@ -387,7 +370,7 @@ export default function AllNutritionDaysScreen() {
           </Text>
         </HistoryFilterModal>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -396,6 +379,32 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
     listHeader: {
       paddingTop: 8,
       paddingBottom: 14,
@@ -403,9 +412,9 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
     },
     heroRow: {
       flexDirection: 'row',
@@ -418,7 +427,7 @@ function createStyles(
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -427,9 +436,9 @@ function createStyles(
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -463,7 +472,7 @@ function createStyles(
     emptyText: {
       fontSize: 13,
       lineHeight: 18,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       textAlign: 'center',
     },
@@ -478,15 +487,15 @@ function createStyles(
       marginBottom: 6,
       fontSize: 11,
       lineHeight: 14,
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
     },
     input: {
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
-      color: colors.text,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
+      color: HOME_TONES.textPrimary,
       paddingHorizontal: 12,
       paddingVertical: 11,
       fontSize: 13,
@@ -495,7 +504,7 @@ function createStyles(
     helperText: {
       fontSize: 11,
       lineHeight: 16,
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
     },
   });

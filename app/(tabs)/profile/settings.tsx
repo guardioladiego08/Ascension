@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -12,7 +12,6 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/Colors';
 import { clearAllRunWalkLocalState } from '@/lib/runWalkSessionCleanup';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import {
@@ -20,22 +19,17 @@ import {
   getHealthStatusLabel,
 } from '@/lib/health/preferences';
 import { getCurrentHealthProviderLabel } from '@/lib/health/provider';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
 import DistanceUnitModal from './settings/DistanceUnitModal';
 import ProfileDetailsModal from './settings/ProfileDetailsModal';
 
-
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.text ?? '#EAF2FF';
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const DANGER = '#F97373';
-
 export default function SettingsScreen() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { weightUnit, distanceUnit } = useUnits();
   const { activeSession, clearSession } = useActiveRunWalk();
   const [showWeightModal, setShowWeightModal] = useState(false);
@@ -101,10 +95,10 @@ export default function SettingsScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: 32 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
@@ -124,7 +118,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -136,7 +130,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -148,7 +142,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -160,7 +154,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -178,7 +172,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -190,7 +184,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -208,7 +202,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -223,7 +217,11 @@ export default function SettingsScreen() {
               onPress={() => handleComingSoon('Language')}
             >
               <Text style={styles.rowLabel}>Language</Text>
-              <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.textMuted}
+              />
             </TouchableOpacity>
 
             {/* Weight unit with popup */}
@@ -236,7 +234,11 @@ export default function SettingsScreen() {
                 <Text style={styles.rowValue}>
                   {weightUnit === 'lb' ? 'Pounds (lb)' : 'Kilograms (kg)'}
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textMuted}
+                />
               </View>
             </TouchableOpacity>
 
@@ -250,7 +252,11 @@ export default function SettingsScreen() {
                 <Text style={styles.rowValue}>
                   {distanceUnit === 'mi' ? 'Miles (mi)' : 'Kilometers (km)'}
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textMuted}
+                />
               </View>
             </TouchableOpacity>
           </View>
@@ -270,7 +276,7 @@ export default function SettingsScreen() {
                 <Ionicons
                   name="chevron-forward"
                   size={18}
-                  color={TEXT_MUTED}
+                  color={colors.textMuted}
                 />
               </View>
             </TouchableOpacity>
@@ -283,7 +289,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -295,7 +301,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -307,7 +313,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -325,7 +331,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -337,7 +343,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -349,7 +355,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
 
@@ -361,7 +367,7 @@ export default function SettingsScreen() {
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={TEXT_MUTED}
+                color={colors.textMuted}
               />
             </TouchableOpacity>
           </View>
@@ -401,102 +407,113 @@ export default function SettingsScreen() {
 
 // ---- styles ----
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    backgroundColor: BG,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-
-  section: {
-    marginTop: 20,
-  },
-  sectionTitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    overflow: 'hidden',
-  },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    justifyContent: 'space-between',
-  },
-  rowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
-  },
-  rowLabel: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-  },
-
-  logoutContainer: {
-    marginTop: 28,
-  },
-  logoutButton: {
-    backgroundColor: '#1F2937',
-    borderRadius: 999,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DANGER,
-  },
-  logoutText: {
-    color: DANGER,
-    fontSize: 15,
-    fontWeight: '600',
-  },
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 32,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
+      backgroundColor: colors.background,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      flex: 1,
+      textAlign: 'center',
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    headerSpacer: {
+      width: 32,
+    },
+    section: {
+      marginTop: 20,
+    },
+    sectionTitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      marginBottom: 6,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      justifyContent: 'space-between',
+    },
+    rowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowLabel: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
     },
     rowValue: {
-    color: TEXT_MUTED,
-    fontSize: 12,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
     },
-});
+    logoutContainer: {
+      marginTop: 28,
+    },
+    logoutButton: {
+      backgroundColor: colors.card2,
+      borderRadius: 999,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.danger,
+    },
+    logoutText: {
+      color: colors.danger,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+  });
+}

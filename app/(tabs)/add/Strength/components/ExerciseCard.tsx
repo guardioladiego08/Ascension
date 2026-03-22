@@ -14,6 +14,7 @@ import type { ExerciseDraft, SetDraft } from '@/lib/strength/types';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import AppPopup from '@/components/ui/AppPopup';
+import { HOME_TONES } from '../../../home/tokens';
 
 import SetRow from './SetRow';
 
@@ -24,7 +25,7 @@ type Props = {
 };
 
 const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [optionsVisible, setOptionsVisible] = useState(false);
   const [notesVisible, setNotesVisible] = useState(false);
@@ -77,7 +78,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
   let normalCounter = 0;
 
   return (
-    <View style={[globalStyles.panelSoft, styles.card]}>
+    <View style={[styles.panelSoft, styles.card]}>
       <View style={styles.headerRow}>
         <View style={styles.headerCopy}>
           <Text style={styles.name}>{exercise.exercise_name}</Text>
@@ -187,7 +188,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
             numberOfLines={6}
             style={styles.textArea}
             placeholder="Write notes here..."
-            placeholderTextColor={colors.textOffSt}
+            placeholderTextColor={HOME_TONES.textTertiary}
             value={notesText}
             onChangeText={setNotesText}
           />
@@ -196,15 +197,15 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
         <View style={styles.notesButtons}>
           <TouchableOpacity
             activeOpacity={0.92}
-            style={[globalStyles.buttonSecondary, styles.noteButton]}
+            style={[styles.buttonSecondary, styles.noteButton]}
             onPress={() => setNotesVisible(false)}
           >
-            <Text style={globalStyles.buttonTextSecondary}>Cancel</Text>
+            <Text style={styles.buttonTextSecondary}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.92}
-            style={[globalStyles.buttonPrimary, styles.noteButton]}
+            style={[styles.buttonPrimary, styles.noteButton]}
             onPress={() => {
               const updatedSets = exercise.sets.map((setDraft) => ({
                 ...setDraft,
@@ -214,7 +215,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
               setNotesVisible(false);
             }}
           >
-            <Text style={globalStyles.buttonTextPrimary}>Save</Text>
+            <Text style={styles.buttonTextPrimary}>Save</Text>
           </TouchableOpacity>
         </View>
       </AppPopup>
@@ -229,6 +230,47 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     card: {
       marginTop: 14,
       padding: 14,
@@ -244,14 +286,14 @@ function createStyles(
       flex: 1,
     },
     name: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 18,
       lineHeight: 22,
     },
     meta: {
       marginTop: 4,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 17,
@@ -261,8 +303,8 @@ function createStyles(
       height: 36,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -273,7 +315,7 @@ function createStyles(
       marginBottom: 4,
     },
     th: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 14,
@@ -304,9 +346,9 @@ function createStyles(
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
     },
     addSet: {
       marginTop: 12,
@@ -334,8 +376,8 @@ function createStyles(
       gap: 12,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingVertical: 12,
       paddingHorizontal: 12,
     },
@@ -353,7 +395,7 @@ function createStyles(
       backgroundColor: colors.accentSoft,
     },
     modalActionText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 18,
@@ -362,12 +404,12 @@ function createStyles(
       marginTop: 18,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.textInput,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       padding: 12,
     },
     textArea: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,

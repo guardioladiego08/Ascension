@@ -1,20 +1,15 @@
 // components/settings/DistanceUnitModal.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '@/constants/Colors';
 import { useUnits, DistanceUnit } from '@/contexts/UnitsContext';
-
-const BG = 'rgba(0,0,0,0.6)';
-const CARD = Colors.dark?.card ?? '#13182B';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark.text
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = { visible: boolean; onClose: () => void };
 
 const DistanceUnitModal: React.FC<Props> = ({ visible, onClose }) => {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit, setDistanceUnit, distanceSaveState, distanceSaveError } = useUnits();
   const [localMsg, setLocalMsg] = useState<string | null>(null);
 
@@ -49,9 +44,9 @@ const DistanceUnitModal: React.FC<Props> = ({ visible, onClose }) => {
           {label}
         </Text>
         {isActive && saving ? (
-          <ActivityIndicator size="small" color={TEXT_PRIMARY} />
+          <ActivityIndicator size="small" color={colors.text} />
         ) : isActive ? (
-          <Ionicons name="checkmark" size={20} color={TEXT_PRIMARY} />
+          <Ionicons name="checkmark" size={20} color={colors.text} />
         ) : null}
       </TouchableOpacity>
     );
@@ -92,19 +87,95 @@ const DistanceUnitModal: React.FC<Props> = ({ visible, onClose }) => {
 
 export default DistanceUnitModal;
 
-// add these styles
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  card: { width: '100%', borderRadius: 16, backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, padding: 16 },
-  title: { color: TEXT_PRIMARY, fontSize: 16, fontWeight: '600' },
-  subtitle: { color: TEXT_MUTED, fontSize: 12, marginTop: 4 },
-  options: { marginTop: 12 },
-  optionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: BORDER, marginBottom: 8 },
-  optionRowActive: { borderColor: ACCENT, backgroundColor: '#111827' },
-  optionText: { color: TEXT_PRIMARY, fontSize: 14 },
-  optionTextActive: { color: ACCENT, fontWeight: '600' },
-  savedText: { marginTop: 8, color: TEXT_MUTED, fontSize: 12 },
-  errorText: { marginTop: 8, color: '#F87171', fontSize: 12 },
-  closeButton: { marginTop: 8, alignSelf: 'flex-end', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#1F2937' },
-  closeText: { color: TEXT_MUTED, fontSize: 12 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.62)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    },
+    card: {
+      width: '100%',
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 4,
+    },
+    options: {
+      marginTop: 12,
+    },
+    optionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 10,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 8,
+      backgroundColor: colors.card2,
+    },
+    optionRowActive: {
+      borderColor: colors.highlight1,
+      backgroundColor: colors.accentSoft,
+    },
+    optionText: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    optionTextActive: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+    },
+    savedText: {
+      marginTop: 8,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    errorText: {
+      marginTop: 8,
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    closeButton: {
+      marginTop: 8,
+      alignSelf: 'flex-end',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      backgroundColor: colors.card2,
+    },
+    closeText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+  });
+}

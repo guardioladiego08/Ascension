@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 type Props = {
   title: string;
@@ -19,16 +20,16 @@ const SessionHeader: React.FC<Props> = ({
   onPauseToggle,
   onCancel,
 }) => {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
   const ss = String(seconds % 60).padStart(2, '0');
 
   return (
-    <View style={[globalStyles.panel, styles.wrap]}>
+    <View style={[styles.panel, styles.wrap]}>
       <View style={styles.topRow}>
         <View style={styles.copy}>
-          <Text style={globalStyles.eyebrow}>Live session</Text>
+          <Text style={styles.eyebrow}>Live session</Text>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.subtitle}>
             Log sets, track time, and finish with a cleaner session summary.
@@ -96,6 +97,21 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
     wrap: {
       marginTop: 10,
       paddingBottom: 18,
@@ -111,7 +127,7 @@ function createStyles(
     },
     title: {
       marginTop: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 28,
       lineHeight: 32,
@@ -119,7 +135,7 @@ function createStyles(
     },
     subtitle: {
       marginTop: 8,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 19,
@@ -168,7 +184,7 @@ function createStyles(
     },
     timer: {
       marginTop: 20,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 52,
       lineHeight: 56,
@@ -183,16 +199,16 @@ function createStyles(
       flex: 1,
       minHeight: 48,
       borderRadius: 16,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
     },
     pauseText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
@@ -217,9 +233,9 @@ function createStyles(
       minWidth: 108,
       minHeight: 48,
       borderRadius: 16,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',

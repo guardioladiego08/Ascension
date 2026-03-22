@@ -13,7 +13,6 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/Colors';
 import {
   getHealthProviderDescriptor,
 } from '@/lib/health/copy';
@@ -30,13 +29,7 @@ import {
   openCurrentHealthProviderSettings,
   requestCurrentHeartRateAuthorization,
 } from '@/lib/health/provider';
-
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.text ?? '#EAF2FF';
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark?.highlight1 ?? '#6366F1';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const DEFAULT_PREFS: HealthPreferences = {
   providerId: getCurrentHealthProviderId(),
@@ -56,6 +49,8 @@ function formatDateTime(value: string | null): string | null {
 
 export default function HealthDataSettingsScreen() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [prefs, setPrefs] = useState<HealthPreferences>(DEFAULT_PREFS);
@@ -220,7 +215,7 @@ export default function HealthDataSettingsScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Health data</Text>
         <View style={styles.headerSpacer} />
@@ -233,7 +228,7 @@ export default function HealthDataSettingsScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.heroBadge}>
-            <Ionicons name="heart-outline" size={18} color={ACCENT} />
+            <Ionicons name="heart-outline" size={18} color={colors.highlight1} />
             <Text style={styles.heroBadgeText}>Heart Rate Provider</Text>
           </View>
           <Text style={styles.heroTitle}>{provider.connectTitle}</Text>
@@ -245,7 +240,7 @@ export default function HealthDataSettingsScreen() {
           <Text style={styles.sectionTitle}>Status</Text>
           {loading ? (
             <View style={styles.loadingRow}>
-              <ActivityIndicator size="small" color={ACCENT} />
+              <ActivityIndicator size="small" color={colors.highlight1} />
               <Text style={styles.loadingText}>Loading health provider status…</Text>
             </View>
           ) : (
@@ -278,7 +273,7 @@ export default function HealthDataSettingsScreen() {
               ) : null}
               {prefs.lastError ? (
                 <View style={styles.errorBox}>
-                  <Ionicons name="warning-outline" size={16} color="#F59E0B" />
+                  <Ionicons name="warning-outline" size={16} color={colors.warning} />
                   <Text style={styles.errorText}>{prefs.lastError}</Text>
                 </View>
               ) : null}
@@ -361,176 +356,202 @@ export default function HealthDataSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  headerSpacer: {
-    width: 32,
-  },
-  heroCard: {
-    backgroundColor: '#0E151F',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 20,
-    gap: 10,
-  },
-  heroBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(99,102,241,0.12)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  heroBadgeText: {
-    color: ACCENT,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  heroBody: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  heroFootnote: {
-    color: TEXT_MUTED,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 16,
-    gap: 12,
-  },
-  sectionTitle: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loadingText: {
-    color: TEXT_MUTED,
-    fontSize: 14,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statLabel: {
-    flex: 1,
-    color: TEXT_MUTED,
-    fontSize: 14,
-  },
-  statValue: {
-    flex: 1,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    textAlign: 'right',
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: 'rgba(245,158,11,0.12)',
-    borderRadius: 14,
-    padding: 12,
-  },
-  errorText: {
-    flex: 1,
-    color: '#FCD34D',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  loadErrorText: {
-    color: '#F87171',
-    fontSize: 13,
-  },
-  cardCopy: {
-    color: TEXT_MUTED,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  actionWrap: {
-    gap: 12,
-  },
-  primaryButton: {
-    borderRadius: 16,
-    backgroundColor: ACCENT,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  primaryButtonText: {
-    color: '#081018',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  secondaryButtonText: {
-    color: TEXT_PRIMARY,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  linkButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-  },
-  linkButtonText: {
-    color: ACCENT,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 40,
+      gap: 16,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    headerSpacer: {
+      width: 32,
+    },
+    heroCard: {
+      backgroundColor: colors.card,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+      gap: 10,
+    },
+    heroBadge: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderRadius: 999,
+      backgroundColor: colors.accentSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    heroBadgeText: {
+      color: colors.highlight1,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      lineHeight: 15,
+      letterSpacing: 0.5,
+    },
+    heroTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 22,
+      lineHeight: 27,
+    },
+    heroBody: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    heroFootnote: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    loadingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    loadingText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    statRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    statLabel: {
+      flex: 1,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    statValue: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+      textAlign: 'right',
+    },
+    errorBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      backgroundColor: colors.glowSecondary,
+      borderRadius: 14,
+      padding: 12,
+    },
+    errorText: {
+      flex: 1,
+      color: colors.warning,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    loadErrorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    cardCopy: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 21,
+    },
+    actionWrap: {
+      gap: 12,
+    },
+    primaryButton: {
+      borderRadius: 16,
+      backgroundColor: colors.highlight1,
+      paddingVertical: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    secondaryButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    buttonDisabled: {
+      opacity: 0.7,
+    },
+    primaryButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    secondaryButtonText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 19,
+    },
+    linkButton: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+    },
+    linkButtonText: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+  });
+}

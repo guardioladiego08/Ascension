@@ -1,13 +1,26 @@
 // components/my components/meals/MealCard.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/Colors';
 import MacroBar from './MacroBar';
-import { MealItem } from '@/assets/data/mealsData';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = { item: MealItem };
 
+type MealItem = {
+  title: string;
+  subtitle: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  date: string;
+  time: string;
+  calories: number | string;
+};
+
 const MealCard: React.FC<Props> = ({ item }) => {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   return (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
@@ -31,30 +44,38 @@ const MealCard: React.FC<Props> = ({ item }) => {
 
 export default MealCard;
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#4A4A4A',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  mealTitle: {
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  mealSubtitle: {
-    color: Colors.dark.text,
-    opacity: 0.9,
-    marginTop: 4,
-    marginBottom: 10,
-    fontSize: 12,
-    letterSpacing: 0.3,
-  },
-  rightCol: { marginLeft: 16, alignItems: 'flex-end', justifyContent: 'space-between' },
-  dateTxt: { color: Colors.dark.text, fontSize: 12, fontWeight: '700' },
-  calLabel: { color: Colors.dark.text, fontSize: 12, fontWeight: '700', opacity: 0.9 },
-  calories: { color: Colors.dark.highlight1, fontSize: 18, fontWeight: '900' },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      backgroundColor: colors.card2,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+    },
+    mealTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontFamily: fonts.heading,
+      letterSpacing: 0.5,
+    },
+    mealSubtitle: {
+      color: colors.textMuted,
+      marginTop: 4,
+      marginBottom: 10,
+      fontSize: 12,
+      lineHeight: 16,
+      fontFamily: fonts.body,
+      letterSpacing: 0.3,
+    },
+    rightCol: { marginLeft: 16, alignItems: 'flex-end', justifyContent: 'space-between' },
+    dateTxt: { color: colors.text, fontSize: 12, lineHeight: 16, fontFamily: fonts.heading },
+    calLabel: { color: colors.textMuted, fontSize: 12, lineHeight: 16, fontFamily: fonts.heading },
+    calories: { color: colors.highlight1, fontSize: 18, lineHeight: 22, fontFamily: fonts.display },
+  });
+}

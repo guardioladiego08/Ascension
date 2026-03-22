@@ -10,11 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import MealsFoodsList from './components/MealsFoodsList';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 const TABS = ['My Meals', 'My Foods', 'All'] as const;
 type TabKey = (typeof TABS)[number];
@@ -48,12 +48,7 @@ export default function LogMeal() {
   }, [activeTab, indicatorX, tabWidth]);
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
@@ -65,8 +60,8 @@ export default function LogMeal() {
         >
           <View style={styles.hero}>
             <View style={styles.heroCopy}>
-              <Text style={globalStyles.eyebrow}>Nutrition Log</Text>
-              <Text style={globalStyles.header}>Record meals</Text>
+              <Text style={styles.eyebrow}>Nutrition Log</Text>
+              <Text style={styles.header}>Record meals</Text>
               <Text style={styles.heroText}>
                 Search saved meals, build new recipes, or scan packaged foods without
                 leaving the nutrition flow.
@@ -76,16 +71,16 @@ export default function LogMeal() {
 
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[globalStyles.buttonPrimary, styles.actionPrimary]}
+              style={[styles.buttonPrimary, styles.actionPrimary]}
               activeOpacity={0.9}
               onPress={() => router.push('./createMeal')}
             >
               <Ionicons name="add-circle" size={18} color={colors.blkText} />
-              <Text style={globalStyles.buttonTextPrimary}>Create Meal</Text>
+              <Text style={styles.buttonTextPrimary}>Create Meal</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[globalStyles.buttonSecondary, styles.actionSecondary]}
+              style={[styles.buttonSecondary, styles.actionSecondary]}
               activeOpacity={0.9}
               onPress={() => router.push('./scanFood')}
             >
@@ -94,7 +89,7 @@ export default function LogMeal() {
                 size={18}
                 color={colors.text}
               />
-              <Text style={globalStyles.buttonTextSecondary}>Scan Food</Text>
+              <Text style={styles.buttonTextSecondary}>Scan Food</Text>
             </TouchableOpacity>
           </View>
 
@@ -103,7 +98,7 @@ export default function LogMeal() {
             <TextInput
               style={styles.searchInput}
               placeholder="Search meals and foods"
-              placeholderTextColor={colors.textOffSt}
+              placeholderTextColor={HOME_TONES.textTertiary}
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
@@ -146,7 +141,7 @@ export default function LogMeal() {
           <MealsFoodsList activeTab={activeTab} searchQuery={searchQuery} />
         </ScrollView>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -155,6 +150,64 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     scroll: {
       flex: 1,
     },
@@ -164,17 +217,17 @@ function createStyles(
       gap: 14,
     },
     hero: {
+      backgroundColor: HOME_TONES.surface1,
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
     },
     heroCopy: {
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -199,15 +252,15 @@ function createStyles(
       alignItems: 'center',
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 14,
       minHeight: 52,
     },
     searchInput: {
       flex: 1,
       marginLeft: 10,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 15,
     },
@@ -216,8 +269,8 @@ function createStyles(
       position: 'relative',
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 4,
       overflow: 'hidden',
     },
@@ -237,7 +290,7 @@ function createStyles(
       zIndex: 1,
     },
     tabText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.label,
       fontSize: 12,
       lineHeight: 14,

@@ -8,12 +8,12 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import { findFoodByBarcode } from '@/lib/nutrition/foodLookup';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 const BARCODE_TYPES = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128'] as const;
 
@@ -153,19 +153,14 @@ export default function ScanFood() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
         <View style={styles.main}>
           <View style={styles.hero}>
-            <Text style={globalStyles.eyebrow}>Barcode Scanner</Text>
-            <Text style={globalStyles.header}>Scan food</Text>
+            <Text style={styles.eyebrow}>Barcode Scanner</Text>
+            <Text style={styles.header}>Scan food</Text>
             <Text style={styles.heroText}>
               Scan packaged items and jump straight into the nutrition record if a
               match exists in your food database.
@@ -183,11 +178,11 @@ export default function ScanFood() {
                 <Text style={styles.stateTitle}>Camera unavailable</Text>
                 <Text style={styles.stateText}>{cameraUnavailableReason}</Text>
                 <TouchableOpacity
-                  style={[globalStyles.buttonSecondary, styles.permissionButton]}
+                  style={[styles.buttonSecondary, styles.permissionButton]}
                   activeOpacity={0.9}
                   onPress={() => router.push('./addIngredient')}
                 >
-                  <Text style={globalStyles.buttonTextSecondary}>Search Manually</Text>
+                  <Text style={styles.buttonTextSecondary}>Search Manually</Text>
                 </TouchableOpacity>
               </View>
             ) : !permission ? (
@@ -207,11 +202,11 @@ export default function ScanFood() {
                   Allow camera access to scan product barcodes and match foods.
                 </Text>
                 <TouchableOpacity
-                  style={[globalStyles.buttonPrimary, styles.permissionButton]}
+                  style={[styles.buttonPrimary, styles.permissionButton]}
                   activeOpacity={0.9}
                   onPress={() => requestPermission()}
                 >
-                  <Text style={globalStyles.buttonTextPrimary}>Enable Camera</Text>
+                  <Text style={styles.buttonTextPrimary}>Enable Camera</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -259,27 +254,27 @@ export default function ScanFood() {
 
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[globalStyles.buttonSecondary, styles.actionButton]}
+              style={[styles.buttonSecondary, styles.actionButton]}
               activeOpacity={0.9}
               onPress={handleScanAgain}
               disabled={isSearching}
             >
               <Ionicons name="refresh" size={16} color={colors.text} />
-              <Text style={globalStyles.buttonTextSecondary}>Scan Again</Text>
+              <Text style={styles.buttonTextSecondary}>Scan Again</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[globalStyles.buttonSecondary, styles.actionButton]}
+              style={[styles.buttonSecondary, styles.actionButton]}
               activeOpacity={0.9}
               onPress={() => router.push('./addIngredient')}
             >
               <Ionicons name="search" size={16} color={colors.text} />
-              <Text style={globalStyles.buttonTextSecondary}>Search Manually</Text>
+              <Text style={styles.buttonTextSecondary}>Search Manually</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -288,6 +283,59 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     main: {
       flex: 1,
       paddingTop: 8,
@@ -296,13 +344,13 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -310,8 +358,8 @@ function createStyles(
     cameraCard: {
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
       overflow: 'hidden',
       minHeight: 340,
     },
@@ -338,7 +386,7 @@ function createStyles(
     },
     scanHint: {
       marginTop: 16,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 13,
       lineHeight: 17,
@@ -352,7 +400,7 @@ function createStyles(
     },
     stateTitle: {
       marginTop: 12,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 18,
       lineHeight: 22,
@@ -360,7 +408,7 @@ function createStyles(
     },
     stateText: {
       marginTop: 8,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -373,8 +421,8 @@ function createStyles(
     statusCard: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
       gap: 8,
     },
@@ -384,7 +432,7 @@ function createStyles(
       gap: 8,
     },
     statusText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -400,7 +448,7 @@ function createStyles(
       lineHeight: 18,
     },
     hintText: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 17,

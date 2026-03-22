@@ -71,7 +71,7 @@ function initials(nameOrUsername: string) {
 }
 
 function colorFromId(id: string): string {
-  const palette = ['#2F4858', '#394867', '#4F5D75', '#3E4C59', '#2C3E50', '#334155'];
+  const palette = ['#2A2F35', '#30363D', '#343B44', '#2D3238', '#38414A', '#313843'];
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   return palette[hash % palette.length];

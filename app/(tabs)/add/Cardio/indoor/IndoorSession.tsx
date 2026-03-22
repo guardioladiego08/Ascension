@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 import FinishConfirmModal from './indoor/FinishConfirmModal';
 import RunWalkCancelConfirmModal from './indoor/RunWalkCancelConfirmModal';
@@ -456,12 +456,7 @@ export default function IndoorSession() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={[globalStyles.container, styles.safe]}>
         <View style={styles.brandHeader}>
           <Image
@@ -471,14 +466,14 @@ export default function IndoorSession() {
           />
         </View>
 
-        <View style={[globalStyles.panel, styles.heroCard]}>
+        <View style={[styles.panel, styles.heroCard]}>
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
               <Ionicons name="chevron-back" size={18} color={colors.text} />
             </TouchableOpacity>
 
             <View style={styles.headerCenter}>
-              <Text style={globalStyles.eyebrow}>Indoor cardio</Text>
+              <Text style={styles.eyebrow}>Indoor cardio</Text>
               <Text
                 style={styles.title}
                 numberOfLines={1}
@@ -524,7 +519,7 @@ export default function IndoorSession() {
           </View>
         </View>
 
-        <View style={[globalStyles.panelSoft, styles.centerBlock]}>
+        <View style={[styles.panelSoft, styles.centerBlock]}>
           <Text style={styles.centerBig}>
             {displayDistance.toFixed(2)}
             <Text style={styles.centerUnit}> {distLabelUnit}</Text>
@@ -601,7 +596,7 @@ export default function IndoorSession() {
         <View style={styles.bottom}>
           <TouchableOpacity
             activeOpacity={0.92}
-            style={[isRunning ? globalStyles.buttonSecondary : globalStyles.buttonPrimary, styles.pauseBtn]}
+            style={[isRunning ? styles.buttonSecondary : styles.buttonPrimary, styles.pauseBtn]}
             onPress={togglePause}
           >
             <Ionicons
@@ -609,7 +604,7 @@ export default function IndoorSession() {
               size={18}
               color={isRunning ? colors.text : colors.blkText}
             />
-            <Text style={isRunning ? globalStyles.buttonTextSecondary : globalStyles.buttonTextPrimary}>
+            <Text style={isRunning ? styles.buttonTextSecondary : styles.buttonTextPrimary}>
               {isRunning ? 'Pause' : 'Resume'}
             </Text>
           </TouchableOpacity>
@@ -618,11 +613,11 @@ export default function IndoorSession() {
             <View style={styles.pausedActionsRow}>
               <TouchableOpacity
                 activeOpacity={0.92}
-                style={[globalStyles.buttonPrimary, styles.actionButton]}
+                style={[styles.buttonPrimary, styles.actionButton]}
                 onPress={() => setShowFinishConfirm(true)}
               >
                 <Ionicons name="checkmark" size={18} color={colors.blkText} />
-                <Text style={globalStyles.buttonTextPrimary}>Finish</Text>
+                <Text style={styles.buttonTextPrimary}>Finish</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -649,7 +644,7 @@ export default function IndoorSession() {
           onDiscard={confirmDiscardCancel}
         />
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -667,6 +662,66 @@ function createStyles(
   const controlSize = layout.tight ? 44 : layout.compact ? 48 : 52;
 
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     safe: {
       flex: 1,
       paddingBottom: layout.tight ? 8 : 12,
@@ -698,8 +753,8 @@ function createStyles(
       height: layout.tight ? 34 : 38,
       borderRadius: layout.tight ? 12 : 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -719,7 +774,7 @@ function createStyles(
     },
     heroSubtitle: {
       marginTop: layout.tight ? 6 : 8,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: layout.tight ? 12 : 13,
       lineHeight: layout.tight ? 16 : 19,
@@ -776,16 +831,16 @@ function createStyles(
     },
     statBox: {
       flex: 1,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderRadius: layout.tight ? 16 : 18,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       paddingVertical: layout.tight ? 10 : 12,
       paddingHorizontal: 6,
       alignItems: 'center',
     },
     statLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 9 : 10,
       lineHeight: layout.tight ? 12 : 14,
@@ -794,13 +849,13 @@ function createStyles(
       textTransform: 'uppercase',
     },
     statValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: layout.tight ? 15 : layout.compact ? 16 : 17,
       lineHeight: layout.tight ? 19 : 21,
     },
     statUnit: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
@@ -815,20 +870,20 @@ function createStyles(
       paddingHorizontal: layout.tight ? 12 : 14,
     },
     centerBig: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: layout.tight ? 42 : layout.compact ? 48 : 58,
       lineHeight: layout.tight ? 46 : layout.compact ? 52 : 62,
       letterSpacing: -1.2,
     },
     centerUnit: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 16 : layout.compact ? 18 : 20,
       lineHeight: layout.tight ? 20 : 24,
     },
     centerLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
@@ -844,22 +899,22 @@ function createStyles(
     },
     centerMini: {
       flex: 1,
-      backgroundColor: colors.card3,
+      backgroundColor: HOME_TONES.surface3,
       borderRadius: layout.tight ? 14 : 16,
       paddingVertical: layout.tight ? 10 : 12,
       paddingHorizontal: layout.tight ? 10 : 14,
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
     },
     centerMiniValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: layout.tight ? 13 : 14,
       lineHeight: layout.tight ? 16 : 18,
     },
     centerMiniLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 9 : 10,
       lineHeight: layout.tight ? 12 : 14,
@@ -874,11 +929,11 @@ function createStyles(
     controlRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderRadius: layout.tight ? 18 : 20,
       padding: layout.tight ? 8 : 10,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
     },
     controlRowSpaced: {
       marginTop: 0,
@@ -889,24 +944,24 @@ function createStyles(
       borderRadius: layout.tight ? 14 : 16,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.card3,
+      backgroundColor: HOME_TONES.surface3,
     },
     disabled: { opacity: 0.45 },
     controlCenter: { flex: 1, alignItems: 'center' },
     controlValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: layout.tight ? 18 : 20,
       lineHeight: layout.tight ? 22 : 24,
     },
     controlUnit: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 10 : 11,
       lineHeight: 14,
     },
     controlLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: layout.tight ? 9 : 10,
       lineHeight: layout.tight ? 12 : 14,
@@ -938,7 +993,7 @@ function createStyles(
       borderRadius: layout.tight ? 14 : 16,
       borderWidth: 1,
       borderColor: colors.danger,
-      backgroundColor: colors.accentSecondarySoft,
+      backgroundColor: HOME_TONES.surface2,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',

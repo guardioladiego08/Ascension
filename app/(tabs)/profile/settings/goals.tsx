@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -15,19 +15,12 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
-import { Colors } from '@/constants/Colors';
 import { useUnits } from '@/contexts/UnitsContext';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 import {
   syncAndFetchMyDailyGoalResult,
   toLocalISODate,
 } from '@/lib/goals/client';
-
-const BG = Colors.dark?.background ?? '#050816';
-const CARD = Colors.dark?.card ?? '#13182B';
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT_PRIMARY = Colors.dark?.text ?? '#EAF2FF';
-const TEXT_MUTED = Colors.dark?.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark?.highlight1 ?? '#6366F1';
 
 type CalorieGoalMode = 'disabled' | 'lose' | 'maintain' | 'gain';
 type GoalConditionMode = 'and' | 'or';
@@ -47,6 +40,8 @@ function convertDistance(value: number, from: 'km' | 'mi', to: 'km' | 'mi') {
 
 export default function GoalSettingsScreen() {
   const router = useRouter();
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { weightUnit, distanceUnit } = useUnits();
 
   const [loading, setLoading] = useState(true);
@@ -271,15 +266,15 @@ export default function GoalSettingsScreen() {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={22} color={TEXT_PRIMARY} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Goal settings</Text>
-        <View style={{ width: 32 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator />
+          <ActivityIndicator size="small" color={colors.highlight1} />
         </View>
       ) : (
         <ScrollView
@@ -299,6 +294,7 @@ export default function GoalSettingsScreen() {
               <ConditionModeRow
                 value={strengthConditionMode}
                 onChange={setStrengthConditionMode}
+                styles={styles}
               />
 
               <View style={styles.divider} />
@@ -315,7 +311,7 @@ export default function GoalSettingsScreen() {
                     value={strengthTimeMin}
                     onChangeText={setStrengthTimeMin}
                     placeholder="e.g. 45"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={colors.textMuted}
                   />
                   <Switch
                     value={strengthUseTime}
@@ -343,7 +339,7 @@ export default function GoalSettingsScreen() {
                     value={strengthVolumeMin}
                     onChangeText={setStrengthVolumeMin}
                     placeholder="e.g. 20000"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={colors.textMuted}
                   />
                   <Switch
                     value={strengthUseVolume}
@@ -366,6 +362,7 @@ export default function GoalSettingsScreen() {
               <ConditionModeRow
                 value={cardioConditionMode}
                 onChange={setCardioConditionMode}
+                styles={styles}
               />
 
               <View style={styles.divider} />
@@ -387,7 +384,7 @@ export default function GoalSettingsScreen() {
                     value={cardioDistance}
                     onChangeText={setCardioDistance}
                     placeholder="e.g. 5"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={colors.textMuted}
                   />
                   <Switch
                     value={cardioUseDistance}
@@ -410,7 +407,7 @@ export default function GoalSettingsScreen() {
                     value={cardioTimeMin}
                     onChangeText={setCardioTimeMin}
                     placeholder="e.g. 30"
-                    placeholderTextColor={TEXT_MUTED}
+                    placeholderTextColor={colors.textMuted}
                   />
                   <Switch
                     value={cardioUseTime}
@@ -433,6 +430,7 @@ export default function GoalSettingsScreen() {
               <ConditionModeRow
                 value={nutritionConditionMode}
                 onChange={setNutritionConditionMode}
+                styles={styles}
               />
 
               <View style={styles.divider} />
@@ -444,6 +442,8 @@ export default function GoalSettingsScreen() {
                 value={proteinTarget}
                 setValue={setProteinTarget}
                 placeholder="e.g. 180"
+                styles={styles}
+                placeholderColor={colors.textMuted}
               />
               <View style={styles.divider} />
               <MacroRow
@@ -454,6 +454,8 @@ export default function GoalSettingsScreen() {
                 value={carbsTarget}
                 setValue={setCarbsTarget}
                 placeholder="e.g. 250"
+                styles={styles}
+                placeholderColor={colors.textMuted}
               />
               <View style={styles.divider} />
               <MacroRow
@@ -464,6 +466,8 @@ export default function GoalSettingsScreen() {
                 value={fatsTarget}
                 setValue={setFatsTarget}
                 placeholder="e.g. 70"
+                styles={styles}
+                placeholderColor={colors.textMuted}
               />
             </View>
           </View>
@@ -477,11 +481,13 @@ export default function GoalSettingsScreen() {
                   label="Disabled"
                   active={calorieMode === 'disabled'}
                   onPress={() => setCalorieMode('disabled')}
+                  styles={styles}
                 />
                 <GoalChip
                   label="Lose weight"
                   active={calorieMode === 'lose'}
                   onPress={() => setCalorieMode('lose')}
+                  styles={styles}
                 />
               </View>
               <View style={[styles.chipRow, { marginTop: 8 }]}>
@@ -489,11 +495,13 @@ export default function GoalSettingsScreen() {
                   label="Maintain"
                   active={calorieMode === 'maintain'}
                   onPress={() => setCalorieMode('maintain')}
+                  styles={styles}
                 />
                 <GoalChip
                   label="Gain weight"
                   active={calorieMode === 'gain'}
                   onPress={() => setCalorieMode('gain')}
+                  styles={styles}
                 />
               </View>
 
@@ -512,7 +520,7 @@ export default function GoalSettingsScreen() {
                         value={calorieTarget}
                         onChangeText={setCalorieTarget}
                         placeholder="e.g. 2500"
-                        placeholderTextColor={TEXT_MUTED}
+                        placeholderTextColor={colors.textMuted}
                       />
                     </View>
                   </View>
@@ -527,7 +535,7 @@ export default function GoalSettingsScreen() {
             disabled={saving}
           >
             {saving ? (
-              <ActivityIndicator />
+              <ActivityIndicator size="small" color={colors.blkText} />
             ) : (
               <Text style={styles.saveButtonText}>Save goals</Text>
             )}
@@ -541,9 +549,11 @@ export default function GoalSettingsScreen() {
 function ConditionModeRow({
   value,
   onChange,
+  styles,
 }: {
   value: GoalConditionMode;
   onChange: (next: GoalConditionMode) => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <View>
@@ -553,11 +563,13 @@ function ConditionModeRow({
           label="All enabled"
           active={value === 'and'}
           onPress={() => onChange('and')}
+          styles={styles}
         />
         <GoalChip
           label="Any enabled"
           active={value === 'or'}
           onPress={() => onChange('or')}
+          styles={styles}
         />
       </View>
     </View>
@@ -568,10 +580,12 @@ function GoalChip({
   label,
   active,
   onPress,
+  styles,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <TouchableOpacity
@@ -594,6 +608,8 @@ function MacroRow({
   value,
   setValue,
   placeholder,
+  styles,
+  placeholderColor,
 }: {
   label: string;
   unit: string;
@@ -602,6 +618,8 @@ function MacroRow({
   value: string;
   setValue: (v: string) => void;
   placeholder: string;
+  styles: ReturnType<typeof createStyles>;
+  placeholderColor: string;
 }) {
   return (
     <View style={styles.row}>
@@ -617,7 +635,7 @@ function MacroRow({
           value={value}
           onChangeText={setValue}
           placeholder={placeholder}
-          placeholderTextColor={TEXT_MUTED}
+          placeholderTextColor={placeholderColor}
         />
         <Switch value={enabled} onValueChange={setEnabled} />
       </View>
@@ -625,159 +643,175 @@ function MacroRow({
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-    backgroundColor: BG,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: BORDER,
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: TEXT_PRIMARY,
-    fontSize: 18,
-    fontWeight: '600',
-  },
-
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: BG,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  section: {
-    marginTop: 20,
-  },
-  sectionTitle: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BORDER,
-    padding: 12,
-  },
-
-  helperText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-  },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rowLabelCol: {
-    flex: 1.4,
-  },
-  rowControlCol: {
-    flex: 1.6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginLeft: 8,
-  },
-  rowLabel: {
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  rowSubLabel: {
-    color: TEXT_MUTED,
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  input: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: BORDER,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    color: TEXT_PRIMARY,
-    fontSize: 14,
-    backgroundColor: '#020617',
-  },
-  inputDisabled: {
-    opacity: 0.4,
-  },
-
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: BORDER,
-    marginVertical: 10,
-  },
-
-  subSectionLabel: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: BORDER,
-  },
-  chipActive: {
-    backgroundColor: ACCENT,
-    borderColor: ACCENT,
-  },
-  chipText: {
-    color: TEXT_MUTED,
-    fontSize: 12,
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
-  },
-
-  saveButton: {
-    marginTop: 24,
-    backgroundColor: ACCENT,
-    paddingVertical: 12,
-    borderRadius: 999,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
+      backgroundColor: colors.background,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerTitle: {
+      flex: 1,
+      textAlign: 'center',
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 18,
+      lineHeight: 22,
+    },
+    headerSpacer: {
+      width: 32,
+    },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 24,
+    },
+    loadingContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    section: {
+      marginTop: 20,
+    },
+    sectionTitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 12,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+      marginBottom: 6,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 12,
+    },
+    helperText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    rowLabelCol: {
+      flex: 1.4,
+    },
+    rowControlCol: {
+      flex: 1.6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginLeft: 8,
+    },
+    rowLabel: {
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    rowSubLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 11,
+      lineHeight: 15,
+      marginTop: 2,
+    },
+    input: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      color: colors.text,
+      fontFamily: fonts.body,
+      fontSize: 14,
+      lineHeight: 18,
+      backgroundColor: colors.card2,
+    },
+    inputDisabled: {
+      opacity: 0.4,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: 10,
+    },
+    subSectionLabel: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginBottom: 6,
+    },
+    chipRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    chip: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+    },
+    chipActive: {
+      backgroundColor: colors.accentSoft,
+      borderColor: colors.highlight1,
+    },
+    chipText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    chipTextActive: {
+      color: colors.highlight1,
+      fontFamily: fonts.heading,
+    },
+    saveButton: {
+      marginTop: 24,
+      backgroundColor: colors.highlight1,
+      paddingVertical: 12,
+      borderRadius: 999,
+      alignItems: 'center',
+    },
+    saveButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+  });
+}

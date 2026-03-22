@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import MetricLineChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import { supabase } from '@/lib/supabase';
@@ -318,28 +317,18 @@ const ExerciseDetailScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={globalStyles.page}
-      >
+      <View style={globalStyles.page}>
         <View style={[globalStyles.safeArea, styles.centered]}>
           <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.stateText}>Loading exercise...</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   if (errorMsg) {
     return (
-      <LinearGradient
-        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={globalStyles.page}
-      >
+      <View style={globalStyles.page}>
         <View style={[globalStyles.safeArea, styles.centered]}>
           <View style={[globalStyles.panelSoft, styles.errorCard]}>
             <Text style={styles.errorText}>{errorMsg}</Text>
@@ -351,17 +340,12 @@ const ExerciseDetailScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={globalStyles.page}>
       <View style={globalStyles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
@@ -540,7 +524,7 @@ const ExerciseDetailScreen: React.FC = () => {
           </View>
         </ScrollView>
       </View>
-    </LinearGradient>
+    </View>
   );
 };
 

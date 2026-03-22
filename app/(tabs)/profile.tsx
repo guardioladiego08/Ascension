@@ -10,7 +10,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import LogoHeader from '@/components/my components/logoHeader';
@@ -174,27 +173,6 @@ export default function ProfileScreen() {
 
   const renderHeaderBlock = () => (
     <>
-      <View style={[globalStyles.panel, styles.profileHero]}>
-        <View style={styles.profileHeroHeader}>
-          <View>
-            <Text style={globalStyles.eyebrow}>Account</Text>
-            <Text style={styles.profileHeroTitle}>Profile</Text>
-            <Text style={styles.profileHeroText}>
-              Your social presence, training archive, and goal history in one
-              themed view.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={goToSettings}
-            activeOpacity={0.9}
-            style={styles.settingsButton}
-          >
-            <Ionicons name="settings-outline" size={20} color={colors.highlight1} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {profile ? (
         <ProfileHeaderSection
           fullName={fullName}
@@ -217,15 +195,17 @@ export default function ProfileScreen() {
   const userId = profile?.user_id ?? '';
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={globalStyles.page}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.headerTop}>
           <LogoHeader />
+          <TouchableOpacity
+            onPress={goToSettings}
+            activeOpacity={0.9}
+            style={styles.settingsButton}
+          >
+            <Ionicons name="settings-outline" size={20} color={colors.highlight1} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.body}>
@@ -265,7 +245,7 @@ export default function ProfileScreen() {
           )}
         </View>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -309,45 +289,23 @@ function createStyles(
   return StyleSheet.create({
     safeArea: {
       flex: 1,
+      backgroundColor: colors.background,
     },
     flex: {
       flex: 1,
     },
     headerTop: {
+      alignItems: 'center',
       paddingHorizontal: 18,
-      paddingBottom: 4,
+      paddingBottom: 8,
     },
     body: {
       flex: 1,
     },
-    profileHero: {
-      marginHorizontal: 16,
-      marginTop: 10,
-      marginBottom: 14,
-    },
-    profileHeroHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: 12,
-    },
-    profileHeroTitle: {
-      marginTop: 8,
-      color: colors.text,
-      fontFamily: fonts.display,
-      fontSize: 34,
-      lineHeight: 38,
-      letterSpacing: -1,
-    },
-    profileHeroText: {
-      marginTop: 10,
-      maxWidth: 280,
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 14,
-      lineHeight: 20,
-    },
     settingsButton: {
+      position: 'absolute',
+      right: 18,
+      top: 50,
       width: 42,
       height: 42,
       borderRadius: 16,

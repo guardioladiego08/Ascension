@@ -11,7 +11,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import AppPopup from '@/components/ui/AppPopup';
@@ -204,12 +203,7 @@ const ExercisesScreen: React.FC = () => {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={globalStyles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
@@ -345,7 +339,7 @@ const ExercisesScreen: React.FC = () => {
           </AppPopup>
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 };
 

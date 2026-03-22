@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../../home/tokens';
 import {
   formatDuration,
   formatDistance,
@@ -82,17 +83,17 @@ function createStyles(
     statBox: {
       flex: 1,
       minWidth: 0,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       paddingVertical: 14,
       paddingHorizontal: 10,
       alignItems: 'center',
       justifyContent: 'center',
     },
     statLabel: {
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 14,
@@ -103,7 +104,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     statValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 16,
       lineHeight: 20,

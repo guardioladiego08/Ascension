@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 type Props = {
   totalKcal: number;
@@ -19,7 +20,7 @@ const MealSummaryCard: React.FC<Props> = ({
   totalCarbs,
   totalFat,
 }) => {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const macroSum = totalProtein + totalCarbs + totalFat;
@@ -34,10 +35,10 @@ const MealSummaryCard: React.FC<Props> = ({
     : [];
 
   return (
-    <View style={[globalStyles.panel, styles.card]}>
+    <View style={[styles.panel, styles.card]}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={globalStyles.eyebrow}>Nutrition Summary</Text>
+          <Text style={styles.eyebrow}>Nutrition Summary</Text>
           <Text style={styles.title}>Recipe breakdown</Text>
         </View>
         <View style={styles.totalPill}>
@@ -123,6 +124,21 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
     card: {
       gap: 18,
     },
@@ -134,7 +150,7 @@ function createStyles(
     },
     title: {
       marginTop: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 22,
       lineHeight: 26,
@@ -146,7 +162,7 @@ function createStyles(
       paddingVertical: 10,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       backgroundColor: colors.accentSoft,
       alignItems: 'flex-end',
     },
@@ -160,7 +176,7 @@ function createStyles(
     },
     totalPillValue: {
       marginTop: 4,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
@@ -180,7 +196,7 @@ function createStyles(
       alignItems: 'center',
     },
     centerLabel: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 22,
       lineHeight: 24,
@@ -188,7 +204,7 @@ function createStyles(
     },
     centerSubLabel: {
       marginTop: 2,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 14,
@@ -198,14 +214,14 @@ function createStyles(
       minHeight: CHART_SIZE,
       borderRadius: CHART_SIZE / 2,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 18,
       alignItems: 'center',
       justifyContent: 'center',
     },
     emptyTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
@@ -213,7 +229,7 @@ function createStyles(
     },
     emptyText: {
       marginTop: 6,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 15,
@@ -228,8 +244,8 @@ function createStyles(
       alignItems: 'center',
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 12,
       paddingVertical: 11,
     },
@@ -243,14 +259,14 @@ function createStyles(
       flex: 1,
     },
     metricLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 14,
     },
     metricValue: {
       marginTop: 4,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 18,

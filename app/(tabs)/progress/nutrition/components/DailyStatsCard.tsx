@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 type Props = {
   dateLabel: string;
@@ -35,7 +36,7 @@ const DailyStatsCard: React.FC<Props> = ({
   carbsTarget,
   fatTarget,
 }) => {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const safeTotalKcal = totalKcal || 0;
@@ -46,7 +47,7 @@ const DailyStatsCard: React.FC<Props> = ({
       : 0;
 
   return (
-    <View style={[globalStyles.panel, styles.card]}>
+    <View style={[styles.panel, styles.card]}>
       <View style={styles.summaryCard}>
         <Text style={styles.dateText}>{dateLabel}</Text>
         <Text style={styles.kcalLabel}>Calories logged</Text>
@@ -141,18 +142,25 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panel: {
+      backgroundColor: HOME_TONES.surface1,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 22,
+    },
     card: {
       gap: 16,
     },
     summaryCard: {
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
     },
     dateText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 13,
@@ -161,14 +169,14 @@ function createStyles(
     },
     kcalLabel: {
       marginTop: 12,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 17,
     },
     kcalValue: {
       marginTop: 4,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 30,
       lineHeight: 34,
@@ -178,7 +186,7 @@ function createStyles(
       marginTop: 16,
       height: 10,
       borderRadius: 999,
-      backgroundColor: colors.card3,
+      backgroundColor: HOME_TONES.surface3,
       overflow: 'hidden',
     },
     progressFill: {
@@ -188,7 +196,7 @@ function createStyles(
     },
     kcalTargetText: {
       marginTop: 10,
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
@@ -199,8 +207,8 @@ function createStyles(
     macroCard: {
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 14,
       paddingVertical: 12,
     },
@@ -211,13 +219,13 @@ function createStyles(
       gap: 12,
     },
     macroLabel: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
     },
     macroValue: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
@@ -226,7 +234,7 @@ function createStyles(
       marginTop: 12,
       height: 8,
       borderRadius: 999,
-      backgroundColor: colors.card3,
+      backgroundColor: HOME_TONES.surface3,
       overflow: 'hidden',
     },
     macroBarInner: {

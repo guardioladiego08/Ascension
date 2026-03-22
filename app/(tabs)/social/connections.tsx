@@ -9,19 +9,11 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { listFollowers, listFollowing, type ConnectionProfile } from '@/lib/social/api';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT = Colors.dark.text;
-const MUTED = Colors.dark.textMuted ?? '#9AA4BF';
-const ACCENT = Colors.dark.highlight1;
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Tab = 'followers' | 'following';
 
@@ -33,6 +25,8 @@ function initials(name: string) {
 
 export default function ConnectionsScreen() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const params = useLocalSearchParams<{
     userId?: string | string[];
     tab?: string | string[];
@@ -106,12 +100,12 @@ export default function ConnectionsScreen() {
 
   return (
     <View style={styles.safe}>
-      <LinearGradient colors={[BG, '#070B12']} style={styles.bg}>
+      <View style={globalStyles.page}>
         <LogoHeader />
 
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={TEXT} />
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.title}>{title}</Text>
@@ -127,7 +121,7 @@ export default function ConnectionsScreen() {
 
         {loading ? (
           <View style={styles.stateWrap}>
-            <ActivityIndicator size="small" color={ACCENT} />
+            <ActivityIndicator size="small" color={colors.highlight1} />
             <Text style={styles.stateText}>Loading {activeTab}…</Text>
           </View>
         ) : errorText ? (
@@ -161,7 +155,13 @@ export default function ConnectionsScreen() {
                   <Text style={styles.displayName}>{item.display_name}</Text>
                 </View>
 
-                {item.is_private ? <Ionicons name="lock-closed-outline" size={16} color={MUTED} /> : null}
+                {item.is_private ? (
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={16}
+                    color={colors.textMuted}
+                  />
+                ) : null}
               </TouchableOpacity>
             )}
             ListEmptyComponent={
@@ -171,12 +171,14 @@ export default function ConnectionsScreen() {
             }
           />
         )}
-      </LinearGradient>
+      </View>
     </View>
   );
 }
 
 function TabPill({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { colors, fonts } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -188,75 +190,137 @@ function TabPill({ label, active, onPress }: { label: string; active: boolean; o
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  bg: { flex: 1 },
-
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 10,
-  },
-  iconBtn: { width: 38, height: 38, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  title: { color: TEXT, fontSize: 15, fontWeight: '900' },
-  subtitle: { color: MUTED, fontSize: 12, fontWeight: '600', marginTop: 2 },
-
-  switchWrap: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  tabPill: {
-    flex: 1,
-    height: 38,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabPillActive: {
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  tabText: { color: MUTED, fontSize: 13, fontWeight: '700' },
-  tabTextActive: { color: TEXT },
-
-  stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, gap: 10 },
-  stateText: { color: MUTED, fontSize: 13, textAlign: 'center' },
-  errorText: { color: '#FCA5A5', fontSize: 13, textAlign: 'center' },
-
-  userCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-  },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  avatarText: { color: TEXT, fontWeight: '900', fontSize: 13, letterSpacing: 0.4 },
-  username: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
-  displayName: { color: MUTED, fontSize: 12.25, fontWeight: '600', marginTop: 2 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 10,
+    },
+    iconBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+    subtitle: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+    switchWrap: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+    },
+    tabPill: {
+      flex: 1,
+      height: 38,
+      borderRadius: 13,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tabPillActive: {
+      borderColor: colors.highlight1,
+      backgroundColor: colors.accentSoft,
+    },
+    tabText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+    tabTextActive: {
+      color: colors.highlight1,
+    },
+    stateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 20,
+      gap: 10,
+    },
+    stateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      textAlign: 'center',
+    },
+    userCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    avatarImage: {
+      width: 40,
+      height: 40,
+      borderRadius: 999,
+    },
+    avatarFallback: {
+      width: 40,
+      height: 40,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+    },
+    avatarText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+    },
+    username: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13.5,
+      lineHeight: 17,
+    },
+    displayName: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12.25,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+  });
+}

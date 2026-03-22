@@ -17,7 +17,6 @@ import { HomeGoalLanesCard } from './home/HomeGoalLanesCard';
 import { HomeNutritionCard } from './home/HomeNutritionCard';
 import { HomeSectionHeader } from './home/HomeSectionHeader';
 import { createHomeStyles } from './home/styles';
-import { HOME_TONES } from './home/tokens';
 import { type HomeGoalLaneItem } from './home/types';
 import { useHomeDashboard } from './home/useHomeDashboard';
 import {
@@ -395,7 +394,7 @@ export default function HomeScreen() {
         <HomeSectionHeader
           eyebrow="Quick Actions"
           title="Start from the home tab"
-          subtitle="Strength, cardio, nutrition logging, and the bike placeholder are all one tap away."
+          subtitle="Strength, cardio, and nutrition logging are all one tap away."
           styles={styles}
         />
 
@@ -425,15 +424,6 @@ export default function HomeScreen() {
             accentColor={colors.accentTertiarySoft}
             styles={styles}
             onPress={() => router.push('/add/Nutrition/logMeal')}
-          />
-
-          <HomeActionTile
-            title="Bike session"
-            subtitle="Reserved for the upcoming dedicated ride-tracking flow."
-            icon={<Ionicons name="bicycle-outline" size={22} color={colors.textMuted} />}
-            accentColor={HOME_TONES.panelOverlayStrong}
-            styles={styles}
-            onPress={() => router.push('/add/Cardio/bike')}
           />
         </View>
 

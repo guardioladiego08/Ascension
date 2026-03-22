@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList } from 'react-native';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 type Ingredient = {
   food_id: string;
@@ -21,12 +22,12 @@ type Props = {
 };
 
 const IngredientsList: React.FC<Props> = ({ ingredients, onChangeQuantity }) => {
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   if (!ingredients || ingredients.length === 0) {
     return (
-      <View style={[globalStyles.panelSoft, styles.emptyWrap]}>
+      <View style={[styles.panelSoft, styles.emptyWrap]}>
         <Text style={styles.emptyTitle}>No ingredients added</Text>
         <Text style={styles.emptyText}>Use “Add Ingredient” to build the meal and preview macros.</Text>
       </View>
@@ -73,7 +74,7 @@ const IngredientsList: React.FC<Props> = ({ ingredients, onChangeQuantity }) => 
                   onChangeText={(value) => onChangeQuantity(index, value)}
                   keyboardType="decimal-pad"
                   placeholder="1.0"
-                  placeholderTextColor={colors.textOffSt}
+                  placeholderTextColor={HOME_TONES.textTertiary}
                 />
                 <Text style={styles.portionUnit}>x serving</Text>
               </View>
@@ -116,18 +117,25 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
     emptyWrap: {
       alignItems: 'flex-start',
       gap: 6,
     },
     emptyTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 16,
       lineHeight: 20,
     },
     emptyText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -135,8 +143,8 @@ function createStyles(
     row: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 14,
       gap: 12,
     },
@@ -149,14 +157,14 @@ function createStyles(
       flex: 1,
     },
     title: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 20,
     },
     servingText: {
       marginTop: 4,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
@@ -165,14 +173,14 @@ function createStyles(
       width: 86,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 10,
       paddingVertical: 10,
       alignItems: 'center',
     },
     portionLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -184,18 +192,18 @@ function createStyles(
       marginTop: 8,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: colors.borderStrong,
-      backgroundColor: colors.background,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 8,
       paddingVertical: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       textAlign: 'center',
     },
     portionUnit: {
       marginTop: 6,
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 10,
       lineHeight: 12,
@@ -209,8 +217,8 @@ function createStyles(
       minWidth: 62,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 10,
       paddingVertical: 7,
       flexDirection: 'row',
@@ -219,7 +227,7 @@ function createStyles(
       gap: 8,
     },
     chipLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -227,7 +235,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     chipValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 12,
       lineHeight: 14,

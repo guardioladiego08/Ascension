@@ -17,6 +17,7 @@ import {
   toLocalISODate,
 } from '@/lib/goals/client';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../../home/tokens';
 
 export type TabKey = 'My Meals' | 'My Foods' | 'All';
 
@@ -67,7 +68,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
   searchQuery,
 }) => {
   const router = useRouter();
-  const { colors, fonts, globalStyles } = useAppTheme();
+  const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -261,7 +262,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   if (loading) {
     return (
-      <View style={[globalStyles.panelSoft, styles.stateContainer]}>
+      <View style={[styles.panelSoft, styles.stateContainer]}>
         <ActivityIndicator size="small" color={colors.highlight1} />
         <Text style={styles.stateText}>Loading meals...</Text>
       </View>
@@ -270,7 +271,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   if (errorMsg) {
     return (
-      <View style={[globalStyles.panelSoft, styles.stateContainer]}>
+      <View style={[styles.panelSoft, styles.stateContainer]}>
         <Text style={styles.errorText}>{errorMsg}</Text>
       </View>
     );
@@ -278,7 +279,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   if (activeTab === 'My Foods') {
     return (
-      <View style={[globalStyles.panelSoft, styles.stateContainer]}>
+      <View style={[styles.panelSoft, styles.stateContainer]}>
         <Ionicons name="fast-food-outline" size={22} color={colors.textMuted} />
         <Text style={styles.stateText}>
           My Foods is still pending. Once your personal foods table is wired up, it
@@ -290,7 +291,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   if (visibleItems.length === 0) {
     return (
-      <View style={[globalStyles.panelSoft, styles.stateContainer]}>
+      <View style={[styles.panelSoft, styles.stateContainer]}>
         <Text style={styles.stateText}>
           {searchQuery.trim()
             ? 'No meals match your search.'
@@ -330,7 +331,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
             <TouchableOpacity
               activeOpacity={0.9}
-              style={[globalStyles.buttonPrimary, styles.addButton]}
+              style={[styles.buttonPrimary, styles.addButton]}
               onPress={() => handleAddMealToDiary(item)}
               disabled={isSaving}
             >
@@ -339,7 +340,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
               ) : (
                 <>
                   <Ionicons name="add-circle" size={16} color={colors.blkText} />
-                  <Text style={globalStyles.buttonTextPrimary}>Add to diary</Text>
+                  <Text style={styles.buttonTextPrimary}>Add to diary</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -372,6 +373,30 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     list: {
       gap: 12,
     },
@@ -382,7 +407,7 @@ function createStyles(
       gap: 8,
     },
     stateText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -398,8 +423,8 @@ function createStyles(
     card: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 15,
       gap: 14,
     },
@@ -429,13 +454,13 @@ function createStyles(
       textTransform: 'uppercase',
     },
     title: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 17,
       lineHeight: 22,
     },
     subtitle: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -443,13 +468,13 @@ function createStyles(
     kcalPill: {
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 10,
       paddingVertical: 8,
     },
     kcalValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 12,
       lineHeight: 15,
@@ -462,20 +487,20 @@ function createStyles(
       flex: 1,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 10,
       paddingVertical: 10,
     },
     metricLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 14,
     },
     metricValue: {
       marginTop: 4,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 13,
       lineHeight: 16,

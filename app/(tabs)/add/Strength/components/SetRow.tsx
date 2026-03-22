@@ -11,6 +11,7 @@ import type { SetDraft } from '@/lib/strength/types';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import AppPopup from '@/components/ui/AppPopup';
+import { HOME_TONES } from '../../../home/tokens';
 
 const LB_PER_KG = 2.20462;
 
@@ -161,7 +162,7 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
           style={styles.weightInput}
           inputMode="decimal"
           placeholder="0"
-          placeholderTextColor={colors.textOffSt}
+          placeholderTextColor={HOME_TONES.textTertiary}
           value={
             displayWeight != null && !Number.isNaN(displayWeight)
               ? String(displayWeight)
@@ -178,7 +179,7 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
         style={styles.reps}
         inputMode="numeric"
         placeholder="reps"
-        placeholderTextColor={colors.textOffSt}
+        placeholderTextColor={HOME_TONES.textTertiary}
         value={setDraft.reps?.toString() ?? ''}
         onChangeText={handleRepsChange}
       />
@@ -228,15 +229,15 @@ function createStyles(
       width: 38,
       height: 42,
       borderRadius: 14,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
       alignItems: 'center',
       justifyContent: 'center',
     },
     idxBtnActive: {
-      backgroundColor: colors.card3,
-      borderColor: colors.borderStrong,
+      backgroundColor: HOME_TONES.surface3,
+      borderColor: HOME_TONES.borderSoft,
     },
     idxBtnWarmup: {
       backgroundColor: colors.accentTertiarySoft,
@@ -251,14 +252,14 @@ function createStyles(
       borderColor: colors.danger,
     },
     idxText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
       textAlign: 'center',
     },
     typeLetter: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
@@ -281,13 +282,13 @@ function createStyles(
       borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.textInput,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       width: 1,
     },
     weightInput: {
       flex: 1,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 15,
       lineHeight: 20,
@@ -299,12 +300,12 @@ function createStyles(
       height: 42,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderLeftWidth: 1,
-      borderLeftColor: colors.border,
+      borderLeftColor: HOME_TONES.borderSoft,
     },
     unitText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 13,
       lineHeight: 17,
@@ -314,10 +315,10 @@ function createStyles(
       width: 76,
       height: 42,
       borderRadius: 14,
-      backgroundColor: colors.textInput,
+      backgroundColor: HOME_TONES.surface3,
       borderWidth: 1,
-      borderColor: colors.border,
-      color: colors.text,
+      borderColor: HOME_TONES.borderSoft,
+      color: HOME_TONES.textPrimary,
       textAlign: 'center',
       paddingHorizontal: 12,
       fontFamily: fonts.body,
@@ -329,16 +330,16 @@ function createStyles(
       paddingHorizontal: 12,
       borderRadius: 14,
       marginTop: 8,
-      backgroundColor: colors.card2,
+      backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: HOME_TONES.borderSoft,
     },
     modeRowActive: {
       backgroundColor: colors.accentSoft,
       borderColor: colors.glowPrimary,
     },
     modeText: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 18,

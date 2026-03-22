@@ -9,7 +9,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
@@ -28,6 +27,7 @@ import {
   toLocalISODate,
 } from '@/lib/goals/client';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 type AddMode = 'snack' | 'meal';
 
@@ -186,19 +186,14 @@ export default function ScanFoodResult() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
         <View style={styles.main}>
           <View style={styles.hero}>
-            <Text style={globalStyles.eyebrow}>Scan Result</Text>
-            <Text style={globalStyles.header}>Review food</Text>
+            <Text style={styles.eyebrow}>Scan Result</Text>
+            <Text style={styles.header}>Review food</Text>
             <Text style={styles.heroText}>
               Confirm the serving and macros before adding this product into your
               nutrition diary.
@@ -206,20 +201,20 @@ export default function ScanFoodResult() {
           </View>
 
           {loading ? (
-            <View style={[globalStyles.panelSoft, styles.centeredState]}>
+            <View style={[styles.panelSoft, styles.centeredState]}>
               <ActivityIndicator color={colors.highlight1} />
               <Text style={styles.stateText}>Loading food data...</Text>
             </View>
           ) : errorText ? (
-            <View style={[globalStyles.panelSoft, styles.centeredState]}>
+            <View style={[styles.panelSoft, styles.centeredState]}>
               <Ionicons name="alert-circle-outline" size={26} color={colors.danger} />
               <Text style={styles.stateText}>{errorText}</Text>
               <TouchableOpacity
-                style={[globalStyles.buttonSecondary, styles.retryButton]}
+                style={[styles.buttonSecondary, styles.retryButton]}
                 activeOpacity={0.9}
                 onPress={() => router.replace('./scanFood')}
               >
-                <Text style={globalStyles.buttonTextSecondary}>Scan Again</Text>
+                <Text style={styles.buttonTextSecondary}>Scan Again</Text>
               </TouchableOpacity>
             </View>
           ) : food && nutrition100g && defaultServing && servingNutrition ? (
@@ -280,7 +275,7 @@ export default function ScanFoodResult() {
 
               <View style={styles.actionRow}>
                 <TouchableOpacity
-                  style={[globalStyles.buttonPrimary, styles.actionButton]}
+                  style={[styles.buttonPrimary, styles.actionButton]}
                   activeOpacity={0.9}
                   disabled={savingAs != null}
                   onPress={() => handleAddToDiary('snack')}
@@ -290,13 +285,13 @@ export default function ScanFoodResult() {
                   ) : (
                     <>
                       <Ionicons name="cafe-outline" size={17} color={colors.blkText} />
-                      <Text style={globalStyles.buttonTextPrimary}>Add as Snack</Text>
+                      <Text style={styles.buttonTextPrimary}>Add as Snack</Text>
                     </>
                   )}
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[globalStyles.buttonSecondary, styles.actionButton]}
+                  style={[styles.buttonSecondary, styles.actionButton]}
                   activeOpacity={0.9}
                   disabled={savingAs != null}
                   onPress={() => handleAddToDiary('meal')}
@@ -310,7 +305,7 @@ export default function ScanFoodResult() {
                         size={17}
                         color={colors.text}
                       />
-                      <Text style={globalStyles.buttonTextSecondary}>Add as Meal</Text>
+                      <Text style={styles.buttonTextSecondary}>Add as Meal</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -319,30 +314,30 @@ export default function ScanFoodResult() {
           ) : null}
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
-  const { colors, fonts } = useAppTheme();
+  const { fonts } = useAppTheme();
   const styles = useMemo(
     () =>
       StyleSheet.create({
         title: {
-          color: colors.text,
+          color: HOME_TONES.textPrimary,
           fontFamily: fonts.heading,
           fontSize: 17,
           lineHeight: 21,
         },
         subtitle: {
           marginTop: 4,
-          color: colors.textMuted,
+          color: HOME_TONES.textSecondary,
           fontFamily: fonts.body,
           fontSize: 13,
           lineHeight: 18,
         },
       }),
-    [colors, fonts]
+    [fonts]
   );
 
   return (
@@ -375,6 +370,66 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     main: {
       flex: 1,
       paddingTop: 8,
@@ -383,13 +438,13 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -400,7 +455,7 @@ function createStyles(
       paddingVertical: 28,
     },
     stateText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -420,8 +475,8 @@ function createStyles(
     infoCard: {
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
       gap: 10,
     },
@@ -449,7 +504,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     foodName: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 24,
       lineHeight: 28,
@@ -457,13 +512,13 @@ function createStyles(
     },
     foodMeta: {
       marginTop: 6,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 17,
     },
     foodDescription: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 19,
@@ -471,8 +526,8 @@ function createStyles(
     metricSection: {
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
       gap: 14,
     },
@@ -485,13 +540,13 @@ function createStyles(
       width: '48%',
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingVertical: 10,
       paddingHorizontal: 12,
     },
     metricLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -500,7 +555,7 @@ function createStyles(
     },
     metricValue: {
       marginTop: 6,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,

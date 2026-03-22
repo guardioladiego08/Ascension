@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -235,12 +234,7 @@ export default function Social() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <LinearGradient
-        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={globalStyles.page}
-      >
+      <View style={globalStyles.page}>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -351,7 +345,7 @@ export default function Social() {
             <ActivityTab />
           )}
         </KeyboardAvoidingView>
-      </LinearGradient>
+      </View>
     </SafeAreaView>
   );
 }

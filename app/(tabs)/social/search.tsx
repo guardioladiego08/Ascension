@@ -10,18 +10,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/Colors';
 import LogoHeader from '@/components/my components/logoHeader';
 import { getMyUserId, searchProfiles, type PublicProfile } from '@/lib/social/api';
-
-const BG = Colors.dark.background;
-const CARD = Colors.dark.card;
-const BORDER = Colors.dark?.border ?? '#1F2937';
-const TEXT = Colors.dark.text;
-const TEXT_MUTED = Colors.dark.textMuted ?? '#9AA4BF';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/);
@@ -31,6 +24,8 @@ function initials(name: string) {
 
 export default function PeopleSearchScreen() {
   const router = useRouter();
+  const { colors, fonts, globalStyles } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
   const [meId, setMeId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -83,22 +78,27 @@ export default function PeopleSearchScreen() {
 
   return (
     <View style={styles.safe}>
-      <LinearGradient colors={[BG, '#070B12']} style={styles.bg}>
+      <View style={globalStyles.page}>
         <LogoHeader />
 
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
-            <Ionicons name="chevron-back" size={22} color={TEXT} />
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Search People</Text>
           <View style={{ width: 38 }} />
         </View>
 
         <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color={TEXT_MUTED} style={{ marginRight: 10 }} />
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={colors.textMuted}
+            style={{ marginRight: 10 }}
+          />
           <TextInput
             placeholder="Search"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={colors.textMuted}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
@@ -107,7 +107,7 @@ export default function PeopleSearchScreen() {
           />
           {!!query && (
             <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn} activeOpacity={0.85}>
-              <Ionicons name="close-circle" size={18} color={TEXT_MUTED} />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -120,7 +120,7 @@ export default function PeopleSearchScreen() {
           </View>
         ) : loading && rows.length === 0 ? (
           <View style={styles.stateWrap}>
-            <ActivityIndicator />
+            <ActivityIndicator size="small" color={colors.highlight1} />
           </View>
         ) : (
           <FlatList
@@ -147,67 +147,129 @@ export default function PeopleSearchScreen() {
                   <Text style={styles.displayName}>{item.display_name}</Text>
                 </View>
 
-                <Ionicons name="chevron-forward" size={18} color={TEXT_MUTED} />
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             )}
           />
         )}
-      </LinearGradient>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: BG },
-  bg: { flex: 1 },
-
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 6,
-    paddingBottom: 10,
-    justifyContent: 'space-between',
-  },
-  iconBtn: { width: 38, height: 38, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  title: { color: TEXT, fontSize: 16, fontWeight: '900' },
-
-  searchBox: {
-    marginHorizontal: 16,
-    height: 44,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchInput: { flex: 1, color: TEXT, fontSize: 14, fontWeight: '700' },
-  clearBtn: { paddingLeft: 8, paddingVertical: 6 },
-
-  hint: { marginHorizontal: 16, marginTop: 10, marginBottom: 10, color: TEXT_MUTED, fontSize: 12, fontWeight: '600' },
-
-  stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { color: '#FCA5A5', fontSize: 13, paddingHorizontal: 16, textAlign: 'center' },
-
-  userCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: BORDER,
-    backgroundColor: CARD,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatar: {
-    width: 40, height: 40, borderRadius: 999,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  avatarText: { color: TEXT, fontWeight: '900', fontSize: 13, letterSpacing: 0.4 },
-  username: { color: TEXT, fontSize: 13.5, fontWeight: '900' },
-  displayName: { color: TEXT_MUTED, fontSize: 12.25, fontWeight: '600', marginTop: 2 },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 10,
+      justifyContent: 'space-between',
+    },
+    iconBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 16,
+      lineHeight: 20,
+    },
+    searchBox: {
+      marginHorizontal: 16,
+      height: 44,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card2,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    searchInput: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    clearBtn: {
+      paddingLeft: 8,
+      paddingVertical: 6,
+    },
+    hint: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      marginBottom: 10,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    stateWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    errorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 17,
+      paddingHorizontal: 16,
+      textAlign: 'center',
+    },
+    userCard: {
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      padding: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+    },
+    avatarText: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 16,
+      letterSpacing: 0.4,
+    },
+    username: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+      fontSize: 13.5,
+      lineHeight: 17,
+    },
+    displayName: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12.25,
+      lineHeight: 16,
+      marginTop: 2,
+    },
+  });
+}

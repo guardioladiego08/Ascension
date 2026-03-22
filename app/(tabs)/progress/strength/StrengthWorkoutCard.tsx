@@ -1,8 +1,8 @@
 // components/my components/progress/StrengthWorkoutCard.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme } from '@/providers/AppThemeProvider';
 
 export type StrengthWorkoutRow = {
   id: string;
@@ -18,6 +18,9 @@ type Props = {
 };
 
 const StrengthWorkoutCard: React.FC<Props> = ({ workout, onPress }) => {
+  const { colors, fonts } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+
   const date = new Date(workout.started_at);
   const dateLabel = date.toLocaleDateString(undefined, {
     month: 'short',
@@ -55,36 +58,46 @@ const StrengthWorkoutCard: React.FC<Props> = ({ workout, onPress }) => {
           {stats || 'Strength session'}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#9DA4C4" />
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.dark.card,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  left: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  title: {
-    fontSize: 14,
-    color: '#E5E7F5',
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 11,
-    color: '#9DA4C4',
-    marginTop: 4,
-  },
-});
+function createStyles(
+  colors: ReturnType<typeof useAppTheme>['colors'],
+  fonts: ReturnType<typeof useAppTheme>['fonts']
+) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
+    },
+    left: {
+      flex: 1,
+      paddingRight: 8,
+    },
+    title: {
+      fontSize: 14,
+      lineHeight: 18,
+      color: colors.text,
+      fontFamily: fonts.heading,
+    },
+    subtitle: {
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.textMuted,
+      marginTop: 4,
+      fontFamily: fonts.body,
+    },
+  });
+}
 
 export default StrengthWorkoutCard;

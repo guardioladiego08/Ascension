@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -19,6 +18,7 @@ import {
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 type DiaryDay = {
   id: string;
@@ -235,29 +235,24 @@ export default function DailyNutritionSummary() {
   const macroTotal = totals.totalProtein + totals.totalCarbs + totals.totalFat;
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
         <View style={styles.main}>
           <View style={styles.hero}>
-            <Text style={globalStyles.eyebrow}>Nutrition History</Text>
-            <Text style={globalStyles.header}>Daily nutrition</Text>
+            <Text style={styles.eyebrow}>Nutrition History</Text>
+            <Text style={styles.header}>Daily nutrition</Text>
             <Text style={styles.heroText}>{dayLabel}</Text>
           </View>
 
           {loading ? (
-            <View style={[globalStyles.panelSoft, styles.centerState]}>
+            <View style={[styles.panelSoft, styles.centerState]}>
               <ActivityIndicator size="small" color={colors.highlight1} />
               <Text style={styles.stateText}>Loading summary...</Text>
             </View>
           ) : errorMsg ? (
-            <View style={[globalStyles.panelSoft, styles.centerState]}>
+            <View style={[styles.panelSoft, styles.centerState]}>
               <Text style={styles.errorText}>{errorMsg}</Text>
             </View>
           ) : (
@@ -309,7 +304,7 @@ export default function DailyNutritionSummary() {
 
               <View style={styles.sectionHeader}>
                 <View>
-                  <Text style={globalStyles.eyebrow}>Logged Items</Text>
+                  <Text style={styles.eyebrow}>Logged Items</Text>
                   <Text style={styles.sectionTitle}>What you consumed</Text>
                 </View>
                 <View style={styles.sectionBadge}>
@@ -320,7 +315,7 @@ export default function DailyNutritionSummary() {
               </View>
 
               {items.length === 0 ? (
-                <View style={[globalStyles.panelSoft, styles.centerState]}>
+                <View style={[styles.panelSoft, styles.centerState]}>
                   <Text style={styles.stateText}>No items logged for this day yet.</Text>
                 </View>
               ) : (
@@ -354,7 +349,7 @@ export default function DailyNutritionSummary() {
           )}
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -400,6 +395,32 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
     main: {
       flex: 1,
       paddingTop: 8,
@@ -408,13 +429,13 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -434,7 +455,7 @@ function createStyles(
       gap: 6,
     },
     stateText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -455,8 +476,8 @@ function createStyles(
       flex: 1,
       borderRadius: 20,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 14,
       gap: 8,
     },
@@ -466,7 +487,7 @@ function createStyles(
       borderRadius: 5,
     },
     metricLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -474,7 +495,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     metricValue: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 14,
       lineHeight: 18,
@@ -488,7 +509,7 @@ function createStyles(
     },
     sectionTitle: {
       marginTop: 8,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 20,
       lineHeight: 24,
@@ -497,13 +518,13 @@ function createStyles(
     sectionBadge: {
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 10,
       paddingVertical: 7,
     },
     sectionBadgeText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 11,
       lineHeight: 13,
@@ -513,8 +534,8 @@ function createStyles(
     itemCard: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 15,
       gap: 12,
     },
@@ -528,14 +549,14 @@ function createStyles(
       flex: 1,
     },
     itemTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 20,
     },
     itemSubtitle: {
       marginTop: 5,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 17,
@@ -560,13 +581,13 @@ function createStyles(
       flex: 1,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card3,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 10,
       paddingVertical: 9,
     },
     miniMacroLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -575,7 +596,7 @@ function createStyles(
     },
     miniMacroValue: {
       marginTop: 5,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 12,
       lineHeight: 15,

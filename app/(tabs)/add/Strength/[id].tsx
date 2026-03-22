@@ -14,7 +14,6 @@ import { useLocalSearchParams, router } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
-import { LinearGradient } from 'expo-linear-gradient';
 import { shareStrengthWorkoutToFeed } from '@/lib/social/feed';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
 import {
@@ -557,17 +556,12 @@ export default function StrengthSummaryPage() {
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-        start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        style={globalStyles.page}
-      >
+      <View style={globalStyles.page}>
         <View style={styles.loading}>
           <ActivityIndicator size="small" color={colors.highlight1} />
           <Text style={styles.loadingText}>Loading workout summary…</Text>
         </View>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -635,12 +629,7 @@ export default function StrengthSummaryPage() {
   };
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.9, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={globalStyles.page}>
       <View style={[globalStyles.container, styles.container]}>
         <LogoHeader />
 
@@ -930,7 +919,7 @@ export default function StrengthSummaryPage() {
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 

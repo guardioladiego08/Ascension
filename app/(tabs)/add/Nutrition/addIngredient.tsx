@@ -14,12 +14,12 @@ import { Picker } from '@react-native-picker/picker';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { PieChart } from 'react-native-gifted-charts';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import AppPopup from '@/components/ui/AppPopup';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { HOME_TONES } from '../../home/tokens';
 
 type JsonValue = any;
 
@@ -261,19 +261,14 @@ export default function AddIngredient() {
   );
 
   return (
-    <LinearGradient
-      colors={[colors.gradientTop, colors.gradientMid, colors.gradientBottom]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.8, y: 1 }}
-      style={globalStyles.page}
-    >
+    <View style={styles.page}>
       <View style={globalStyles.safeArea}>
         <LogoHeader showBackButton />
 
         <View style={styles.main}>
           <View style={styles.hero}>
-            <Text style={globalStyles.eyebrow}>Ingredient Search</Text>
-            <Text style={globalStyles.header}>Add ingredient</Text>
+            <Text style={styles.eyebrow}>Ingredient Search</Text>
+            <Text style={styles.header}>Add ingredient</Text>
             <Text style={styles.heroText}>
               Search the food database, preview portion-based macros, and push the
               selected ingredient back into the meal builder.
@@ -286,18 +281,18 @@ export default function AddIngredient() {
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search foods"
-                placeholderTextColor={colors.textOffSt}
+                placeholderTextColor={HOME_TONES.textTertiary}
                 value={query}
                 onChangeText={setQuery}
                 returnKeyType="search"
                 onSubmitEditing={handleSearch}
               />
               <TouchableOpacity
-                style={[globalStyles.buttonPrimary, styles.searchButton]}
+                style={[styles.buttonPrimary, styles.searchButton]}
                 onPress={handleSearch}
                 activeOpacity={0.9}
               >
-                <Text style={globalStyles.buttonTextPrimary}>Search</Text>
+                <Text style={styles.buttonTextPrimary}>Search</Text>
               </TouchableOpacity>
             </View>
             {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
@@ -305,14 +300,14 @@ export default function AddIngredient() {
 
           <View style={styles.listContainer}>
             {loading ? (
-              <View style={[globalStyles.panelSoft, styles.center]}>
+              <View style={[styles.panelSoft, styles.center]}>
                 <ActivityIndicator size="small" color={colors.highlight1} />
                 <Text style={styles.loadingText}>Searching foods...</Text>
               </View>
             ) : null}
 
             {!loading && hasSearched && results.length === 0 && !errorText ? (
-              <View style={[globalStyles.panelSoft, styles.center]}>
+              <View style={[styles.panelSoft, styles.center]}>
                 <Text style={styles.emptyText}>No foods found.</Text>
               </View>
             ) : null}
@@ -344,7 +339,7 @@ export default function AddIngredient() {
           />
         </View>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -461,7 +456,7 @@ const IngredientPortionPopup: React.FC<IngredientPortionPopupProps> = ({
   getUnitOptions,
   styles,
 }) => {
-  const { colors, globalStyles } = useAppTheme();
+  const { colors } = useAppTheme();
 
   return (
     <AppPopup
@@ -477,18 +472,18 @@ const IngredientPortionPopup: React.FC<IngredientPortionPopupProps> = ({
       footer={
         <View style={styles.modalButtonsRow}>
           <TouchableOpacity
-            style={[globalStyles.buttonSecondary, styles.modalButton]}
+            style={[styles.buttonSecondary, styles.modalButton]}
             onPress={onClose}
             activeOpacity={0.9}
           >
-            <Text style={globalStyles.buttonTextSecondary}>Cancel</Text>
+            <Text style={styles.buttonTextSecondary}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[globalStyles.buttonPrimary, styles.modalButton]}
+            style={[styles.buttonPrimary, styles.modalButton]}
             onPress={onConfirm}
             activeOpacity={0.9}
           >
-            <Text style={globalStyles.buttonTextPrimary}>Add</Text>
+            <Text style={styles.buttonTextPrimary}>Add</Text>
           </TouchableOpacity>
         </View>
       }
@@ -515,7 +510,7 @@ const IngredientPortionPopup: React.FC<IngredientPortionPopupProps> = ({
             value={amount}
             onChangeText={setAmount}
             placeholder="1"
-            placeholderTextColor={colors.textOffSt}
+            placeholderTextColor={HOME_TONES.textTertiary}
           />
         </View>
       </View>
@@ -574,6 +569,66 @@ function createStyles(
   fonts: ReturnType<typeof useAppTheme>['fonts']
 ) {
   return StyleSheet.create({
+    page: {
+      flex: 1,
+      backgroundColor: HOME_TONES.background,
+    },
+    panelSoft: {
+      backgroundColor: HOME_TONES.surface2,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      padding: 18,
+    },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
+    header: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.display,
+      fontSize: 32,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+    },
+    buttonPrimary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.highlight1,
+      borderWidth: 1,
+      borderColor: colors.highlight1,
+      flexDirection: 'row',
+    },
+    buttonSecondary: {
+      height: 48,
+      borderRadius: 16,
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: HOME_TONES.surface2,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      flexDirection: 'row',
+    },
+    buttonTextPrimary: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
+    buttonTextSecondary: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     main: {
       flex: 1,
       paddingTop: 8,
@@ -582,13 +637,13 @@ function createStyles(
     hero: {
       borderRadius: 28,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      padding: 20,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface1,
+      padding: 22,
       gap: 8,
     },
     heroText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
@@ -596,8 +651,8 @@ function createStyles(
     searchCard: {
       borderRadius: 24,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 12,
       gap: 8,
     },
@@ -608,7 +663,7 @@ function createStyles(
     },
     searchInput: {
       flex: 1,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.body,
       fontSize: 15,
     },
@@ -636,13 +691,13 @@ function createStyles(
       gap: 6,
     },
     loadingText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
     },
     emptyText: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 13,
       lineHeight: 18,
@@ -650,8 +705,8 @@ function createStyles(
     foodRow: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingHorizontal: 15,
       paddingVertical: 14,
       flexDirection: 'row',
@@ -662,21 +717,21 @@ function createStyles(
       flex: 1,
     },
     foodTitle: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 15,
       lineHeight: 20,
     },
     foodSubtitle: {
       marginTop: 5,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 17,
     },
     foodServing: {
       marginTop: 4,
-      color: colors.textOffSt,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 15,
@@ -697,8 +752,8 @@ function createStyles(
       flex: 1,
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       paddingTop: 10,
       overflow: 'hidden',
     },
@@ -706,13 +761,13 @@ function createStyles(
       width: 110,
       borderRadius: 18,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 12,
       gap: 8,
     },
     amountLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textTertiary,
       fontFamily: fonts.label,
       fontSize: 10,
       lineHeight: 12,
@@ -723,11 +778,11 @@ function createStyles(
     amountInput: {
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface3,
       paddingHorizontal: 12,
       paddingVertical: 12,
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
       fontSize: 16,
       textAlign: 'center',
@@ -735,8 +790,8 @@ function createStyles(
     previewRow: {
       borderRadius: 22,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
       padding: 16,
     },
     macroDonutContainer: {
@@ -747,14 +802,14 @@ function createStyles(
       alignItems: 'center',
     },
     macroCenterKcal: {
-      color: colors.text,
+      color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
       fontSize: 22,
       lineHeight: 24,
       letterSpacing: -0.6,
     },
     macroCenterKcalLabel: {
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 14,
@@ -775,7 +830,7 @@ function createStyles(
     },
     macroLegendText: {
       flex: 1,
-      color: colors.textMuted,
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
