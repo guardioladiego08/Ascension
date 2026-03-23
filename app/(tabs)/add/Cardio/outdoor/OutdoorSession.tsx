@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -20,7 +21,7 @@ import OutdoorMetrics from './components/OutdoorMetrics';
 import OutdoorMapSlide from './components/OutdoorMapSlide';
 import ConfirmCancelModal from './components/ConfrmCancelModal';
 
-import { haversineMeters, paceSecPerKm } from '@/lib/OutdoorSession/outdoorUtils';
+import { paceSecPerKm } from '@/lib/OutdoorSession/outdoorUtils';
 import {
   clearActiveRunWalkLock,
   getActiveRunWalkLock,
@@ -32,6 +33,20 @@ import {
   type OutdoorDraftSample,
   type OutdoorSessionDraft,
 } from '@/lib/OutdoorSession/draftStore';
+import {
+  prepareOutdoorBackgroundTracking,
+  reloadOutdoorSessionFromStorage,
+  startOutdoorBackgroundTracking,
+  stopOutdoorBackgroundTracking,
+} from '@/lib/OutdoorSession/backgroundTracking';
+import { appendOutdoorLocations } from '@/lib/OutdoorSession/locationTracking';
+import {
+  createPausedRunWalkClock,
+  getRunWalkElapsedMs,
+  normalizeRunWalkClock,
+  pauseRunWalkClock,
+  resumeRunWalkClock,
+} from '@/lib/runWalkSessionClock';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 type Phase = 'idle' | 'running' | 'paused';
@@ -75,7 +90,8 @@ export default function OutdoorSession() {
     () => normalizeActivityType(params.activityType),
     [params.activityType]
   );
-  const lockMode: RunWalkMode = activityType === 'walk' ? 'outdoor_walk' : 'outdoor_run';
+  const lockMode: Extract<RunWalkMode, 'outdoor_run' | 'outdoor_walk'> =
+    activityType === 'walk' ? 'outdoor_walk' : 'outdoor_run';
 
   const title = useMemo(
     () => outdoorTitle(params.activityType, params.title),
@@ -93,15 +109,15 @@ export default function OutdoorSession() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
-  const lastPointRef = useRef<{ lat: number; lng: number } | null>(null);
   const phaseRef = useRef<Phase>('idle');
   const sessionStartedAtRef = useRef<string | null>(null);
   const elapsedSecondsRef = useRef(0);
+  const elapsedMsRef = useRef(0);
   const distanceMetersRef = useRef(0);
-  const acceptedPointCountRef = useRef(0);
   const samplesRef = useRef<OutdoorDraftSample[]>([]);
   const sessionInitializedRef = useRef(false);
   const hydrationAppliedRef = useRef(false);
+  const clockRef = useRef(createPausedRunWalkClock(0));
 
   const hasProgress = elapsedSeconds > 0 || distanceMeters > 0;
 
@@ -122,6 +138,85 @@ export default function OutdoorSession() {
     elapsedSecondsRef.current = elapsedSeconds;
   }, [elapsedSeconds]);
 
+  function applyStoredSessionState(existingSession: NonNullable<typeof activeSession> & { kind: 'outdoor' }) {
+    const normalizedClock = normalizeRunWalkClock({
+      clock: existingSession.clock,
+      elapsedSeconds: existingSession.elapsedSeconds,
+      phase: existingSession.phase,
+    });
+
+    setPhase(existingSession.phase);
+    phaseRef.current = existingSession.phase;
+    setElapsedSeconds(existingSession.elapsedSeconds);
+    setDistanceMeters(existingSession.distanceMeters);
+    setCoords(existingSession.coords);
+
+    elapsedSecondsRef.current = existingSession.elapsedSeconds;
+    elapsedMsRef.current = Math.max(0, existingSession.elapsedSeconds * 1000);
+    distanceMetersRef.current = existingSession.distanceMeters;
+    sessionStartedAtRef.current = existingSession.startedAtISO;
+    coordsRef.current = existingSession.coords;
+    samplesRef.current = existingSession.samples;
+    clockRef.current = normalizedClock;
+    sessionInitializedRef.current = true;
+  }
+
+  function syncElapsedFromClock(
+    nowMs = Date.now(),
+    phaseOverride: Extract<Phase, 'running' | 'paused'> = phaseRef.current === 'running'
+      ? 'running'
+      : 'paused'
+  ) {
+    const normalizedClock = normalizeRunWalkClock({
+      clock: clockRef.current,
+      elapsedSeconds: elapsedSecondsRef.current,
+      phase: phaseOverride,
+      nowMs,
+    });
+    clockRef.current = normalizedClock;
+
+    const nextElapsedMs = getRunWalkElapsedMs(normalizedClock, nowMs);
+    const nextElapsedSeconds = Math.floor(nextElapsedMs / 1000);
+
+    elapsedMsRef.current = nextElapsedMs;
+    if (nextElapsedSeconds !== elapsedSecondsRef.current) {
+      elapsedSecondsRef.current = nextElapsedSeconds;
+      setElapsedSeconds(nextElapsedSeconds);
+    }
+  }
+
+  async function moveTrackingToBackground() {
+    if (phaseRef.current !== 'running') return;
+    syncElapsedFromClock(Date.now(), 'running');
+    stopTimer();
+    stopLocation();
+    await startOutdoorBackgroundTracking();
+  }
+
+  async function restoreForegroundTracking() {
+    await stopOutdoorBackgroundTracking();
+
+    const storedSession = await reloadOutdoorSessionFromStorage(lockMode).catch(() => null);
+    if (storedSession) {
+      applyStoredSessionState(storedSession);
+    }
+
+    if (phaseRef.current !== 'running') {
+      syncElapsedFromClock(Date.now(), 'paused');
+      return;
+    }
+
+    syncElapsedFromClock(Date.now(), 'running');
+    startTimer();
+    const locationStarted = await startLocation();
+    if (!locationStarted) {
+      clockRef.current = pauseRunWalkClock(clockRef.current);
+      phaseRef.current = 'paused';
+      setPhase('paused');
+      stopTimer();
+    }
+  }
+
   useEffect(() => {
     if (!activeSessionHydrated || hydrationAppliedRef.current) return;
 
@@ -133,32 +228,14 @@ export default function OutdoorSession() {
     hydrationAppliedRef.current = true;
     if (!existingSession) return;
 
-    setPhase(existingSession.phase);
-    phaseRef.current = existingSession.phase;
-    setElapsedSeconds(existingSession.elapsedSeconds);
-    setDistanceMeters(existingSession.distanceMeters);
-    setCoords(existingSession.coords);
-
-    elapsedSecondsRef.current = existingSession.elapsedSeconds;
-    distanceMetersRef.current = existingSession.distanceMeters;
-    sessionStartedAtRef.current = existingSession.startedAtISO;
-    coordsRef.current = existingSession.coords;
-    samplesRef.current = existingSession.samples;
-    acceptedPointCountRef.current =
-      existingSession.samples[existingSession.samples.length - 1]?.seq ?? 0;
-
-    const lastCoord = existingSession.coords[existingSession.coords.length - 1];
-    lastPointRef.current = lastCoord
-      ? { lat: lastCoord.latitude, lng: lastCoord.longitude }
-      : null;
-
-    sessionInitializedRef.current = true;
+    applyStoredSessionState(existingSession);
 
     if (existingSession.phase === 'running') {
-      startTimer();
-      startLocation().catch((error) => {
+      restoreForegroundTracking().catch((error) => {
         console.log('[OutdoorSession] restore location error', error);
       });
+    } else {
+      syncElapsedFromClock(Date.now(), 'paused');
     }
   }, [activeSession, activeSessionHydrated, lockMode]);
 
@@ -168,6 +245,23 @@ export default function OutdoorSession() {
       stopLocation();
     };
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void restoreForegroundTracking();
+        return;
+      }
+
+      if (nextState === 'inactive' || nextState === 'background') {
+        void moveTrackingToBackground();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [lockMode]);
 
   useEffect(() => {
     if (!activeSessionHydrated || !hydrationAppliedRef.current) return;
@@ -230,6 +324,7 @@ export default function OutdoorSession() {
       mode: lockMode,
       title,
       phase,
+      clock: clockRef.current,
       distanceUnit,
       startedAtISO: sessionStartedAtRef.current,
       elapsedSeconds,
@@ -252,12 +347,9 @@ export default function OutdoorSession() {
 
   function startTimer() {
     stopTimer();
+    syncElapsedFromClock(Date.now(), 'running');
     timerRef.current = setInterval(() => {
-      setElapsedSeconds((s) => {
-        const next = s + 1;
-        elapsedSecondsRef.current = next;
-        return next;
-      });
+      syncElapsedFromClock(Date.now(), 'running');
     }, 1000);
   }
 
@@ -289,41 +381,28 @@ export default function OutdoorSession() {
       (loc) => {
         if (phaseRef.current !== 'running') return;
 
-        const { latitude, longitude, accuracy, altitude, speed, heading } = loc.coords;
-        if (accuracy && accuracy > 35) return;
+        const nextSession = appendOutdoorLocations(
+          {
+            phase: 'running',
+            clock: clockRef.current,
+            elapsedSeconds: elapsedSecondsRef.current,
+            distanceMeters: distanceMetersRef.current,
+            coords: coordsRef.current,
+            samples: samplesRef.current,
+          },
+          [loc]
+        );
 
-        const point = { lat: latitude, lng: longitude };
-        let nextDistanceMeters = distanceMetersRef.current;
-        if (lastPointRef.current) {
-          const delta = haversineMeters(lastPointRef.current, point);
-          if (delta < 80) {
-            setDistanceMeters((d) => {
-              nextDistanceMeters = d + delta;
-              distanceMetersRef.current = nextDistanceMeters;
-              return nextDistanceMeters;
-            });
-          }
-        }
-        lastPointRef.current = point;
+        clockRef.current = nextSession.clock;
+        elapsedSecondsRef.current = nextSession.elapsedSeconds;
+        elapsedMsRef.current = getRunWalkElapsedMs(nextSession.clock);
+        distanceMetersRef.current = nextSession.distanceMeters;
+        coordsRef.current = nextSession.coords;
+        samplesRef.current = nextSession.samples;
 
-        const mapPoint: LatLng = { latitude, longitude };
-        coordsRef.current = [...coordsRef.current, mapPoint];
-        setCoords(coordsRef.current);
-
-        acceptedPointCountRef.current += 1;
-        samplesRef.current.push({
-          seq: acceptedPointCountRef.current,
-          ts: new Date(loc.timestamp).toISOString(),
-          elapsed_s: elapsedSecondsRef.current,
-          lat: latitude,
-          lon: longitude,
-          altitude_m: Number.isFinite(altitude) ? altitude : null,
-          accuracy_m: Number.isFinite(accuracy) ? accuracy : null,
-          speed_mps: Number.isFinite(speed) ? speed : null,
-          bearing_deg: Number.isFinite(heading) ? heading : null,
-          distance_m: Number(nextDistanceMeters.toFixed(2)),
-          is_moving: typeof speed === 'number' ? speed > 0.5 : true,
-        });
+        setElapsedSeconds(nextSession.elapsedSeconds);
+        setDistanceMeters(nextSession.distanceMeters);
+        setCoords(nextSession.coords as LatLng[]);
       }
     );
 
@@ -342,13 +421,13 @@ export default function OutdoorSession() {
   function resetSession() {
     setElapsedSeconds(0);
     elapsedSecondsRef.current = 0;
+    elapsedMsRef.current = 0;
     setDistanceMeters(0);
     distanceMetersRef.current = 0;
     phaseRef.current = 'idle';
-    lastPointRef.current = null;
     sessionStartedAtRef.current = null;
-    acceptedPointCountRef.current = 0;
     samplesRef.current = [];
+    clockRef.current = createPausedRunWalkClock(0);
 
     coordsRef.current = [];
     setCoords([]);
@@ -358,39 +437,66 @@ export default function OutdoorSession() {
     resetSession();
     const startedAtISO = new Date().toISOString();
     sessionStartedAtRef.current = startedAtISO;
+    phaseRef.current = 'running';
+    setPhase('running');
+    clockRef.current = resumeRunWalkClock(createPausedRunWalkClock(0));
+    sessionInitializedRef.current = true;
+    await stopOutdoorBackgroundTracking();
+    startTimer();
     const locationStarted = await startLocation();
     if (!locationStarted) {
+      stopTimer();
+      phaseRef.current = 'idle';
+      setPhase('idle');
+      clockRef.current = createPausedRunWalkClock(0);
       sessionStartedAtRef.current = null;
       return;
     }
-    phaseRef.current = 'running';
-    setPhase('running');
-    sessionInitializedRef.current = true;
-    startTimer();
+    const backgroundReady = await prepareOutdoorBackgroundTracking();
+    if (!backgroundReady) {
+      console.log('[OutdoorSession] background location permission not granted yet');
+    }
   }
 
   function onPause() {
+    syncElapsedFromClock(Date.now(), 'running');
+    clockRef.current = pauseRunWalkClock(clockRef.current);
     phaseRef.current = 'paused';
     setPhase('paused');
     stopTimer();
     stopLocation();
+    void stopOutdoorBackgroundTracking();
   }
 
   async function onResume() {
+    clockRef.current = resumeRunWalkClock(clockRef.current);
     phaseRef.current = 'running';
     setPhase('running');
+    await stopOutdoorBackgroundTracking();
     startTimer();
-    await startLocation();
+    const locationStarted = await startLocation();
+    if (!locationStarted) {
+      clockRef.current = pauseRunWalkClock(clockRef.current);
+      phaseRef.current = 'paused';
+      setPhase('paused');
+      stopTimer();
+      return;
+    }
   }
 
   async function onEndWorkout() {
+    syncElapsedFromClock(
+      Date.now(),
+      phaseRef.current === 'running' ? 'running' : 'paused'
+    );
     stopTimer();
     stopLocation();
+    await stopOutdoorBackgroundTracking();
 
     const endedAtISO = new Date().toISOString();
     const startedAtISO =
       sessionStartedAtRef.current ??
-      new Date(Date.now() - Math.max(0, elapsedSeconds) * 1000).toISOString();
+      new Date(Date.now() - Math.max(0, elapsedSecondsRef.current) * 1000).toISOString();
 
     const draftId = makeId();
     const draft: OutdoorSessionDraft = {
@@ -399,10 +505,13 @@ export default function OutdoorSession() {
       started_at: startedAtISO,
       ended_at: endedAtISO,
       activity_type: activityType === 'walk' ? 'walk' : 'run',
-      total_time_s: elapsedSeconds,
-      total_distance_m: Number(distanceMeters.toFixed(2)),
-      avg_speed_mps: elapsedSeconds > 0 ? Number((distanceMeters / elapsedSeconds).toFixed(6)) : null,
-      avg_pace_s_per_km: paceSecPerKm(distanceMeters, elapsedSeconds),
+      total_time_s: elapsedSecondsRef.current,
+      total_distance_m: Number(distanceMetersRef.current.toFixed(2)),
+      avg_speed_mps:
+        elapsedSecondsRef.current > 0
+          ? Number((distanceMetersRef.current / elapsedSecondsRef.current).toFixed(6))
+          : null,
+      avg_pace_s_per_km: paceSecPerKm(distanceMetersRef.current, elapsedSecondsRef.current),
       samples: samplesRef.current,
     };
 
@@ -426,6 +535,7 @@ export default function OutdoorSession() {
     } catch (e) {
       console.log('[OutdoorSession] finish error', e);
       Alert.alert('Error', 'Could not open summary. Please try again.');
+      clockRef.current = pauseRunWalkClock(clockRef.current);
       phaseRef.current = 'paused';
       setPhase('paused');
     }
@@ -434,6 +544,7 @@ export default function OutdoorSession() {
   async function confirmCancel() {
     stopTimer();
     stopLocation();
+    await stopOutdoorBackgroundTracking();
     clearActiveSession();
     sessionInitializedRef.current = false;
     setPhase('idle');

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -18,6 +19,13 @@ import { useUnits } from '@/contexts/UnitsContext';
 import type { ExerciseDraft, UnitMass } from '@/lib/strength/types';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import {
+  createPausedRunWalkClock,
+  getRunWalkElapsedMs,
+  normalizeRunWalkClock,
+  pauseRunWalkClock,
+  resumeRunWalkClock,
+} from '@/lib/runWalkSessionClock';
 import { HOME_TONES } from '../../home/tokens';
 
 import SessionHeader from './components/SessionHeader';
@@ -113,13 +121,74 @@ export default function StrengthTrain() {
   const [exerciseRequiredOpen, setExerciseRequiredOpen] = useState(false);
   const hydrationAppliedRef = useRef(false);
   const sessionPersistEnabledRef = useRef(true);
+  const secondsRef = useRef(0);
+  const pausedRef = useRef(false);
+  const clockRef = useRef(resumeRunWalkClock(createPausedRunWalkClock(0)));
 
   useEffect(() => {
+    secondsRef.current = seconds;
+  }, [seconds]);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
+
+  function syncSecondsFromClock(
+    nowMs = Date.now(),
+    phaseOverride: 'running' | 'paused' = pausedRef.current ? 'paused' : 'running'
+  ) {
+    const normalizedClock = normalizeRunWalkClock({
+      clock: clockRef.current,
+      elapsedSeconds: secondsRef.current,
+      phase: phaseOverride,
+      nowMs,
+    });
+    clockRef.current = normalizedClock;
+
+    const nextSeconds = Math.floor(getRunWalkElapsedMs(normalizedClock, nowMs) / 1000);
+    if (nextSeconds !== secondsRef.current) {
+      secondsRef.current = nextSeconds;
+      setSeconds(nextSeconds);
+    }
+  }
+
+  function pauseStrengthSession() {
+    const nowMs = Date.now();
+    syncSecondsFromClock(nowMs, 'running');
+    clockRef.current = pauseRunWalkClock(clockRef.current, nowMs);
+    setPaused(true);
+  }
+
+  function resumeStrengthSession() {
+    const nowMs = Date.now();
+    clockRef.current = resumeRunWalkClock(clockRef.current, nowMs);
+    setPaused(false);
+  }
+
+  useEffect(() => {
+    if (paused) {
+      syncSecondsFromClock(Date.now(), 'paused');
+      return;
+    }
+
+    syncSecondsFromClock(Date.now(), 'running');
     const id = setInterval(() => {
-      if (!paused) setSeconds((s) => s + 1);
+      syncSecondsFromClock(Date.now(), 'running');
     }, 1000);
+
     return () => clearInterval(id);
   }, [paused]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      syncSecondsFromClock(Date.now(), pausedRef.current ? 'paused' : 'running');
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeSessionHydrated || hydrationAppliedRef.current) return;
@@ -168,6 +237,16 @@ export default function StrengthTrain() {
             setExercises(activeSession.exercises);
             setPaused(activeSession.phase === 'paused');
             setSeconds(activeSession.seconds);
+            secondsRef.current = activeSession.seconds;
+            pausedRef.current = activeSession.phase === 'paused';
+            clockRef.current = normalizeRunWalkClock({
+              clock: activeSession.clock,
+              elapsedSeconds: activeSession.seconds,
+              phase: activeSession.phase,
+            });
+            if (activeSession.phase === 'running') {
+              syncSecondsFromClock(Date.now(), 'running');
+            }
             setLoading(false);
             return;
           }
@@ -188,6 +267,10 @@ export default function StrengthTrain() {
 
         setWorkoutId(data.id);
         setStartedAtISO(data.started_at ?? null);
+        setSeconds(0);
+        secondsRef.current = 0;
+        pausedRef.current = false;
+        clockRef.current = resumeRunWalkClock(createPausedRunWalkClock(0));
         setLoading(false);
       } catch (err: any) {
         console.error('[StrengthTrain] start workout failed', err);
@@ -214,6 +297,7 @@ export default function StrengthTrain() {
       workoutId,
       userId,
       startedAtISO,
+      clock: clockRef.current,
       seconds,
       exercises,
     });
@@ -279,7 +363,7 @@ export default function StrengthTrain() {
   }, [exercises]);
 
   const handleCancel = () => {
-    setPaused(true);
+    pauseStrengthSession();
     setCancelModalOpen(true);
   };
 
@@ -299,6 +383,7 @@ export default function StrengthTrain() {
 
     setLoading(true);
     try {
+      syncSecondsFromClock(Date.now(), paused ? 'paused' : 'running');
       const uid = await ensureAuthedUserId();
       if (uid !== userId) setUserId(uid);
 
@@ -465,7 +550,13 @@ export default function StrengthTrain() {
             title={TITLE}
             paused={paused}
             seconds={seconds}
-            onPauseToggle={() => setPaused((p) => !p)}
+            onPauseToggle={() => {
+              if (paused) {
+                resumeStrengthSession();
+                return;
+              }
+              pauseStrengthSession();
+            }}
             onCancel={handleCancel}
           />
 
@@ -534,7 +625,7 @@ export default function StrengthTrain() {
         <CancelConfirmModal
           visible={cancelModalOpen}
           onKeep={() => {
-            setPaused(false);
+            resumeStrengthSession();
             setCancelModalOpen(false);
           }}
           onDiscard={async () => {
@@ -556,6 +647,9 @@ export default function StrengthTrain() {
             setExercises([]);
             setStartedAtISO(null);
             setSeconds(0);
+            secondsRef.current = 0;
+            pausedRef.current = false;
+            clockRef.current = createPausedRunWalkClock(0);
             setPaused(false);
             setCancelModalOpen(false);
             router.back();

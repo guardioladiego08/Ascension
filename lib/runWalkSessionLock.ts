@@ -36,7 +36,7 @@ export async function getActiveRunWalkLock(): Promise<ActiveLock | null> {
       return null;
     }
 
-    if (activeSession.mode !== parsed.mode) {
+    if (activeSession.kind === 'strength' || activeSession.mode !== parsed.mode) {
       await AsyncStorage.removeItem(KEY);
       return null;
     }

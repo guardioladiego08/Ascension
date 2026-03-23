@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { DistanceUnit, RunWalkSample } from '@/lib/runWalkDraftStore';
 import type { OutdoorDraftSample } from '@/lib/OutdoorSession/draftStore';
+import type { PersistedRunWalkClock } from '@/lib/runWalkSessionClock';
 import type { ExerciseDraft } from '@/lib/strength/types';
 
 export type ActiveSessionPhase = 'running' | 'paused';
@@ -11,6 +12,7 @@ export type ActiveIndoorSession = {
   mode: 'indoor_run' | 'indoor_walk';
   title: string;
   phase: ActiveSessionPhase;
+  clock?: PersistedRunWalkClock;
   distanceUnit: DistanceUnit;
   elapsedS: number;
   distanceM: number;
@@ -30,6 +32,7 @@ export type ActiveOutdoorSession = {
   mode: 'outdoor_run' | 'outdoor_walk';
   title: string;
   phase: ActiveSessionPhase;
+  clock?: PersistedRunWalkClock;
   distanceUnit: DistanceUnit;
   startedAtISO: string | null;
   elapsedSeconds: number;
@@ -45,6 +48,7 @@ export type ActiveStrengthSession = {
   workoutId: string;
   userId: string | null;
   startedAtISO: string | null;
+  clock?: PersistedRunWalkClock;
   seconds: number;
   exercises: ExerciseDraft[];
 };

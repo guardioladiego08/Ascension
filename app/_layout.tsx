@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import MapboxGL from '@rnmapbox/maps';
 import 'react-native-get-random-values';
+import '@/lib/OutdoorSession/backgroundTracking';
 import { UnitsProvider } from '@/contexts/UnitsContext';
 import { SupabaseProvider } from '@/providers/SupabaseProvider';
 import { ActiveRunWalkProvider } from '@/providers/ActiveRunWalkProvider';

@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import {
   type ActiveRunWalkSession,
 } from '@/lib/activeRunWalkSessionStore';
 import { formatDistance, formatDuration } from '@/lib/OutdoorSession/outdoorUtils';
+import { getRunWalkElapsedSeconds } from '@/lib/runWalkSessionClock';
 
 type ActiveRunWalkContextType = {
   activeSession: ActiveRunWalkSession | null;
@@ -31,9 +32,46 @@ type ActiveRunWalkContextType = {
 
 const ActiveRunWalkContext = createContext<ActiveRunWalkContextType | undefined>(undefined);
 
+function refreshActiveSessionTiming(
+  session: ActiveRunWalkSession | null,
+  nowMs = Date.now()
+): ActiveRunWalkSession | null {
+  if (!session || session.phase !== 'running' || !session.clock) {
+    return session;
+  }
+
+  const nextElapsed = getRunWalkElapsedSeconds(session.clock, nowMs);
+
+  if (session.kind === 'outdoor') {
+    return nextElapsed === session.elapsedSeconds
+      ? session
+      : { ...session, elapsedSeconds: nextElapsed };
+  }
+
+  if (session.kind === 'indoor') {
+    return nextElapsed === session.elapsedS
+      ? session
+      : { ...session, elapsedS: nextElapsed };
+  }
+
+  return nextElapsed === session.seconds
+    ? session
+    : { ...session, seconds: nextElapsed };
+}
+
 export function ActiveRunWalkProvider({ children }: { children: React.ReactNode }) {
   const [activeSession, setActiveSessionState] = useState<ActiveRunWalkSession | null>(null);
   const [hydrated, setHydrated] = useState(false);
+
+  const loadStoredSession = useCallback(async () => {
+    const stored = await getActiveRunWalkSession();
+    const refreshed = refreshActiveSessionTiming(stored);
+    setActiveSessionState(refreshed);
+
+    if (refreshed !== stored) {
+      await setActiveRunWalkSession(refreshed);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -41,8 +79,12 @@ export function ActiveRunWalkProvider({ children }: { children: React.ReactNode 
     (async () => {
       try {
         const stored = await getActiveRunWalkSession();
+        const refreshed = refreshActiveSessionTiming(stored);
         if (!mounted) return;
-        setActiveSessionState(stored);
+        setActiveSessionState(refreshed);
+        if (refreshed !== stored) {
+          await setActiveRunWalkSession(refreshed);
+        }
       } finally {
         if (mounted) setHydrated(true);
       }
@@ -52,6 +94,18 @@ export function ActiveRunWalkProvider({ children }: { children: React.ReactNode 
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+
+      loadStoredSession().catch(() => null);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadStoredSession]);
 
   const setSession = useCallback((session: ActiveRunWalkSession | null) => {
     setActiveSessionState(session);

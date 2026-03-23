@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -33,6 +34,13 @@ import {
   clearActiveRunWalkLock,
   type RunWalkMode,
 } from '@/lib/runWalkSessionLock';
+import {
+  createPausedRunWalkClock,
+  getRunWalkElapsedMs,
+  normalizeRunWalkClock,
+  pauseRunWalkClock,
+  resumeRunWalkClock,
+} from '@/lib/runWalkSessionClock';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const M_PER_MI = 1609.344;
@@ -101,7 +109,7 @@ export default function IndoorSession() {
   const mode: Extract<Mode, 'indoor_run' | 'indoor_walk'> =
     params.mode === 'indoor_walk' ? 'indoor_walk' : 'indoor_run';
 
-  const lockMode: RunWalkMode = mode; // same values for indoor
+  const lockMode: Extract<RunWalkMode, 'indoor_run' | 'indoor_walk'> = mode;
 
   const title = mode === 'indoor_walk' ? 'INDOOR WALK' : 'INDOOR RUN';
   const heroSubtitle = compact
@@ -137,10 +145,12 @@ export default function IndoorSession() {
 
   // refs for interval accuracy (avoid stale closures)
   const elapsedRef = useRef(0);
+  const elapsedMsRef = useRef(0);
   const distanceRef = useRef(0);
   const elevRef = useRef(0);
   const speedRef = useRef(0);
   const inclineRef = useRef(0);
+  const clockRef = useRef(resumeRunWalkClock(createPausedRunWalkClock(0)));
 
   useEffect(() => { elapsedRef.current = elapsedS; }, [elapsedS]);
   useEffect(() => { distanceRef.current = distanceM; }, [distanceM]);
@@ -149,6 +159,83 @@ export default function IndoorSession() {
   useEffect(() => { inclineRef.current = inclineDeg; }, [inclineDeg]);
 
   const hasProgress = elapsedRef.current > 0 || distanceRef.current > 0;
+
+  function syncSessionFromClock(
+    nowMs = Date.now(),
+    phaseOverride: 'running' | 'paused' = isRunning ? 'running' : 'paused'
+  ) {
+    const normalizedClock = normalizeRunWalkClock({
+      clock: clockRef.current,
+      elapsedSeconds: elapsedRef.current,
+      phase: phaseOverride,
+      nowMs,
+    });
+    clockRef.current = normalizedClock;
+
+    const previousElapsedMs = elapsedMsRef.current;
+    const previousDistanceM = distanceRef.current;
+    const previousElevM = elevRef.current;
+    const nextElapsedMs = getRunWalkElapsedMs(normalizedClock, nowMs);
+    const deltaMs = phaseOverride === 'running' ? Math.max(0, nextElapsedMs - previousElapsedMs) : 0;
+    const speedMps = speedToMps(speedRef.current, distanceUnit);
+    const deltaDistanceM = speedMps * (deltaMs / 1000);
+    const deltaElevM = deltaDistanceM * Math.sin(deg2rad(inclineRef.current));
+    const nextDistanceM = previousDistanceM + deltaDistanceM;
+    const nextElevM = previousElevM + deltaElevM;
+    const nextElapsedS = Math.floor(nextElapsedMs / 1000);
+
+    if (deltaMs > 0) {
+      const firstBoundary = Math.floor(previousElapsedMs / 10_000) + 1;
+      const lastBoundary = Math.floor(nextElapsedMs / 10_000);
+
+      for (let boundary = firstBoundary; boundary <= lastBoundary; boundary += 1) {
+        const boundaryElapsedMs = boundary * 10_000;
+        const progress = (boundaryElapsedMs - previousElapsedMs) / deltaMs;
+        const sampleDistanceM = previousDistanceM + deltaDistanceM * progress;
+        const sampleElevM = previousElevM + deltaElevM * progress;
+        const paceMi = paceFromMps(speedMps, 'mi');
+        const paceKm = paceFromMps(speedMps, 'km');
+
+        seqRef.current += 1;
+        samplesRef.current.push({
+          seq: seqRef.current,
+          elapsed_s: Math.floor(boundaryElapsedMs / 1000),
+          distance_m: Number(sampleDistanceM.toFixed(2)),
+          speed_mps: Number(speedMps.toFixed(6)),
+          pace_s_per_km: Number.isFinite(paceKm) ? Number(paceKm.toFixed(2)) : null,
+          pace_s_per_mi: Number.isFinite(paceMi) ? Number(paceMi.toFixed(2)) : null,
+          incline_deg: Number(inclineRef.current.toFixed(2)),
+          elevation_m: Number(sampleElevM.toFixed(2)),
+        });
+      }
+
+      distanceRef.current = nextDistanceM;
+      elevRef.current = nextElevM;
+      setDistanceM(nextDistanceM);
+      setElevM(nextElevM);
+    }
+
+    elapsedMsRef.current = nextElapsedMs;
+    if (nextElapsedS !== elapsedRef.current) {
+      elapsedRef.current = nextElapsedS;
+      setElapsedS(nextElapsedS);
+    }
+  }
+
+  function pauseSession() {
+    const nowMs = Date.now();
+    syncSessionFromClock(nowMs, 'running');
+    clockRef.current = pauseRunWalkClock(clockRef.current, nowMs);
+    elapsedMsRef.current = getRunWalkElapsedMs(clockRef.current, nowMs);
+    setIsRunning(false);
+  }
+
+  function resumeSession() {
+    const nowMs = Date.now();
+    clockRef.current = resumeRunWalkClock(clockRef.current, nowMs);
+    elapsedMsRef.current = getRunWalkElapsedMs(clockRef.current, nowMs);
+    setIsRunning(true);
+  }
 
   useEffect(() => {
     if (!activeSessionHydrated || hydrationAppliedRef.current) return;
@@ -160,6 +247,12 @@ export default function IndoorSession() {
 
     if (existingSession) {
       const nextRunning = existingSession.phase === 'running';
+      const normalizedClock = normalizeRunWalkClock({
+        clock: existingSession.clock,
+        elapsedSeconds: existingSession.elapsedS,
+        phase: existingSession.phase,
+      });
+
       setIsRunning(nextRunning);
       setElapsedS(existingSession.elapsedS);
       setDistanceM(existingSession.distanceM);
@@ -168,14 +261,20 @@ export default function IndoorSession() {
       setInclineDeg(existingSession.inclineDeg);
 
       elapsedRef.current = existingSession.elapsedS;
+      elapsedMsRef.current = Math.max(0, existingSession.elapsedS * 1000);
       distanceRef.current = existingSession.distanceM;
       elevRef.current = existingSession.elevM;
       speedRef.current = existingSession.speed;
       inclineRef.current = existingSession.inclineDeg;
+      clockRef.current = normalizedClock;
 
       samplesRef.current = existingSession.samples;
       seqRef.current = existingSession.samples[existingSession.samples.length - 1]?.seq ?? 0;
       sessionInitializedRef.current = true;
+
+      if (nextRunning) {
+        syncSessionFromClock(Date.now(), 'running');
+      }
     }
 
     hydrationAppliedRef.current = true;
@@ -194,10 +293,14 @@ export default function IndoorSession() {
 
     // refs
     elapsedRef.current = 0;
+    elapsedMsRef.current = 0;
     distanceRef.current = 0;
     elevRef.current = 0;
     inclineRef.current = 0;
     speedRef.current = defaultSpeed;
+    clockRef.current = nextRunning
+      ? resumeRunWalkClock(createPausedRunWalkClock(0))
+      : createPausedRunWalkClock(0);
 
     // samples
     seqRef.current = 0;
@@ -280,6 +383,7 @@ export default function IndoorSession() {
       mode,
       title,
       phase: isRunning ? 'running' : 'paused',
+      clock: clockRef.current,
       distanceUnit,
       elapsedS,
       distanceM,
@@ -302,49 +406,32 @@ export default function IndoorSession() {
     title,
   ]);
 
-  // 1-second tick
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning) {
+      syncSessionFromClock(Date.now(), 'paused');
+      return;
+    }
 
+    syncSessionFromClock(Date.now(), 'running');
     const timer = setInterval(() => {
-      const nextElapsed = elapsedRef.current + 1;
-      elapsedRef.current = nextElapsed;
-      setElapsedS(nextElapsed);
-
-      const speedMps = speedToMps(speedRef.current, distanceUnit);
-      const deltaDist = speedMps * 1;
-      const deltaElev = deltaDist * Math.sin(deg2rad(inclineRef.current));
-
-      const nextDist = distanceRef.current + deltaDist;
-      const nextElev = elevRef.current + deltaElev;
-
-      distanceRef.current = nextDist;
-      elevRef.current = nextElev;
-
-      setDistanceM(nextDist);
-      setElevM(nextElev);
-
-      if (nextElapsed > 0 && nextElapsed % 10 === 0) {
-        seqRef.current += 1;
-
-        const paceMi = paceFromMps(speedMps, 'mi');
-        const paceKm = paceFromMps(speedMps, 'km');
-
-        samplesRef.current.push({
-          seq: seqRef.current,
-          elapsed_s: nextElapsed,
-          distance_m: Number(nextDist.toFixed(2)),
-          speed_mps: Number(speedMps.toFixed(6)),
-          pace_s_per_km: Number.isFinite(paceKm) ? Number(paceKm.toFixed(2)) : null,
-          pace_s_per_mi: Number.isFinite(paceMi) ? Number(paceMi.toFixed(2)) : null,
-          incline_deg: Number(inclineRef.current.toFixed(2)),
-          elevation_m: Number(nextElev.toFixed(2)),
-        });
-      }
+      syncSessionFromClock(Date.now(), 'running');
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, [isRunning, distanceUnit]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      syncSessionFromClock(Date.now(), isRunning ? 'running' : 'paused');
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [distanceUnit, isRunning]);
 
   // UI helpers
   const distLabelUnit = distanceUnit === 'mi' ? 'MI' : 'KM';
@@ -368,10 +455,18 @@ export default function IndoorSession() {
       ? formatPace(paceFromMps(avgSpeedMps, 'mi'), '/mi')
       : formatPace(paceFromMps(avgSpeedMps, 'km'), '/km');
 
-  const togglePause = () => setIsRunning((v) => !v);
+  const togglePause = () => {
+    if (isRunning) {
+      pauseSession();
+      return;
+    }
+    resumeSession();
+  };
 
   const requestCancel = () => {
-    setIsRunning(false);
+    if (isRunning) {
+      pauseSession();
+    }
     setShowCancelConfirm(true);
   };
 
@@ -393,6 +488,7 @@ export default function IndoorSession() {
     setIsRunning(false);
 
     const endedAt = new Date().toISOString();
+    syncSessionFromClock(Date.now(), 'paused');
     const totalTimeS = elapsedRef.current;
     const startedAt = new Date(
       new Date(endedAt).getTime() - totalTimeS * 1000
@@ -438,7 +534,7 @@ export default function IndoorSession() {
     } catch (e) {
       console.log('[IndoorSession] finish error', e);
       Alert.alert('Error', 'Could not open summary. Please try again.');
-      setIsRunning(true);
+      resumeSession();
     }
   };
 
@@ -543,7 +639,10 @@ export default function IndoorSession() {
           <View style={styles.controlRow}>
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
-              onPress={() => setSpeed((v) => clamp(Number((v - speedStep).toFixed(1)), 0, 25))}
+              onPress={() => {
+                syncSessionFromClock();
+                setSpeed((v) => clamp(Number((v - speedStep).toFixed(1)), 0, 25));
+              }}
               disabled={!isRunning}
             >
               <Ionicons name="remove" size={20} color={colors.text} />
@@ -559,7 +658,10 @@ export default function IndoorSession() {
 
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
-              onPress={() => setSpeed((v) => clamp(Number((v + speedStep).toFixed(1)), 0, 25))}
+              onPress={() => {
+                syncSessionFromClock();
+                setSpeed((v) => clamp(Number((v + speedStep).toFixed(1)), 0, 25));
+              }}
               disabled={!isRunning}
             >
               <Ionicons name="add" size={20} color={colors.text} />
@@ -569,7 +671,10 @@ export default function IndoorSession() {
           <View style={[styles.controlRow, styles.controlRowSpaced]}>
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
-              onPress={() => setInclineDeg((v) => clamp(Number((v - inclineStep).toFixed(1)), 0, 20))}
+              onPress={() => {
+                syncSessionFromClock();
+                setInclineDeg((v) => clamp(Number((v - inclineStep).toFixed(1)), 0, 20));
+              }}
               disabled={!isRunning}
             >
               <Ionicons name="remove" size={20} color={colors.text} />
@@ -585,7 +690,10 @@ export default function IndoorSession() {
 
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
-              onPress={() => setInclineDeg((v) => clamp(Number((v + inclineStep).toFixed(1)), 0, 20))}
+              onPress={() => {
+                syncSessionFromClock();
+                setInclineDeg((v) => clamp(Number((v + inclineStep).toFixed(1)), 0, 20));
+              }}
               disabled={!isRunning}
             >
               <Ionicons name="add" size={20} color={colors.text} />
