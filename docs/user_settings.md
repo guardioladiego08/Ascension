@@ -7,6 +7,11 @@
   - `weight_unit` (`lb` | `kg`)
   - `distance_unit` (`mi` | `km`)
   - `created_at`, `updated_at`
+- Local device storage:
+  - Strength rest timer default duration is stored in AsyncStorage only.
+  - Key: `tensr:strength_rest_timer_preferences.v1`
+  - Field:
+    - `defaultDurationSeconds`
 
 ## Storage And Display Rules
 - Strength values are stored in canonical metric values where applicable (for example, totals/volume in kg).
@@ -22,13 +27,24 @@
 3. `UnitsContext` upserts into `user.user_preferences`.
 4. All consumers read from `UnitsContext` and render converted values.
 
+## Strength Rest Timer Flow
+1. User changes the default rest duration from `app/(tabs)/profile/settings.tsx`.
+2. `app/(tabs)/profile/settings/RestTimerModal.tsx` saves the duration through `lib/strength/restTimerPreferences.ts`.
+3. `app/(tabs)/add/Strength/components/SetRow.tsx` marks a set complete with a local checkbox, and completed sets trigger the countdown for that exercise.
+4. `app/(tabs)/add/Strength/StrengthTrain.tsx` loads the local preference, tracks the active exercise-owned rest timer, and persists it only in the local active-session store so it can recover across foreground/background transitions.
+5. `app/(tabs)/add/Strength/components/ExerciseRestTimerBar.tsx` renders the active countdown as a horizontal progress bar at the bottom of the matching exercise card.
+6. The countdown is never sent to Supabase.
+
 ## Coverage In App
 - Settings UI:
   - `app/(tabs)/profile/settings.tsx`
   - `app/(tabs)/profile/settings/WeightUnitModal.tsx`
   - `app/(tabs)/profile/settings/DistanceUnitModal.tsx`
+  - `app/(tabs)/profile/settings/RestTimerModal.tsx`
 - Strength:
   - `app/(tabs)/add/Strength/StrengthTrain.tsx`
+  - `app/(tabs)/add/Strength/components/SessionHeader.tsx`
+  - `app/(tabs)/add/Strength/components/ExerciseRestTimerBar.tsx`
   - `app/(tabs)/add/Strength/components/ExerciseCard.tsx`
   - `app/(tabs)/add/Strength/components/SetRow.tsx`
   - `app/(tabs)/add/Strength/[id].tsx`

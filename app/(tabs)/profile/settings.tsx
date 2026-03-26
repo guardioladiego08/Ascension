@@ -19,12 +19,18 @@ import {
   getHealthStatusLabel,
 } from '@/lib/health/preferences';
 import { getCurrentHealthProviderLabel } from '@/lib/health/provider';
+import {
+  getStrengthRestTimerPreferences,
+  setStrengthRestTimerDefaultSeconds,
+} from '@/lib/strength/restTimerPreferences';
+import { formatRestTimerClock } from '@/lib/strength/restTimer';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
 import DistanceUnitModal from './settings/DistanceUnitModal';
 import ProfileDetailsModal from './settings/ProfileDetailsModal';
+import RestTimerModal from './settings/RestTimerModal';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -35,7 +41,9 @@ export default function SettingsScreen() {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showDistanceModal, setShowDistanceModal] = useState(false);
   const [showProfileDetailsModal, setShowProfileDetailsModal] = useState(false);
+  const [showRestTimerModal, setShowRestTimerModal] = useState(false);
   const [healthStatus, setHealthStatus] = useState('Not connected');
+  const [restTimerSeconds, setRestTimerSeconds] = useState(90);
   const providerLabel = getCurrentHealthProviderLabel();
 
   const loadHealthStatus = useCallback(async () => {
@@ -48,10 +56,20 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadRestTimerPreference = useCallback(async () => {
+    try {
+      const prefs = await getStrengthRestTimerPreferences();
+      setRestTimerSeconds(prefs.defaultDurationSeconds);
+    } catch (error) {
+      console.warn('[Settings] failed to load strength rest timer preference', error);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadHealthStatus();
-    }, [loadHealthStatus])
+      loadRestTimerPreference();
+    }, [loadHealthStatus, loadRestTimerPreference])
   );
 
   const handleComingSoon = (label: string) => {
@@ -166,14 +184,17 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
-              onPress={() => handleComingSoon('Rest timer')}
+              onPress={() => setShowRestTimerModal(true)}
             >
               <Text style={styles.rowLabel}>Rest timer</Text>
-              <Ionicons
-                name="chevron-forward"
-                size={18}
-                color={colors.textMuted}
-              />
+              <View style={styles.rowRight}>
+                <Text style={styles.rowValue}>{formatRestTimerClock(restTimerSeconds)}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textMuted}
+                />
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -398,6 +419,17 @@ export default function SettingsScreen() {
         <ProfileDetailsModal
           visible={showProfileDetailsModal}
           onClose={() => setShowProfileDetailsModal(false)}
+        />
+
+        <RestTimerModal
+          visible={showRestTimerModal}
+          valueSeconds={restTimerSeconds}
+          onClose={() => setShowRestTimerModal(false)}
+          onSave={async (seconds) => {
+            const nextSeconds = await setStrengthRestTimerDefaultSeconds(seconds);
+            setRestTimerSeconds(nextSeconds);
+            setShowRestTimerModal(false);
+          }}
         />
 
       </ScrollView>

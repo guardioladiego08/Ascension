@@ -14,6 +14,8 @@
 
 - Supabase client helpers: `lib/supabase.ts`
 - Outdoor session Supabase helpers: `lib/OutdoorSession/supabase.ts`
+- Strength workout session flow: `app/(tabs)/add/Strength/`
+- Strength workout client models/helpers: `lib/strength/`
 
 ## Notes
 

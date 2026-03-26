@@ -11,20 +11,30 @@ import { v4 as uuidv4 } from 'uuid';
 import { Swipeable } from 'react-native-gesture-handler';
 
 import type { ExerciseDraft, SetDraft } from '@/lib/strength/types';
+import type { StrengthRestTimerState } from '@/lib/strength/restTimer';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import AppPopup from '@/components/ui/AppPopup';
 import { HOME_TONES } from '../../../home/tokens';
 
+import ExerciseRestTimerBar from './ExerciseRestTimerBar';
 import SetRow from './SetRow';
 
 type Props = {
   exercise: ExerciseDraft;
+  restTimer: StrengthRestTimerState;
   onDelete: () => void;
   onChange: (updated: ExerciseDraft) => void;
+  onSetCompleted: (exerciseInstanceId: string) => void;
 };
 
-const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
+const ExerciseCard: React.FC<Props> = ({
+  exercise,
+  restTimer,
+  onDelete,
+  onChange,
+  onSetCompleted,
+}) => {
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [optionsVisible, setOptionsVisible] = useState(false);
@@ -100,6 +110,7 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
         <Text style={[styles.th, styles.thSet]}>Set</Text>
         <Text style={[styles.th, styles.thWeight]}>Weight</Text>
         <Text style={[styles.th, styles.thReps]}>Reps</Text>
+        <Text style={[styles.th, styles.thDone]}>Done</Text>
       </View>
 
       {exercise.sets.map((setDraft) => {
@@ -128,7 +139,17 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
             <SetRow
               setDraft={setDraft}
               displayIndex={displayIndex}
+              suggestedSet={exercise.previousSessionSets?.[setDraft.set_index - 1]}
               onChange={(next) => updateSet(setDraft.tempId, () => next)}
+              onToggleComplete={(nextDone) => {
+                updateSet(setDraft.tempId, (current) => ({
+                  ...current,
+                  done: nextDone,
+                }));
+                if (nextDone) {
+                  onSetCompleted(exercise.instanceId);
+                }
+              }}
             />
           </Swipeable>
         );
@@ -138,6 +159,11 @@ const ExerciseCard: React.FC<Props> = ({ exercise, onDelete, onChange }) => {
         <Ionicons name="add" size={16} color={colors.highlight1} />
         <Text style={styles.addSetText}>Add set</Text>
       </TouchableOpacity>
+
+      <ExerciseRestTimerBar
+        timer={restTimer}
+        exerciseInstanceId={exercise.instanceId}
+      />
 
       <AppPopup
         visible={optionsVisible}
@@ -332,6 +358,10 @@ function createStyles(
     },
     thReps: {
       width: 76,
+      textAlign: 'center',
+    },
+    thDone: {
+      width: 34,
       textAlign: 'center',
     },
     deleteAction: {

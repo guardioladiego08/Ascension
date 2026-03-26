@@ -34,11 +34,17 @@ import {
 } from '@/lib/health/provider';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
 import type { HealthHeartRateSample } from '@/lib/health/types';
+import {
+  clearActiveRunWalkSession,
+  getActiveRunWalkSession,
+} from '@/lib/activeRunWalkSessionStore';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
+const HOME_ROUTE = '/(tabs)/home';
 
 const LB_PER_KG = 2.20462;
 
@@ -122,6 +128,7 @@ function formatTimelineLabel(totalSeconds: number): string {
 export default function StrengthSummaryPage() {
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const { activeSession, clearSession } = useActiveRunWalk();
   const { id, postId, autoHeartRateSync } = useLocalSearchParams<{
     id?: string;
     postId?: string;
@@ -146,6 +153,16 @@ export default function StrengthSummaryPage() {
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
   const shouldAutoHeartRateSync = autoHeartRateSync === '1';
+
+  React.useEffect(() => {
+    if (
+      id &&
+      activeSession?.kind === 'strength' &&
+      activeSession.workoutId === id
+    ) {
+      clearSession();
+    }
+  }, [activeSession, clearSession, id]);
 
   const runHeartRateSync = React.useCallback(
     async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
@@ -501,8 +518,27 @@ export default function StrengthSummaryPage() {
 
               console.log('Deleted strength_workouts rows:', deletedWorkouts?.length ?? 0);
 
+              const storedSession = await getActiveRunWalkSession();
+              const matchesDeletedWorkout =
+                (activeSession?.kind === 'strength' &&
+                  activeSession.workoutId === id) ||
+                (storedSession?.kind === 'strength' &&
+                  storedSession.workoutId === id);
+
+              if (matchesDeletedWorkout) {
+                clearSession();
+                try {
+                  await clearActiveRunWalkSession();
+                } catch (storageError) {
+                  console.warn(
+                    '[StrengthSummary] failed to clear persisted active session',
+                    storageError
+                  );
+                }
+              }
+
               Alert.alert('Workout deleted');
-              router.replace('../../../home');
+              router.replace(HOME_ROUTE);
             } catch (err) {
               console.error('Error deleting workout', err);
               Alert.alert(
@@ -592,16 +628,16 @@ export default function StrengthSummaryPage() {
   const handleReturnHome = async () => {
     if (sharing) return;
     if (!canDelete) {
-      router.back();
+      router.replace(HOME_ROUTE);
       return;
     }
     if (!id) {
-      router.replace('/');
+      router.replace(HOME_ROUTE);
       return;
     }
 
     if (!shareToFeed) {
-      router.replace('/');
+      router.replace(HOME_ROUTE);
       return;
     }
 
@@ -616,7 +652,7 @@ export default function StrengthSummaryPage() {
         visibility: 'followers',
       });
       Alert.alert('Shared', 'Workout saved and posted to your social feed.');
-      router.replace('/');
+      router.replace(HOME_ROUTE);
     } catch (err) {
       console.error('[StrengthSummary] share failed', err);
       Alert.alert(

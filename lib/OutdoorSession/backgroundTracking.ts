@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import * as TaskManager from 'expo-task-manager';
 
 import {
   getActiveRunWalkSession,
@@ -13,9 +12,23 @@ import { appendOutdoorLocations } from './locationTracking';
 export const OUTDOOR_LOCATION_TASK = 'tensr-outdoor-location-task';
 
 const OUTDOOR_TRACKING_READY_KEY = 'tensr:outdoor-background-permission-ready';
+type TaskManagerModule = typeof import('expo-task-manager');
 
-if (!TaskManager.isTaskDefined(OUTDOOR_LOCATION_TASK)) {
-  TaskManager.defineTask(OUTDOOR_LOCATION_TASK, async ({ data, error }) => {
+let taskManagerModule: TaskManagerModule | null = null;
+
+try {
+  taskManagerModule = require('expo-task-manager') as TaskManagerModule;
+} catch (error) {
+  console.warn(
+    '[OutdoorBackgroundTracking] expo-task-manager unavailable; background tracking is disabled for this build'
+  );
+}
+
+if (
+  taskManagerModule &&
+  !taskManagerModule.isTaskDefined(OUTDOOR_LOCATION_TASK)
+) {
+  taskManagerModule.defineTask(OUTDOOR_LOCATION_TASK, async ({ data, error }) => {
     if (error) {
       console.warn('[OutdoorBackgroundTracking] task error', error);
       return;
@@ -39,6 +52,10 @@ if (!TaskManager.isTaskDefined(OUTDOOR_LOCATION_TASK)) {
 }
 
 export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
+  if (!taskManagerModule) {
+    return false;
+  }
+
   try {
     const foreground = await Location.getForegroundPermissionsAsync();
     const foregroundStatus =
@@ -66,6 +83,10 @@ export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
 }
 
 export async function hasPreparedOutdoorBackgroundTracking(): Promise<boolean> {
+  if (!taskManagerModule) {
+    return false;
+  }
+
   try {
     const cached = await AsyncStorage.getItem(OUTDOOR_TRACKING_READY_KEY);
     if (cached === 'true') return true;
@@ -77,6 +98,10 @@ export async function hasPreparedOutdoorBackgroundTracking(): Promise<boolean> {
 }
 
 export async function startOutdoorBackgroundTracking(): Promise<boolean> {
+  if (!taskManagerModule) {
+    return false;
+  }
+
   try {
     const ready = await hasPreparedOutdoorBackgroundTracking();
     if (!ready) return false;
@@ -106,6 +131,10 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
 }
 
 export async function stopOutdoorBackgroundTracking(): Promise<void> {
+  if (!taskManagerModule) {
+    return;
+  }
+
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(OUTDOOR_LOCATION_TASK);
     if (started) {

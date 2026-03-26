@@ -1,5 +1,6 @@
 export type UnitMass = 'kg' | 'lb';
 export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
+export type StrengthWorkoutBlockKind = 'exercise' | 'superset';
 
 export type SetDraft = {
   tempId: string;
@@ -15,9 +16,33 @@ export type SetDraft = {
   notes?: string | null;
 };
 
+export type PreviousExerciseSetSuggestion = {
+  set_index: number;
+  set_type: SetType;
+  weight?: number | null;
+  weight_unit_csv?: UnitMass | null;
+  reps?: number | null;
+};
+
 export type ExerciseDraft = {
   instanceId: string;
   exercise_id: string;
   exercise_name: string;
+  previousSessionSets?: PreviousExerciseSetSuggestion[];
   sets: SetDraft[];
 };
+
+export type ExerciseBlockDraft = {
+  id: string;
+  kind: 'exercise';
+  exercise: ExerciseDraft;
+};
+
+export type SupersetBlockDraft = {
+  id: string;
+  kind: 'superset';
+  restSeconds: number;
+  exercises: ExerciseDraft[];
+};
+
+export type StrengthWorkoutBlockDraft = ExerciseBlockDraft | SupersetBlockDraft;

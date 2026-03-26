@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-import type { SetDraft } from '@/lib/strength/types';
+import type { PreviousExerciseSetSuggestion, SetDraft } from '@/lib/strength/types';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import AppPopup from '@/components/ui/AppPopup';
@@ -28,6 +29,20 @@ const convertBetweenUnits = (
 
 const toKg = (weight: number, unit: 'kg' | 'lb') =>
   unit === 'kg' ? weight : weight / LB_PER_KG;
+
+const trimToSingleDecimal = (value: string): string => {
+  const normalized = value.replace(',', '.').replace(/[^0-9.]/g, '');
+  const [wholePart = '', ...decimalParts] = normalized.split('.');
+  const safeWhole = wholePart.replace(/^0+(?=\d)/, '');
+  if (decimalParts.length === 0) {
+    return safeWhole;
+  }
+  const decimal = decimalParts.join('').slice(0, 1);
+  return decimal.length > 0 ? `${safeWhole || '0'}.${decimal}` : `${safeWhole || '0'}.`;
+};
+
+const formatSingleDecimal = (value: number | undefined): string =>
+  value == null || Number.isNaN(value) ? '' : value.toFixed(1).replace(/\.0$/, '');
 
 const computeEst1RM = (
   storedWeight: number | undefined,
@@ -57,13 +72,27 @@ const modeLetter: Record<SetDraft['set_type'], string> = {
 type Props = {
   setDraft: SetDraft;
   displayIndex: number | null;
+  suggestedSet?: PreviousExerciseSetSuggestion;
   onChange: (s: SetDraft) => void;
+  onToggleComplete: (nextDone: boolean) => void;
+  completionDisabled?: boolean;
 };
 
-const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
+const SetRow: React.FC<Props> = ({
+  setDraft,
+  displayIndex,
+  suggestedSet,
+  onChange,
+  onToggleComplete,
+  completionDisabled = false,
+}) => {
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const [modeVisible, setModeVisible] = useState(false);
+  const [weightText, setWeightText] = useState('');
+  const [repsText, setRepsText] = useState('');
+  const [weightFocused, setWeightFocused] = useState(false);
+  const [repsFocused, setRepsFocused] = useState(false);
   const { weightUnit: viewerUnit } = useUnits();
 
   const handleSelectMode = (mode: SetDraft['set_type']) => {
@@ -84,13 +113,52 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
     storedWeight != null
       ? convertBetweenUnits(storedWeight, storedUnit, viewerUnit)
       : undefined;
+  const suggestedWeight = suggestedSet?.weight ?? undefined;
+  const suggestedWeightUnitCsv = suggestedSet?.weight_unit_csv ?? undefined;
+  const suggestedReps = suggestedSet?.reps ?? undefined;
+  const suggestedDisplayWeight =
+    suggestedWeight != null &&
+    (suggestedWeightUnitCsv === 'kg' || suggestedWeightUnitCsv === 'lb')
+      ? convertBetweenUnits(suggestedWeight, suggestedWeightUnitCsv, viewerUnit)
+      : undefined;
+  const suggestedWeightPlaceholder =
+    suggestedDisplayWeight == null || Number.isNaN(suggestedDisplayWeight)
+      ? '0'
+      : viewerUnit === 'kg'
+        ? Number.isInteger(suggestedDisplayWeight)
+          ? String(suggestedDisplayWeight)
+          : suggestedDisplayWeight.toFixed(1)
+        : String(Math.round(suggestedDisplayWeight));
+  const suggestedRepsPlaceholder =
+    suggestedReps != null && !Number.isNaN(suggestedReps)
+      ? String(Math.round(suggestedReps))
+      : 'reps';
+
+  useEffect(() => {
+    if (!weightFocused) {
+      setWeightText(
+        displayWeight != null && !Number.isNaN(displayWeight)
+          ? formatSingleDecimal(displayWeight)
+          : ''
+      );
+    }
+  }, [displayWeight, weightFocused]);
+
+  useEffect(() => {
+    if (!repsFocused) {
+      setRepsText(formatSingleDecimal(setDraft.reps ?? undefined));
+    }
+  }, [repsFocused, setDraft.reps]);
 
   const handleWeightChange = (text: string) => {
-    const wDisplay = text ? Number(text) : undefined;
+    const normalizedText = trimToSingleDecimal(text);
+    setWeightText(normalizedText);
+    const wDisplay = normalizedText ? Number(normalizedText) : undefined;
     let newStoredWeight: number | undefined;
 
     if (wDisplay != null && !Number.isNaN(wDisplay)) {
       newStoredWeight = convertBetweenUnits(wDisplay, viewerUnit, storedUnit);
+      newStoredWeight = Number(newStoredWeight.toFixed(1));
     }
 
     const reps = setDraft.reps ?? undefined;
@@ -108,7 +176,9 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
   };
 
   const handleRepsChange = (text: string) => {
-    const reps = text ? Number(text) : undefined;
+    const normalizedText = trimToSingleDecimal(text);
+    setRepsText(normalizedText);
+    const reps = normalizedText ? Number(normalizedText) : undefined;
     const est1rm =
       storedWeight && reps
         ? computeEst1RM(storedWeight, reps, storedUnit)
@@ -159,15 +229,13 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
 
       <View style={styles.weightWrap}>
         <TextInput
-          style={styles.weightInput}
+          style={[styles.weightInput, setDraft.done ? styles.inputDone : null]}
           inputMode="decimal"
-          placeholder="0"
+          placeholder={suggestedWeightPlaceholder}
           placeholderTextColor={HOME_TONES.textTertiary}
-          value={
-            displayWeight != null && !Number.isNaN(displayWeight)
-              ? String(displayWeight)
-              : ''
-          }
+          value={weightText}
+          onFocus={() => setWeightFocused(true)}
+          onBlur={() => setWeightFocused(false)}
           onChangeText={handleWeightChange}
         />
         <View style={styles.unitBadge}>
@@ -176,13 +244,38 @@ const SetRow: React.FC<Props> = ({ setDraft, displayIndex, onChange }) => {
       </View>
 
       <TextInput
-        style={styles.reps}
+        style={[styles.reps, setDraft.done ? styles.repsDone : null]}
         inputMode="numeric"
-        placeholder="reps"
+        placeholder={suggestedRepsPlaceholder}
         placeholderTextColor={HOME_TONES.textTertiary}
-        value={setDraft.reps?.toString() ?? ''}
+        value={repsText}
+        onFocus={() => setRepsFocused(true)}
+        onBlur={() => setRepsFocused(false)}
         onChangeText={handleRepsChange}
       />
+
+      <TouchableOpacity
+        activeOpacity={0.92}
+        disabled={completionDisabled}
+        style={[
+          styles.checkboxBtn,
+          setDraft.done ? styles.checkboxBtnDone : null,
+          completionDisabled ? styles.checkboxBtnDisabled : null,
+        ]}
+        onPress={() => onToggleComplete(!Boolean(setDraft.done))}
+      >
+        <Ionicons
+          name={setDraft.done ? 'checkmark-circle' : 'ellipse-outline'}
+          size={22}
+          color={
+            setDraft.done
+              ? colors.highlight1
+              : completionDisabled
+                ? HOME_TONES.textDisabled
+                : HOME_TONES.textTertiary
+          }
+        />
+      </TouchableOpacity>
 
       <AppPopup
         visible={modeVisible}
@@ -295,6 +388,9 @@ function createStyles(
       paddingHorizontal: 12,
       height: 42,
     },
+    inputDone: {
+      color: HOME_TONES.textSecondary,
+    },
     unitBadge: {
       width: 54,
       height: 42,
@@ -324,6 +420,22 @@ function createStyles(
       fontFamily: fonts.body,
       fontSize: 15,
       lineHeight: 20,
+    },
+    repsDone: {
+      color: HOME_TONES.textSecondary,
+    },
+    checkboxBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxBtnDone: {
+      backgroundColor: colors.accentSoft,
+    },
+    checkboxBtnDisabled: {
+      opacity: 0.55,
     },
     modeRow: {
       paddingVertical: 12,

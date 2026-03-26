@@ -1,5 +1,11 @@
 # Supabase Schema Changes
 
+## 2026-03-22 - Strength workout blocks and normalized superset structure
+
+- What changed: Added migration `20260322_strength_workout_blocks_and_supersets.sql` to create `strength.workout_blocks` and `strength.workout_block_exercises`, add block references plus `block_round_index` to `strength.strength_sets`, apply ownership-safe RLS policies and indexes, and expose `public.get_strength_workout_structure_user(...)`.
+- Why: Strength sessions needed a normalized way to persist ordered supersets with group-level rest intervals without breaking existing `strength_workouts`, `strength_sets`, or `exercise_summary` flows.
+- Follow-up: If strength history/detail screens start rendering structured workouts, prefer the new block tables or the structure RPC over trying to reconstruct superset order from `exercise_summary` or the legacy `superset_group` field.
+
 ## 2026-03-22 - Fixed nutrition.search_food_items return-shape mismatch
 
 - What changed: Updated `search_food_items` SQL bodies in `20260322_nutrition_food_search_performance.sql` and `20260322_nutrition_food_verification_status.sql` so ranked CTEs keep scoring columns internal while the final select returns only `nutrition.food_items` rows.

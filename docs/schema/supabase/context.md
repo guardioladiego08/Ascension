@@ -2,6 +2,22 @@
 
 Use this file for durable schema context that should not live only in chat.
 
+## 2026-03-22 - Strength supersets use workout blocks plus ordered block exercises
+
+- Strength workout structure is now modeled separately from raw set rows:
+  - `strength.workout_blocks` stores ordered workout units such as standalone exercises and supersets
+  - `strength.workout_block_exercises` stores the ordered exercise membership inside each block
+  - `strength.strength_sets` keeps the per-set performance data and now optionally references the block and member exercise it belongs to
+- Supersets are represented as:
+  - one `workout_blocks` row with `block_kind = 'superset'`
+  - `rest_interval_seconds` on that block
+  - two or more `workout_block_exercises` rows in the exact execution order
+- Standalone exercises remain compatible with existing flows by using:
+  - one `workout_blocks` row with `block_kind = 'exercise'`
+  - one `workout_block_exercises` row for the exercise membership
+- `exercise_summary` remains an exercise-level aggregate table and should not be repurposed to store superset structure.
+- The legacy `strength_sets.superset_group` column can remain populated for compatibility, but the normalized workout-block references are now the source of truth for group order and rest ownership.
+
 ## 2026-03-22 - Hosted nutrition schema may lag local migrations
 
 - The current hosted project can still be missing `nutrition.food_items.verification_status` plus the `nutrition.user_favorite_foods` and `nutrition.user_favorite_meals` tables even though the local repo now expects them.

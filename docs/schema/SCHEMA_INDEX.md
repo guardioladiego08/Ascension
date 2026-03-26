@@ -25,6 +25,7 @@ Use it to find:
   - `supabase/migrations/20260322_nutrition_favorites_and_recency.sql`
   - `supabase/migrations/20260322_nutrition_food_search_performance.sql`
   - `supabase/migrations/20260322_nutrition_food_verification_status.sql`
+  - `supabase/migrations/20260322_strength_workout_blocks_and_supersets.sql`
 
 ## Rules
 

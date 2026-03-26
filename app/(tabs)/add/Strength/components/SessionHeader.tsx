@@ -30,9 +30,8 @@ const SessionHeader: React.FC<Props> = ({
       <View style={styles.topRow}>
         <View style={styles.copy}>
           <Text style={styles.eyebrow}>Live session</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>
-            Log sets, track time, and finish with a cleaner session summary.
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
           </Text>
         </View>
 
@@ -59,32 +58,39 @@ const SessionHeader: React.FC<Props> = ({
         </View>
       </View>
 
-      <Text style={styles.timer}>{mm}:{ss}</Text>
-
-      <View style={styles.controls}>
-        <TouchableOpacity
-          activeOpacity={0.92}
-          style={[paused ? styles.resumeBtn : styles.pauseBtn]}
-          onPress={onPauseToggle}
-        >
-          <Ionicons
-            name={paused ? 'play' : 'pause'}
-            size={16}
-            color={paused ? colors.blkText : colors.text}
-          />
-          <Text style={paused ? styles.resumeText : styles.pauseText}>
-            {paused ? 'Resume' : 'Pause'}
+      <View style={styles.bottomRow}>
+        <View style={styles.timerCard}>
+          <Text style={styles.metricLabel}>Session</Text>
+          <Text style={styles.timer}>
+            {mm}:{ss}
           </Text>
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          activeOpacity={0.92}
-          style={styles.cancelBtn}
-          onPress={onCancel}
-        >
-          <Ionicons name="close" size={16} color={colors.danger} />
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
+        <View style={styles.controls}>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[paused ? styles.resumeBtn : styles.pauseBtn]}
+            onPress={onPauseToggle}
+          >
+            <Ionicons
+              name={paused ? 'play' : 'pause'}
+              size={16}
+              color={paused ? colors.blkText : colors.text}
+            />
+            <Text style={paused ? styles.resumeText : styles.pauseText}>
+              {paused ? 'Resume' : 'Pause'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={styles.cancelBtn}
+            onPress={onCancel}
+          >
+            <Ionicons name="close" size={16} color={colors.danger} />
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -102,19 +108,10 @@ function createStyles(
       borderRadius: 28,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
-      padding: 22,
-    },
-    eyebrow: {
-      color: HOME_TONES.textTertiary,
-      fontFamily: fonts.label,
-      fontSize: 11,
-      lineHeight: 14,
-      letterSpacing: 0.9,
-      textTransform: 'uppercase',
+      padding: 16,
     },
     wrap: {
       marginTop: 10,
-      paddingBottom: 18,
     },
     topRow: {
       flexDirection: 'row',
@@ -125,30 +122,30 @@ function createStyles(
     copy: {
       flex: 1,
     },
+    eyebrow: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      letterSpacing: 0.9,
+      textTransform: 'uppercase',
+    },
     title: {
-      marginTop: 8,
+      marginTop: 6,
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
-      fontSize: 28,
-      lineHeight: 32,
-      letterSpacing: -0.8,
-    },
-    subtitle: {
-      marginTop: 8,
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 19,
-      maxWidth: 260,
+      fontSize: 22,
+      lineHeight: 26,
+      letterSpacing: -0.7,
     },
     statusPill: {
       borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
       borderWidth: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 7,
     },
     statusPillActive: {
       backgroundColor: colors.accentSoft,
@@ -182,23 +179,47 @@ function createStyles(
     statusTextPaused: {
       color: colors.highlight3,
     },
+    bottomRow: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    timerCard: {
+      width: 112,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+    },
+    metricLabel: {
+      color: HOME_TONES.textTertiary,
+      fontFamily: fonts.label,
+      fontSize: 10,
+      lineHeight: 13,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+    },
     timer: {
-      marginTop: 20,
+      marginTop: 8,
       color: HOME_TONES.textPrimary,
-      fontFamily: fonts.display,
-      fontSize: 52,
-      lineHeight: 56,
-      letterSpacing: -1.4,
+      fontFamily: fonts.mono,
+      fontSize: 23,
+      lineHeight: 27,
+      letterSpacing: -0.7,
+      fontVariant: ['tabular-nums'],
     },
     controls: {
-      marginTop: 18,
+      flex: 1,
       flexDirection: 'row',
-      gap: 12,
+      gap: 10,
     },
     pauseBtn: {
       flex: 1,
-      minHeight: 48,
-      borderRadius: 16,
+      minHeight: 44,
+      borderRadius: 14,
       backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
@@ -215,8 +236,8 @@ function createStyles(
     },
     resumeBtn: {
       flex: 1,
-      minHeight: 48,
-      borderRadius: 16,
+      minHeight: 44,
+      borderRadius: 14,
       backgroundColor: colors.highlight1,
       flexDirection: 'row',
       alignItems: 'center',
@@ -231,8 +252,8 @@ function createStyles(
     },
     cancelBtn: {
       minWidth: 108,
-      minHeight: 48,
-      borderRadius: 16,
+      minHeight: 44,
+      borderRadius: 14,
       backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
