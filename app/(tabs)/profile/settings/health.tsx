@@ -30,6 +30,7 @@ import {
   requestCurrentHeartRateAuthorization,
 } from '@/lib/health/provider';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { PROFILE_SETTINGS_ROUTE } from '../profileNavigation';
 
 const DEFAULT_PREFS: HealthPreferences = {
   providerId: getCurrentHealthProviderId(),
@@ -214,7 +215,10 @@ export default function HealthDataSettingsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.navigate(PROFILE_SETTINGS_ROUTE)}
+        >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Health data</Text>

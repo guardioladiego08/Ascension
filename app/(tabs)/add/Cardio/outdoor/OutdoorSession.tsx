@@ -189,8 +189,13 @@ export default function OutdoorSession() {
     if (phaseRef.current !== 'running') return;
     syncElapsedFromClock(Date.now(), 'running');
     stopTimer();
+    const backgroundStarted = await startOutdoorBackgroundTracking();
+    if (!backgroundStarted) {
+      console.warn(
+        '[OutdoorSession] background tracking did not start; route logging may pause while the app is not active'
+      );
+    }
     stopLocation();
-    await startOutdoorBackgroundTracking();
   }
 
   async function restoreForegroundTracking() {
@@ -454,7 +459,9 @@ export default function OutdoorSession() {
     }
     const backgroundReady = await prepareOutdoorBackgroundTracking();
     if (!backgroundReady) {
-      console.log('[OutdoorSession] background location permission not granted yet');
+      console.warn(
+        '[OutdoorSession] background location permission not granted; outdoor tracking will pause if the app is locked or moved to the background'
+      );
     }
   }
 

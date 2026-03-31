@@ -11,6 +11,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { PROFILE_SETTINGS_ROUTE } from '../profileNavigation';
+import DeleteAccountSection from './DeleteAccountSection';
 
 export default function AdvancedSettingsScreen() {
   const router = useRouter();
@@ -27,7 +29,10 @@ export default function AdvancedSettingsScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.navigate(PROFILE_SETTINGS_ROUTE)}
+        >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Advanced</Text>
@@ -103,6 +108,11 @@ export default function AdvancedSettingsScreen() {
               })}
             </View>
           </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <DeleteAccountSection />
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -25,6 +25,12 @@ import {
 } from '@/lib/strength/restTimerPreferences';
 import { formatRestTimerClock } from '@/lib/strength/restTimer';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import {
+  PROFILE_ADVANCED_SETTINGS_ROUTE,
+  PROFILE_GOALS_SETTINGS_ROUTE,
+  PROFILE_HEALTH_SETTINGS_ROUTE,
+  PROFILE_ROUTE,
+} from './profileNavigation';
 
 import { useUnits } from '@/contexts/UnitsContext';
 import WeightUnitModal from './settings/WeightUnitModal';
@@ -78,7 +84,7 @@ export default function SettingsScreen() {
   };
 
   const goToGoals = () => {
-    router.push('./settings/goals');
+    router.push(PROFILE_GOALS_SETTINGS_ROUTE);
   };
 
   const handleLogout = async () => {
@@ -111,7 +117,7 @@ export default function SettingsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.navigate(PROFILE_ROUTE)}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>
@@ -166,7 +172,7 @@ export default function SettingsScreen() {
 
             <TouchableOpacity
               style={styles.row}
-              onPress={() => router.push('/profile/settings/advanced')}
+              onPress={() => router.push(PROFILE_ADVANCED_SETTINGS_ROUTE)}
             >
               <Text style={styles.rowLabel}>Advanced</Text>
               <Ionicons
@@ -289,7 +295,7 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
-              onPress={() => router.push('/profile/settings/health')}
+              onPress={() => router.push(PROFILE_HEALTH_SETTINGS_ROUTE)}
             >
               <Text style={styles.rowLabel}>Health data</Text>
               <View style={styles.rowRight}>

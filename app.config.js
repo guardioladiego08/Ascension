@@ -39,11 +39,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       supportsTablet: true,
 
       /**
-       * ✅ This generates Info.plist:
-       * UIBackgroundModes = ["location"]
+       * ✅ This keeps the existing fetch mode and adds location:
+       * UIBackgroundModes = ["fetch", "location"]
        * Required for Location.startLocationUpdatesAsync(...)
        */
-      backgroundModes: ['location'],
+      backgroundModes: ['fetch', 'location'],
 
       infoPlist: {
         ...(config.ios?.infoPlist ?? {}),
@@ -104,7 +104,18 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       'expo-camera',
 
       // Location modules (ensures config plugin runs during prebuild)
-      'expo-location',
+      [
+        'expo-location',
+        {
+          locationWhenInUsePermission:
+            'Allow TENSR to access your location during workouts.',
+          locationAlwaysAndWhenInUsePermission:
+            'Allow TENSR to access your location in the background so outdoor runs and walks keep tracking when your phone is locked or you switch apps.',
+          isIosBackgroundLocationEnabled: true,
+          isAndroidBackgroundLocationEnabled: true,
+          isAndroidForegroundServiceEnabled: true,
+        },
+      ],
       'expo-task-manager',
 
       // Mapbox

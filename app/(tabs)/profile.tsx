@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { PROFILE_SETTINGS_ROUTE } from './profile/profileNavigation';
 
 import GoalCalendar from './profile/components/GoalCalendar';
 import ProfileHeaderSection, { type ProfileStats } from './profile/components/ProfileHeaderSection';
@@ -75,7 +76,7 @@ export default function ProfileScreen() {
     return `user_${profile.user_id.slice(0, 8)}`;
   }, [profile]);
 
-  const goToSettings = () => router.push('/profile/settings');
+  const goToSettings = () => router.push(PROFILE_SETTINGS_ROUTE);
   const goToConnections = useCallback(
     (tab: 'followers' | 'following') => {
       const uid = profile?.user_id;

@@ -26,6 +26,52 @@ const EXERCISE_SELECT =
   'id,user_id,exercise_name,body_parts,workout_category,info,created_at';
 const PAGE_SIZE = 1000;
 
+type ExerciseIdentity = Pick<ExerciseRecord, 'id' | 'user_id' | 'exercise_name' | 'created_at'>;
+
+export function normalizeExerciseName(exerciseName: string | null | undefined) {
+  return (exerciseName ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function compareExercisePriority(left: ExerciseIdentity, right: ExerciseIdentity) {
+  if (left.user_id == null && right.user_id != null) return -1;
+  if (left.user_id != null && right.user_id == null) return 1;
+
+  const createdAtComparison = left.created_at.localeCompare(right.created_at);
+  if (createdAtComparison !== 0) return createdAtComparison;
+
+  return left.id.localeCompare(right.id);
+}
+
+function sortVisibleExercises(items: ExerciseRecord[]) {
+  return [...items].sort((left, right) => {
+    const nameComparison = left.exercise_name
+      .toLowerCase()
+      .localeCompare(right.exercise_name.toLowerCase());
+
+    if (nameComparison !== 0) return nameComparison;
+    return compareExercisePriority(left, right);
+  });
+}
+
+export function dedupeVisibleExercises(items: ExerciseRecord[]) {
+  const byNormalizedName = new Map<string, ExerciseRecord>();
+
+  for (const exercise of items) {
+    const normalizedName = normalizeExerciseName(exercise.exercise_name);
+    if (!normalizedName) continue;
+
+    const existing = byNormalizedName.get(normalizedName);
+    if (!existing || compareExercisePriority(exercise, existing) < 0) {
+      byNormalizedName.set(normalizedName, exercise);
+    }
+  }
+
+  return sortVisibleExercises(Array.from(byNormalizedName.values()));
+}
+
 export function buildVisibleExercisesFilter(userId: string) {
   return `user_id.is.null,user_id.eq.${userId}`;
 }
@@ -50,6 +96,7 @@ export async function fetchVisibleExercises(userId: string) {
       .select(EXERCISE_SELECT)
       .or(buildVisibleExercisesFilter(userId))
       .order('exercise_name', { ascending: true })
+      .order('id', { ascending: true })
       .range(offset, offset + PAGE_SIZE - 1);
 
     if (error) throw error;
@@ -64,7 +111,7 @@ export async function fetchVisibleExercises(userId: string) {
     offset += PAGE_SIZE;
   }
 
-  return rows;
+  return dedupeVisibleExercises(rows);
 }
 
 export async function fetchVisibleExerciseById(userId: string, exerciseId: string) {
@@ -90,19 +137,24 @@ export async function fetchVisibleExerciseCount(userId: string) {
 }
 
 export async function findVisibleExerciseByName(userId: string, exerciseName: string) {
-  const normalizedName = exerciseName.trim();
+  const normalizedName = normalizeExerciseName(exerciseName);
   if (!normalizedName) return null;
 
   const { data, error } = await supabase
     .from('exercises')
     .select(EXERCISE_SELECT)
     .or(buildVisibleExercisesFilter(userId))
-    .ilike('exercise_name', normalizedName)
-    .limit(1)
-    .maybeSingle();
+    .ilike('exercise_name', exerciseName.trim())
+    .limit(20);
 
   if (error) throw error;
-  return (data ?? null) as ExerciseRecord | null;
+
+  const matches = (data ?? []) as ExerciseRecord[];
+  return (
+    dedupeVisibleExercises(matches).find(
+      (exercise) => normalizeExerciseName(exercise.exercise_name) === normalizedName
+    ) ?? null
+  );
 }
 
 export async function createCustomExercise(input: CreateCustomExerciseInput) {

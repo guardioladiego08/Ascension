@@ -15,6 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AuthScreen from '../components/AuthScreen';
 import AuthButton from '../components/AuthButton';
 import AppAlert from '../components/AppAlert';
+import {
+  getAuthBootstrapDisplayName,
+  getAuthBootstrapUsername,
+} from '@/lib/auth/bootstrapIdentity';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useAuthDesignSystem } from '../designSystem';
@@ -55,25 +59,6 @@ function isScrolledToBottom(
 ) {
   const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
   return layoutMeasurement.height + contentOffset.y >= contentSize.height - thresholdPx;
-}
-
-function sanitizeUsername(raw: string) {
-  let value = (raw ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  if (value.length > 30) value = value.slice(0, 30);
-  return value;
-}
-
-function buildFallbackUsername(email: string | null | undefined, userId: string) {
-  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
-  let value = sanitizeUsername(baseRaw);
-  if (value.length < 3) value = `user_${userId.slice(0, 6)}`;
-  if (value.length > 30) value = value.slice(0, 30);
-  return value;
 }
 
 export default function TermsAndPrivacy() {
@@ -117,23 +102,8 @@ export default function TermsAndPrivacy() {
           return;
         }
 
-        const metaUsername =
-          (user.user_metadata as any)?.username?.trim?.() ||
-          (user.user_metadata as any)?.Username?.trim?.() ||
-          '';
-
-        const username = (() => {
-          const sanitized = sanitizeUsername(metaUsername);
-          if (sanitized.length >= 3) return sanitized;
-          return buildFallbackUsername(user.email, user.id);
-        })();
-
-        const metaDisplayName =
-          (user.user_metadata as any)?.display_name?.trim?.() ||
-          (user.user_metadata as any)?.displayName?.trim?.() ||
-          '';
-
-        const displayName = (metaDisplayName || username).trim();
+        const username = getAuthBootstrapUsername(user, user.id);
+        const displayName = getAuthBootstrapDisplayName(user, username).trim();
 
         const { error: ensureError } = await supabase
           .schema('public')

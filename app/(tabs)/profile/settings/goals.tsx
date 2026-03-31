@@ -21,6 +21,7 @@ import {
   syncAndFetchMyDailyGoalResult,
   toLocalISODate,
 } from '@/lib/goals/client';
+import { PROFILE_SETTINGS_ROUTE } from '../profileNavigation';
 
 type CalorieGoalMode = 'disabled' | 'lose' | 'maintain' | 'gain';
 type GoalConditionMode = 'and' | 'or';
@@ -253,7 +254,7 @@ export default function GoalSettingsScreen() {
       }
 
       Alert.alert('Goals saved', 'Your goals have been updated.');
-      router.back();
+      router.navigate(PROFILE_SETTINGS_ROUTE);
     } finally {
       setSaving(false);
     }
@@ -264,7 +265,7 @@ export default function GoalSettingsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.navigate(PROFILE_SETTINGS_ROUTE)}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </TouchableOpacity>

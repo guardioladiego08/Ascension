@@ -15,32 +15,11 @@ import AuthScreen from './components/AuthScreen';
 import AuthButton from './components/AuthButton';
 import AuthField from './components/AuthField';
 import AppAlert from './components/AppAlert';
+import { sanitizeUsername } from '@/lib/auth/bootstrapIdentity';
+import { checkSignupUsernameAvailability } from '@/lib/auth/usernameAvailability';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useAuthDesignSystem } from './designSystem';
-
-function sanitizeUsername(raw: string) {
-  let u = (raw ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
-async function checkUsernameAgainstUserUsers(desired: string) {
-  const { data, error } = await supabase
-    .schema('public')
-    .from('profiles_stub')
-    .select('user_id')
-    .eq('username', desired)
-    .limit(1)
-    .maybeSingle();
-
-  return { exists: !!data, error };
-}
 
 export default function SignupEmail() {
   const router = useRouter();
@@ -93,34 +72,35 @@ export default function SignupEmail() {
     setCheckingUsername(true);
     setUsernameAvailable(null);
 
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('is_username_available', {
-      desired_username: desired,
-    });
+    const { available, error: availabilityError } =
+      await checkSignupUsernameAvailability(desired);
+    setCheckingUsername(false);
 
-    if (!rpcErr) {
-      setCheckingUsername(false);
-      setUsernameAvailable(rpcData === true);
+    if (available !== null) {
+      setUsernameAvailable(available);
       return;
     }
 
-    const { exists, error: qErr } = await checkUsernameAgainstUserUsers(desired);
-    setCheckingUsername(false);
-
-    if (qErr) {
-      console.log('username check error', qErr);
-      const code = (qErr as any)?.code;
+    if (availabilityError) {
+      console.log('username check error', availabilityError);
+      const code = (availabilityError as any)?.code;
       if (code === '42501') {
         showAlert(
           'Username check blocked',
-          'Your database RLS is preventing username checks. Create a public view or a SECURITY DEFINER RPC for username availability.'
+          'Your database RLS is preventing username checks. Create or apply the SECURITY DEFINER username-availability RPC before testing signup.'
         );
         return;
       }
 
-      if (code === 'PGRST200' || code === 'PGRST205') {
+      if (
+        code === '42P01' ||
+        code === 'PGRST106' ||
+        code === 'PGRST200' ||
+        code === 'PGRST205'
+      ) {
         showAlert(
-          'Schema/table not exposed',
-          'Make sure the required schema and username lookup table are exposed in Supabase API settings.'
+          'Username check unavailable',
+          'The connected Supabase project is missing the canonical username-availability RPC or legacy lookup tables.'
         );
         return;
       }
@@ -128,8 +108,6 @@ export default function SignupEmail() {
       showAlert('Error', 'Could not check username right now.');
       return;
     }
-
-    setUsernameAvailable(!exists);
   }, [usernameSanitized]);
 
   const handleEmailSignup = useCallback(async () => {
@@ -149,35 +127,30 @@ export default function SignupEmail() {
       return;
     }
 
-    if (usernameAvailable === null) {
-      setCheckingUsername(true);
-      try {
-        const { exists, error: qErr } = await checkUsernameAgainstUserUsers(usernameTrim);
+    setCheckingUsername(true);
+    try {
+      const { available, error: availabilityError } =
+        await checkSignupUsernameAvailability(usernameTrim);
 
-        if (qErr) {
-          console.log('username check error (during signup)', qErr);
-          showAlert(
-            'Could not verify username',
-            'Please verify the username before creating the account.'
-          );
-          return;
-        }
+      if (available !== true) {
+        setUsernameAvailable(available);
 
-        if (exists) {
-          setUsernameAvailable(false);
+        if (available === false) {
           showAlert('Username taken', 'Please choose a different username.');
           return;
         }
 
-        setUsernameAvailable(true);
-      } finally {
-        setCheckingUsername(false);
+        console.log('username check error (during signup)', availabilityError);
+        showAlert(
+          'Could not verify username',
+          'Please verify the username before creating the account.'
+        );
+        return;
       }
-    }
 
-    if (usernameAvailable === false) {
-      showAlert('Username taken', 'Please choose a different username.');
-      return;
+      setUsernameAvailable(true);
+    } finally {
+      setCheckingUsername(false);
     }
 
     setLoadingEmail(true);
@@ -196,6 +169,26 @@ export default function SignupEmail() {
     setLoadingEmail(false);
 
     if (error) {
+      console.log('[SignupEmail] sign up failed', {
+        message: error.message,
+        username: usernameTrim,
+      });
+
+      if (error.message === 'Database error saving new user') {
+        const { available } = await checkSignupUsernameAvailability(usernameTrim);
+        if (available === false) {
+          setUsernameAvailable(false);
+          showAlert('Username taken', 'Please choose a different username.');
+          return;
+        }
+
+        showAlert(
+          'Sign up failed',
+          'We could not finish creating your account. Try a different username, and if the problem continues, apply the latest Supabase signup auth-trigger hardening migration on the connected project.'
+        );
+        return;
+      }
+
       showAlert('Sign up failed', error.message);
       return;
     }
@@ -216,7 +209,7 @@ export default function SignupEmail() {
         router.replace({ pathname: '/SignInLogin/Login', params: { email: emailTrim } });
       }
     );
-  }, [email, password, usernameAvailable, usernameSanitized, router]);
+  }, [email, password, usernameSanitized, router]);
 
   const handleOpenTerms = useCallback(() => {
     WebBrowser.openBrowserAsync('https://tensrfitness.com/terms-of-service/');

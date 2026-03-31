@@ -24,24 +24,35 @@ export default function Index() {
     const checkProfile = async () => {
       setCheckingProfile(true);
 
-      const { data, error } = await supabase
-        .schema('public')
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', session.user.id)
-        .maybeSingle();
+      const [{ data: profileRow, error: profileError }, { data: userRow, error: userRowError }] =
+        await Promise.all([
+          supabase
+            .schema('public')
+            .from('profiles')
+            .select('onboarding_completed')
+            .eq('id', session.user.id)
+            .maybeSingle(),
+          supabase
+            .schema('user')
+            .from('users')
+            .select('onboarding_completed')
+            .eq('user_id', session.user.id)
+            .maybeSingle(),
+        ]);
 
       if (cancelled) return;
 
-      if (error) {
-        console.log('profile check error', error);
-        // Treat as not onboarded if we can't read it
-        setOnboardingState('incomplete');
-      } else {
-        const completed = data?.onboarding_completed === true;
-        setOnboardingState(completed ? 'completed' : 'incomplete');
+      if (profileError && (profileError as any).code !== 'PGRST116') {
+        console.log('profile check error', profileError);
       }
 
+      if (userRowError && (userRowError as any).code !== 'PGRST116') {
+        console.log('user.users onboarding check error', userRowError);
+      }
+
+      const completed =
+        profileRow?.onboarding_completed === true || userRow?.onboarding_completed === true;
+      setOnboardingState(completed ? 'completed' : 'incomplete');
       setCheckingProfile(false);
     };
 
@@ -77,7 +88,7 @@ export default function Index() {
 
   // 4) Session + onboarding incomplete -> start at first onboarding screen
   if (onboardingState === 'incomplete') {
-    return <Redirect href="/onboarding/UserInfo" />;
+    return <Redirect href="/SignInLogin/onboarding/UserInfo1" />;
   }
 
   // 5) Session + onboarding complete -> go to home

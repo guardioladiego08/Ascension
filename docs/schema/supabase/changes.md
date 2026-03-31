@@ -1,5 +1,47 @@
 # Supabase Schema Changes
 
+## 2026-03-29 - Signup auth trigger is now hardened against legacy bootstrap failures
+
+- What changed: Added migration `20260329_signup_auth_trigger_hardening.sql` to replace `public.handle_new_auth_user()` with a safer version that derives a normalized fallback username from metadata/email/id, seeds `public.profiles` when possible, and treats `profiles_stub` / `"user".users` bootstrap writes as best-effort warning paths instead of aborting the auth insert.
+- Why: The hosted project showed a compatible `auth.users` trigger body but signup was still failing at database-save time, which means any downstream bootstrap insert error was still rolling back the whole auth-user creation.
+- Follow-up: Apply this migration on the hosted project before retrying signup. After it is live, the app can self-heal any missing bootstrap rows during login and onboarding instead of losing the account at signup time.
+
+## 2026-03-29 - Signup bootstrap compatibility for hosted auth triggers
+
+- What changed: Added migration `20260329_signup_bootstrap_schema_compat.sql` to add `onboarding_completed`, `has_accepted_privacy_policy`, and `privacy_accepted_at` to `public.profiles`, grant authenticated users insert/update access to their own profile row, and set bootstrap-safe defaults on `"user".users` for `is_private`, `onboarding_completed`, and `app_usage_reasons`.
+- Why: Hosted signup was still failing with `Database error saving new user` even for fresh usernames, and the live schema inspection showed the hosted `public.profiles` table was still missing onboarding/privacy columns while hidden auth bootstrap logic may also rely on defaults in `"user".users`.
+- Follow-up: Apply this migration together with `20260329_signup_username_availability_rpc.sql` on the hosted project before retesting signup. If signup still fails afterward, inspect the live `auth.users` trigger SQL and compare it against the new defaults/columns.
+
+## 2026-03-29 - Signup username availability is now canonicalized in an RPC
+
+- What changed: Added migration `20260329_signup_username_availability_rpc.sql` creating `public.normalize_username_lookup(...)` and replacing `public.is_username_available(...)` so it checks `"user".users`, `public.profiles`, and legacy `public.profiles_stub`.
+- Why: Signup UI checks and hosted auth-user bootstrap can disagree when username uniqueness is enforced in a table that the old lookup path did not query, which surfaces as Supabase Auth's generic `Database error saving new user`.
+- Follow-up: Apply this migration to the hosted project before retesting signup, and prefer the RPC over ad hoc client-side table checks anywhere username availability is needed before auth.
+
+## 2026-03-29 - Workout block exercise FK is now deferred so auth-user deletes can complete
+
+- What changed: Added migration `20260329_workout_block_exercises_exercise_fk_deferrable.sql` to replace `strength.workout_block_exercises.exercise_id -> public.exercises(id) on delete restrict` with a deferred `on delete no action` foreign key.
+- Why: Postgres was blocking auth-user deletion with `workout_block_exercises_exercise_id_fkey` because user-owned exercises and user-owned workout-block rows were being removed through different cascade paths in the same transaction.
+- Follow-up: Apply this migration to the hosted project before retrying account deletion. Keep the FK deferred rather than switching to `on delete cascade` so standalone exercise deletes still fail unless dependent workout-block rows are removed in the same transaction.
+
+## 2026-03-29 - Auth-user deletion no longer allows summary and goal triggers to recreate child rows
+
+- What changed: Added migration `20260329_auth_user_delete_safe_summary_triggers.sql` with an `auth_user_exists(...)` helper and guarded the strength/cardio summary delta helpers plus goal and nutrition delete-trigger functions so they stop before upserting summary rows when the auth user is already gone in the current transaction.
+- Why: Account deletion was reaching `auth.admin.deleteUser(...)` but still failing with `Database error deleting user` because cascade-triggered recomputations could recreate rows in `"user".weekly_summary`, `"user".lifetime_stats`, `"user".daily_goal_results`, or `"user".daily_goal_status` during the delete.
+- Follow-up: Apply this migration to the hosted project before retrying account deletion, and if deletion still fails after that, inspect Supabase function logs for the exact Auth/database detail emitted by the edge function.
+
+## 2026-03-27 - Exercise catalog now supports canonical core movement and weighted body-part data
+
+- What changed: Added migration `20260327_z_exercise_catalog_core_movement_and_body_part_weights.sql` to add `public.exercises.core_movement` plus `body_part_weights`, normalize the new core movement vocabulary into canonical snake_case text, backfill existing rows, and keep the legacy `body_parts` array synchronized as a compatibility projection.
+- Why: The new master exercise import requires a required movement classifier and weighted muscle-activation metadata, but the current app still reads and writes the older `body_parts` array shape.
+- Follow-up: When app surfaces start using `core_movement` or weighted activations directly, read `body_part_weights` as the source of truth and keep `body_parts` only as a fallback/compatibility field.
+
+## 2026-03-27 - Exercise library visible-scope duplicates are now blocked
+
+- What changed: Added migration `20260327_exercise_library_visibility_guard.sql` to normalize exercise names, reject inserts or updates that would create a shared-vs-user name collision in a viewer's visible exercise scope, and add a trigger so future writes cannot recreate these duplicates.
+- Why: New accounts were surfacing duplicate exercise names because users could end up with a private copy of the same movement that already existed in the shared library, even though custom exercises should only be created explicitly.
+- Follow-up: Existing duplicate rows may still need a careful merge or relink plan before deletion because historical workouts reference exercise ids directly.
+
 ## 2026-03-22 - Strength workout blocks and normalized superset structure
 
 - What changed: Added migration `20260322_strength_workout_blocks_and_supersets.sql` to create `strength.workout_blocks` and `strength.workout_block_exercises`, add block references plus `block_round_index` to `strength.strength_sets`, apply ownership-safe RLS policies and indexes, and expose `public.get_strength_workout_structure_user(...)`.

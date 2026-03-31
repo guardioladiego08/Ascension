@@ -12,38 +12,15 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import AuthScreen from './components/AuthScreen';
 import AuthButton from './components/AuthButton';
 import AuthField from './components/AuthField';
+import {
+  getAuthBootstrapDisplayName,
+  getAuthBootstrapUsername,
+} from '@/lib/auth/bootstrapIdentity';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useAuthDesignSystem } from './designSystem';
 
 type Params = { email?: string };
-
-function sanitizeUsername(raw: string) {
-  let u = (raw ?? '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
-function buildFallbackUsername(email: string | null | undefined, userId: string) {
-  const baseRaw = (email?.split('@')?.[0] ?? 'user') + '_' + userId.slice(0, 6);
-  let u = sanitizeUsername(baseRaw);
-  if (u.length < 3) u = `user_${userId.slice(0, 6)}`;
-  if (u.length > 30) u = u.slice(0, 30);
-  return u;
-}
-
-function getMetaUsername(user: any) {
-  return (
-    (user?.user_metadata as any)?.username?.trim?.() ||
-    (user?.user_metadata as any)?.Username?.trim?.() ||
-    ''
-  );
-}
 
 export default function Login() {
   const router = useRouter();
@@ -70,9 +47,7 @@ export default function Login() {
       return { ok: false as const, message: 'You are not signed in. Please sign in again.' };
     }
 
-    const metaUsername = sanitizeUsername(getMetaUsername(user));
-    const fallbackUsername = buildFallbackUsername(user.email, userId);
-    const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
+    const username = getAuthBootstrapUsername(user, userId);
 
     const { data: existing, error: readErr } = await supabase
       .schema('user')
@@ -131,14 +106,37 @@ export default function Login() {
     return { ok: true as const, onboardingCompleted: false };
   };
 
+  const ensurePublicProfileRow = async (userId: string) => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const username = getAuthBootstrapUsername(user, userId);
+    const displayName = getAuthBootstrapDisplayName(user, username);
+
+    const { error } = await supabase
+      .schema('public')
+      .from('profiles')
+      .upsert(
+        {
+          id: userId,
+          username,
+          display_name: displayName,
+        },
+        { onConflict: 'id' }
+      );
+
+    if (error) {
+      console.log('[ensurePublicProfileRow] non-fatal error', error);
+    }
+  };
+
   const ensureProfilesStubRow = async (userId: string) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const metaUsername = sanitizeUsername(getMetaUsername(user));
-    const fallbackUsername = buildFallbackUsername(user?.email, userId);
-    const username = metaUsername.length >= 3 ? metaUsername : fallbackUsername;
+    const username = getAuthBootstrapUsername(user, userId);
 
     const { error } = await supabase.from('profiles_stub').upsert(
       {
@@ -165,7 +163,7 @@ export default function Login() {
         return;
       }
 
-      await ensureProfilesStubRow(userId);
+      await Promise.all([ensureProfilesStubRow(userId), ensurePublicProfileRow(userId)]);
 
       const onboardingCompleted = ensure.onboardingCompleted === true;
 

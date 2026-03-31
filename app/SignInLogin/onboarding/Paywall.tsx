@@ -37,11 +37,27 @@ export default function Paywall() {
 
       const fallbackId = authData.user.id;
 
-      await supabase
-        .schema('user')
-        .from('users')
-        .update({ onboarding_completed: true })
-        .eq('user_id', fallbackId);
+      const [{ error: onboardingError }, { error: profileError }] = await Promise.all([
+        supabase
+          .schema('user')
+          .from('users')
+          .update({ onboarding_completed: true })
+          .eq('user_id', fallbackId),
+        supabase
+          .schema('public')
+          .from('profiles')
+          .update({ onboarding_completed: true })
+          .eq('id', fallbackId),
+      ]);
+
+      if (onboardingError) {
+        Alert.alert('Error', onboardingError.message);
+        return;
+      }
+
+      if (profileError) {
+        console.log('[Paywall] non-fatal public.profiles onboarding update error', profileError);
+      }
 
       router.replace('/SignInLogin/Login');
       return;
@@ -49,11 +65,18 @@ export default function Paywall() {
 
     setFinishing(true);
 
-    const { error } = await supabase
-      .schema('user')
-      .from('users')
-      .update({ onboarding_completed: true })
-      .eq('user_id', authUserId);
+    const [{ error }, { error: profileError }] = await Promise.all([
+      supabase
+        .schema('user')
+        .from('users')
+        .update({ onboarding_completed: true })
+        .eq('user_id', authUserId),
+      supabase
+        .schema('public')
+        .from('profiles')
+        .update({ onboarding_completed: true })
+        .eq('id', authUserId),
+    ]);
 
     setFinishing(false);
 
@@ -61,6 +84,10 @@ export default function Paywall() {
       console.log('finish onboarding error', error);
       Alert.alert('Error', error.message);
       return;
+    }
+
+    if (profileError) {
+      console.log('[Paywall] non-fatal public.profiles onboarding update error', profileError);
     }
 
     router.replace('/SignInLogin/Login');

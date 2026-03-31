@@ -4,6 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
@@ -37,8 +38,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const { colors, fonts } = useAppTheme();
   const { distanceUnit, weightUnit } = useUnits();
+  const { activeSession, hydrated: activeSessionHydrated } = useActiveRunWalk();
   const styles = useMemo(() => createHomeStyles(colors, fonts), [colors, fonts]);
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
+  const showFloatingActiveSession = activeSessionHydrated && !!activeSession;
 
   const {
     loading,
@@ -314,7 +317,11 @@ export default function HomeScreen() {
   return (
     <View style={styles.page}>
       <ScrollView
-        contentContainerStyle={[styles.container, styles.content]}
+        contentContainerStyle={[
+          styles.container,
+          styles.content,
+          showFloatingActiveSession ? styles.contentWithFloatingSession : null,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <LogoHeader />
@@ -497,7 +504,6 @@ export default function HomeScreen() {
           onOpenSummary={handleOpenNutritionSummary}
         />
       </ScrollView>
-
       <RunWalkTypeModal
         visible={showRunWalkModal}
         onClose={() => setShowRunWalkModal(false)}

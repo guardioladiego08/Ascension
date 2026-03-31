@@ -35,12 +35,25 @@
 5. `app/(tabs)/add/Strength/components/ExerciseRestTimerBar.tsx` renders the active countdown as a horizontal progress bar at the bottom of the matching exercise card.
 6. The countdown is never sent to Supabase.
 
+## Account Deletion Flow
+1. User opens `app/(tabs)/profile/settings/advanced.tsx`.
+2. `app/(tabs)/profile/settings/DeleteAccountSection.tsx` launches the destructive confirmation modal.
+3. The modal requires the exact phrase `DELETE MY ACCOUNT` before `lib/accountDeletion/deleteAccount.ts` invokes the Supabase Edge Function.
+4. `supabase/functions/delete-account/index.ts` verifies the user, deletes owned storage objects by `storage.objects.owner_id` with legacy `owner` fallback, recursively clears known upload prefixes, and then removes the auth user so Supabase foreign-key cascades clean up relational data.
+5. The hosted database also needs the delete-safe summary/goal trigger migration (`supabase/migrations/20260329_auth_user_delete_safe_summary_triggers.sql`) so cascade deletes do not recreate user-owned summary rows during account removal.
+6. The hosted database also needs `supabase/migrations/20260329_workout_block_exercises_exercise_fk_deferrable.sql`, which changes `strength.workout_block_exercises.exercise_id` from `ON DELETE RESTRICT` to a deferred `NO ACTION` foreign key so account deletion can remove user-owned exercises and workout blocks in one transaction.
+7. If the edge function still returns `Database error deleting user` after those migrations are present remotely, the next step is a rollback delete probe in Supabase SQL Editor to capture the exact Postgres error text.
+8. After success, the client clears local active-session state and routes back to `/SignInLogin/FirstPage`.
+
 ## Coverage In App
 - Settings UI:
   - `app/(tabs)/profile/settings.tsx`
+  - `app/(tabs)/profile/settings/advanced.tsx`
   - `app/(tabs)/profile/settings/WeightUnitModal.tsx`
   - `app/(tabs)/profile/settings/DistanceUnitModal.tsx`
   - `app/(tabs)/profile/settings/RestTimerModal.tsx`
+  - `app/(tabs)/profile/settings/DeleteAccountSection.tsx`
+  - `app/(tabs)/profile/settings/DeleteAccountConfirmationModal.tsx`
 - Strength:
   - `app/(tabs)/add/Strength/StrengthTrain.tsx`
   - `app/(tabs)/add/Strength/components/SessionHeader.tsx`
@@ -73,3 +86,10 @@
   - RLS policies for per-user access
   - `public.schema_registry` (current schema snapshot)
   - `public.schema_change_log` (applied change entries)
+- Account deletion safety migration: `supabase/migrations/20260329_auth_user_delete_safe_summary_triggers.sql`
+- Exercise/workout delete-order migration: `supabase/migrations/20260329_workout_block_exercises_exercise_fk_deferrable.sql`
+
+## Backend Reference
+- Edge Function: `supabase/functions/delete-account/index.ts`
+- Client helper: `lib/accountDeletion/deleteAccount.ts`
+- Deployed function name expected by the app: `delete-account` unless `EXPO_PUBLIC_DELETE_ACCOUNT_FUNCTION_NAME` is overridden.

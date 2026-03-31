@@ -15,8 +15,9 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.alterastudio.ascension",
+      "bundleIdentifier": "com.alterastudio.tensrfitness ",
       "backgroundModes": [
+        "fetch",
         "location"
       ],
       "infoPlist": {
@@ -35,6 +36,11 @@
       "edgeToEdgeEnabled": true,
       "package": "com.alterastudio.ascension",
       "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.health.READ_HEART_RATE"
       ]
     },
@@ -55,7 +61,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow TENSR to access your location during workouts."
+          "locationWhenInUsePermission": "Allow TENSR to access your location during workouts.",
+          "locationAlwaysAndWhenInUsePermission": "Allow TENSR to access your location in the background so outdoor runs and walks keep tracking when your phone is locked or you switch apps.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [

@@ -115,6 +115,9 @@ export function createHomeStyles(
       paddingTop: 0,
       paddingBottom: 44,
     },
+    contentWithFloatingSession: {
+      paddingBottom: 178,
+    },
     heroCard: {
       position: 'relative',
       marginTop: -6,

@@ -12,8 +12,14 @@ It does not replace the SQL source of truth. It points to it and captures the re
 
 ## Current Focus Areas
 
+- Signup username availability compatibility across legacy and canonical user-profile stores
+- Signup bootstrap compatibility between hosted auth triggers, `public.profiles`, and `"user".users`
+- Signup auth-trigger hardening so legacy bootstrap insert failures do not abort `auth.users` creation
 - Nutrition catalog/search compatibility and verification-state rollout
 - Strength workout structure via ordered workout blocks and normalized superset membership
+- Strength exercise catalog classification via canonical core movements and weighted muscle activation
+- Account deletion safety for summary and goal trigger cascades
+- Account deletion safety for exercise/workout cascade ordering
 
 ## SQL Workflow
 
