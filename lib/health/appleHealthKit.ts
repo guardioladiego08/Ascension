@@ -15,6 +15,14 @@ const HEART_RATE_QUERY_BUFFER_MS = 2 * 60 * 1000;
 let healthKitLoadLogged = false;
 let healthKitLoadErrorMessage: string | null = null;
 let cachedHealthKitModule: HealthKitModule | null = null;
+let healthKitLoadAttempted = false;
+
+declare global {
+  var __turboModuleProxy:
+    | ((moduleName: string) => unknown)
+    | undefined;
+  var NitroModulesProxy: unknown | undefined;
+}
 
 type HealthKitQuantitySample = {
   uuid?: unknown;
@@ -114,16 +122,54 @@ function normalizeHealthKitModule(value: unknown): HealthKitModule | null {
   };
 }
 
+function setHealthKitLoadError(message: string) {
+  healthKitLoadErrorMessage = message;
+
+  if (!healthKitLoadLogged) {
+    healthKitLoadLogged = true;
+    console.warn(`${HEALTH_DEBUG_PREFIX} native module load failed: ${message}`);
+  }
+}
+
+function hasNitroModulesRuntime(): boolean {
+  if (Platform.OS !== 'ios') {
+    return false;
+  }
+
+  if (global.NitroModulesProxy) {
+    return true;
+  }
+
+  if (typeof global.__turboModuleProxy !== 'function') {
+    return false;
+  }
+
+  try {
+    return global.__turboModuleProxy('NitroModules') != null;
+  } catch {
+    return false;
+  }
+}
+
 function getHealthKitModule(): HealthKitModule | null {
   if (Platform.OS !== 'ios') return null;
+  if (healthKitLoadAttempted) return cachedHealthKitModule;
   if (cachedHealthKitModule) return cachedHealthKitModule;
+
+  healthKitLoadAttempted = true;
+
+  if (!hasNitroModulesRuntime()) {
+    setHealthKitLoadError('Native NitroModules were not found in this build.');
+    return null;
+  }
 
   try {
     const module = normalizeHealthKitModule(require('@kingstinct/react-native-healthkit'));
 
     if (!module) {
-      healthKitLoadErrorMessage =
-        'The Apple Health native module loaded without the required API surface.';
+      setHealthKitLoadError(
+        'The Apple Health native module loaded without the required API surface.'
+      );
       return null;
     }
 
@@ -136,14 +182,9 @@ function getHealthKitModule(): HealthKitModule | null {
         ? (error as { message?: unknown }).message
         : error
     );
-    healthKitLoadErrorMessage = asErrString ?? 'Native NitroModules were not found in this build.';
-
-    if (!healthKitLoadLogged) {
-      healthKitLoadLogged = true;
-      console.warn(
-        `${HEALTH_DEBUG_PREFIX} native module load failed: ${healthKitLoadErrorMessage}`
-      );
-    }
+    setHealthKitLoadError(
+      asErrString ?? 'Native NitroModules were not found in this build.'
+    );
     return null;
   }
 }

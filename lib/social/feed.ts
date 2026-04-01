@@ -832,10 +832,19 @@ function mapRunWalkExerciseTypeToActivityType(exerciseType: string): SocialActiv
   return 'run';
 }
 
-function buildRunWalkTitle(activityType: SocialActivityType): string {
-  if (activityType === 'walk') return 'Indoor Walk';
-  if (activityType === 'ride') return 'Indoor Ride';
-  return 'Indoor Run';
+function buildRunWalkTitle(exerciseType: string, activityType: SocialActivityType): string {
+  const source = String(exerciseType ?? '').toLowerCase();
+  const environment = source.includes('outdoor') ? 'Outdoor' : 'Indoor';
+
+  if (activityType === 'walk') return `${environment} Walk`;
+  if (activityType === 'ride') return `${environment} Ride`;
+  return `${environment} Run`;
+}
+
+function buildRunWalkSubtitle(exerciseType: string): string {
+  return String(exerciseType ?? '').toLowerCase().includes('outdoor')
+    ? 'Outdoor Session'
+    : 'Run/Walk Session';
 }
 
 export async function shareRunWalkSessionToFeed(args: {
@@ -871,8 +880,8 @@ export async function shareRunWalkSessionToFeed(args: {
   const rpcRes = await shareSessionViaRpc({
     sessionId: rpcSessionId,
     activityType,
-    title: buildRunWalkTitle(activityType),
-    subtitle: 'Run/Walk Session',
+    title: buildRunWalkTitle(args.exerciseType, activityType),
+    subtitle: buildRunWalkSubtitle(args.exerciseType),
     caption: args.caption ?? null,
     visibility,
     metrics,

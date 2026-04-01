@@ -20,6 +20,7 @@ import { HOME_TONES } from '../../../home/tokens';
 import OutdoorMetrics from './components/OutdoorMetrics';
 import OutdoorMapSlide from './components/OutdoorMapSlide';
 import ConfirmCancelModal from './components/ConfrmCancelModal';
+import FinishConfirmModal from './components/FinishConfirmModal';
 
 import { paceSecPerKm } from '@/lib/OutdoorSession/outdoorUtils';
 import {
@@ -100,6 +101,7 @@ export default function OutdoorSession() {
 
   const [phase, setPhase] = useState<Phase>('idle');
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [distanceMeters, setDistanceMeters] = useState(0);
@@ -117,6 +119,8 @@ export default function OutdoorSession() {
   const samplesRef = useRef<OutdoorDraftSample[]>([]);
   const sessionInitializedRef = useRef(false);
   const hydrationAppliedRef = useRef(false);
+  const sessionExitRef = useRef(false);
+  const sessionIdRef = useRef(makeId());
   const clockRef = useRef(createPausedRunWalkClock(0));
 
   const hasProgress = elapsedSeconds > 0 || distanceMeters > 0;
@@ -139,6 +143,7 @@ export default function OutdoorSession() {
   }, [elapsedSeconds]);
 
   function applyStoredSessionState(existingSession: NonNullable<typeof activeSession> & { kind: 'outdoor' }) {
+    sessionIdRef.current = existingSession.sessionId ?? makeId();
     const normalizedClock = normalizeRunWalkClock({
       clock: existingSession.clock,
       elapsedSeconds: existingSession.elapsedSeconds,
@@ -186,6 +191,7 @@ export default function OutdoorSession() {
   }
 
   async function moveTrackingToBackground() {
+    if (sessionExitRef.current) return;
     if (phaseRef.current !== 'running') return;
     syncElapsedFromClock(Date.now(), 'running');
     stopTimer();
@@ -199,6 +205,7 @@ export default function OutdoorSession() {
   }
 
   async function restoreForegroundTracking() {
+    if (sessionExitRef.current) return;
     await stopOutdoorBackgroundTracking();
 
     const storedSession = await reloadOutdoorSessionFromStorage(lockMode).catch(() => null);
@@ -223,7 +230,7 @@ export default function OutdoorSession() {
   }
 
   useEffect(() => {
-    if (!activeSessionHydrated || hydrationAppliedRef.current) return;
+    if (!activeSessionHydrated || hydrationAppliedRef.current || sessionExitRef.current) return;
 
     const existingSession =
       activeSession?.kind === 'outdoor' && activeSession.mode === lockMode
@@ -269,7 +276,7 @@ export default function OutdoorSession() {
   }, [lockMode]);
 
   useEffect(() => {
-    if (!activeSessionHydrated || !hydrationAppliedRef.current) return;
+    if (!activeSessionHydrated || !hydrationAppliedRef.current || sessionExitRef.current) return;
     let mounted = true;
 
     (async () => {
@@ -322,9 +329,17 @@ export default function OutdoorSession() {
   }, [activeSession, activeSessionHydrated, lockMode, router, phase]);
 
   useEffect(() => {
-    if (!activeSessionHydrated || !sessionInitializedRef.current || phase === 'idle') return;
+    if (
+      !activeSessionHydrated ||
+      !sessionInitializedRef.current ||
+      sessionExitRef.current ||
+      phase === 'idle'
+    ) {
+      return;
+    }
 
     setActiveSession({
+      sessionId: sessionIdRef.current,
       kind: 'outdoor',
       mode: lockMode,
       title,
@@ -438,7 +453,15 @@ export default function OutdoorSession() {
     setCoords([]);
   }
 
+  function beginSessionExit() {
+    sessionExitRef.current = true;
+    sessionInitializedRef.current = false;
+    clearActiveSession();
+  }
+
   async function onStart() {
+    sessionExitRef.current = false;
+    sessionIdRef.current = makeId();
     resetSession();
     const startedAtISO = new Date().toISOString();
     sessionStartedAtRef.current = startedAtISO;
@@ -492,6 +515,7 @@ export default function OutdoorSession() {
   }
 
   async function onEndWorkout() {
+    setFinishOpen(false);
     syncElapsedFromClock(
       Date.now(),
       phaseRef.current === 'running' ? 'running' : 'paused'
@@ -524,8 +548,7 @@ export default function OutdoorSession() {
 
     try {
       await upsertOutdoorDraft(draft);
-      clearActiveSession();
-      sessionInitializedRef.current = false;
+      beginSessionExit();
       await clearActiveRunWalkLock();
 
       router.push({
@@ -552,8 +575,7 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
     await stopOutdoorBackgroundTracking();
-    clearActiveSession();
-    sessionInitializedRef.current = false;
+    beginSessionExit();
     setPhase('idle');
     resetSession();
     setCancelOpen(false);
@@ -567,8 +589,7 @@ export default function OutdoorSession() {
       setCancelOpen(true);
     } else {
       clearActiveRunWalkLock().catch(() => null);
-      clearActiveSession();
-      sessionInitializedRef.current = false;
+      beginSessionExit();
       router.back();
     }
   }
@@ -584,6 +605,13 @@ export default function OutdoorSession() {
         visible={cancelOpen}
         onClose={() => setCancelOpen(false)}
         onConfirmCancel={confirmCancel}
+      />
+      <FinishConfirmModal
+        visible={finishOpen}
+        onKeepGoing={() => setFinishOpen(false)}
+        onFinish={() => {
+          void onEndWorkout();
+        }}
       />
 
       <View style={[globalStyles.container, styles.safe]}>
@@ -697,7 +725,7 @@ export default function OutdoorSession() {
               <TouchableOpacity
                 activeOpacity={0.92}
                 style={[styles.buttonPrimary, styles.endBtn]}
-                onPress={onEndWorkout}
+                onPress={() => setFinishOpen(true)}
               >
                 <Ionicons name="checkmark" size={18} color={colors.blkText} />
                 <Text style={styles.buttonTextPrimary}>End</Text>

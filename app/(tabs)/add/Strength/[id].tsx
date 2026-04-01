@@ -38,8 +38,12 @@ import {
   clearActiveRunWalkSession,
   getActiveRunWalkSession,
 } from '@/lib/activeRunWalkSessionStore';
+import { saveStrengthWorkoutTemplateFromWorkout } from '@/lib/strength/templates';
+import type { StrengthSessionMode } from '@/lib/strength/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
+
+import SaveTemplateModal from './components/SaveTemplateModal';
 
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
@@ -101,6 +105,19 @@ function formatShareErr(err: any): string {
   return code ? `${message} (${code})` : message;
 }
 
+function buildDefaultTemplateName(exercises: ExerciseSummaryRow[]) {
+  const firstExerciseName = exercises[0]?.exercise_name?.trim();
+  if (!firstExerciseName) {
+    return 'Strength template';
+  }
+
+  if (exercises.length === 1) {
+    return `${firstExerciseName} template`;
+  }
+
+  return `${firstExerciseName} + ${exercises.length - 1} more`;
+}
+
 type ExerciseSummaryRow = {
   exercise_id: string;
   exercise_name?: string | null;
@@ -129,10 +146,17 @@ export default function StrengthSummaryPage() {
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { activeSession, clearSession } = useActiveRunWalk();
-  const { id, postId, autoHeartRateSync } = useLocalSearchParams<{
+  const {
+    id,
+    postId,
+    autoHeartRateSync,
+    sessionMode: sessionModeParam,
+  } = useLocalSearchParams<{
     id?: string;
     postId?: string;
     autoHeartRateSync?: string;
+    sessionMode?: string;
+    templateId?: string;
   }>(); // workout ID
 
   const [loading, setLoading] = React.useState(true);
@@ -148,20 +172,50 @@ export default function StrengthSummaryPage() {
   const [heartRateSyncMessage, setHeartRateSyncMessage] = React.useState<string | null>(null);
   const [heartRateSyncing, setHeartRateSyncing] = React.useState(false);
   const [heartRateLoaded, setHeartRateLoaded] = React.useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = React.useState(false);
+  const [templateName, setTemplateName] = React.useState('');
+  const [savingTemplate, setSavingTemplate] = React.useState(false);
+  const [savedTemplateName, setSavedTemplateName] = React.useState<string | null>(null);
   const autoSyncScheduledRef = React.useRef(false);
   const activeSyncTokenRef = React.useRef(0);
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
   const shouldAutoHeartRateSync = autoHeartRateSync === '1';
+  const sessionMode: StrengthSessionMode =
+    sessionModeParam === 'template' ? 'template' : 'freestyle';
 
   React.useEffect(() => {
-    if (
-      id &&
-      activeSession?.kind === 'strength' &&
-      activeSession.workoutId === id
-    ) {
-      clearSession();
+    if (!id) {
+      return;
     }
+
+    let cancelled = false;
+
+    (async () => {
+      const storedSession = await getActiveRunWalkSession().catch(() => null);
+      if (cancelled) {
+        return;
+      }
+
+      const matchesCurrentWorkout =
+        (activeSession?.kind === 'strength' && activeSession.workoutId === id) ||
+        (storedSession?.kind === 'strength' && storedSession.workoutId === id);
+
+      if (!matchesCurrentWorkout) {
+        return;
+      }
+
+      clearSession();
+      try {
+        await clearActiveRunWalkSession();
+      } catch (error) {
+        console.warn('[StrengthSummary] failed to clear persisted active session', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeSession, clearSession, id]);
 
   const runHeartRateSync = React.useCallback(
@@ -424,7 +478,29 @@ export default function StrengthSummaryPage() {
     setHeartRateSyncState('idle');
     setHeartRateSyncMessage(null);
     setHeartRateSyncing(false);
+    setSaveTemplateOpen(false);
+    setSavingTemplate(false);
+    setSavedTemplateName(null);
+    setTemplateName('');
   }, [id]);
+
+  React.useEffect(() => {
+    if (sessionMode !== 'freestyle') {
+      return;
+    }
+
+    if (savedTemplateName) {
+      return;
+    }
+
+    setTemplateName((currentName) => {
+      if (currentName.trim().length > 0 && currentName !== 'Strength template') {
+        return currentName;
+      }
+
+      return buildDefaultTemplateName(exercises);
+    });
+  }, [exercises, savedTemplateName, sessionMode]);
 
   React.useEffect(() => {
     if (!id || !canDelete || !workout?.started_at || !workout?.ended_at) return;
@@ -661,6 +737,42 @@ export default function StrengthSummaryPage() {
       );
     } finally {
       setSharing(false);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!id || !canDelete || sessionMode !== 'freestyle') {
+      return;
+    }
+
+    const normalizedTemplateName = templateName.trim();
+    if (!normalizedTemplateName) {
+      Alert.alert('Template name required', 'Add a name for this workout template first.');
+      return;
+    }
+
+    try {
+      setSavingTemplate(true);
+      const template = await saveStrengthWorkoutTemplateFromWorkout({
+        workoutId: id,
+        title: normalizedTemplateName,
+        visibility: 'private',
+        metadata: {
+          origin: 'freestyle_workout',
+        },
+      });
+
+      setSavedTemplateName(template.title);
+      setSaveTemplateOpen(false);
+      Alert.alert('Template saved', `"${template.title}" is now available in your strength templates.`);
+    } catch (error: any) {
+      console.error('[StrengthSummary] save template failed', error);
+      Alert.alert(
+        'Template save failed',
+        error?.message ?? 'Something went wrong while saving this workout as a template.'
+      );
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -902,6 +1014,48 @@ export default function StrengthSummaryPage() {
             </View>
           ))}
 
+          {canDelete && sessionMode === 'freestyle' ? (
+            savedTemplateName ? (
+              <View style={styles.templateCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shareTitle}>Template saved</Text>
+                  <Text style={styles.shareSubtitle}>
+                    {savedTemplateName} is now available from the strength template library.
+                  </Text>
+                </View>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={24}
+                  color={colors.highlight1}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.templateCard}
+                onPress={() => setSaveTemplateOpen(true)}
+                disabled={savingTemplate}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.shareTitle}>Save as template</Text>
+                  <Text style={styles.shareSubtitle}>
+                    Reuse this exercise order and set count later. New sessions will still use your
+                    last logged weights and reps as placeholders.
+                  </Text>
+                </View>
+                {savingTemplate ? (
+                  <ActivityIndicator size="small" color={colors.highlight1} />
+                ) : (
+                  <Ionicons
+                    name="copy-outline"
+                    size={22}
+                    color={colors.highlight1}
+                  />
+                )}
+              </TouchableOpacity>
+            )
+          ) : null}
+
           {canDelete ? (
             <TouchableOpacity
               activeOpacity={0.9}
@@ -954,6 +1108,14 @@ export default function StrengthSummaryPage() {
             </Text>
           </TouchableOpacity>
         </ScrollView>
+        <SaveTemplateModal
+          visible={saveTemplateOpen}
+          value={templateName}
+          loading={savingTemplate}
+          onChangeText={setTemplateName}
+          onClose={() => setSaveTemplateOpen(false)}
+          onSave={() => void handleSaveTemplate()}
+        />
       </View>
     </View>
   );
@@ -1328,6 +1490,18 @@ function createStyles(
       backgroundColor: colors.card2,
       borderWidth: 1,
       borderColor: colors.border,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    templateCard: {
+      borderRadius: 18,
+      backgroundColor: colors.accentSoft,
+      borderWidth: 1,
+      borderColor: colors.glowPrimary,
       paddingHorizontal: 16,
       paddingVertical: 14,
       marginBottom: 12,

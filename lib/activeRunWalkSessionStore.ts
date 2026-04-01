@@ -3,12 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DistanceUnit, RunWalkSample } from '@/lib/runWalkDraftStore';
 import type { OutdoorDraftSample } from '@/lib/OutdoorSession/draftStore';
 import type { PersistedRunWalkClock } from '@/lib/runWalkSessionClock';
-import type { ExerciseDraft, StrengthWorkoutBlockDraft } from '@/lib/strength/types';
+import type {
+  ExerciseDraft,
+  StrengthSessionMode,
+  StrengthWorkoutBlockDraft,
+} from '@/lib/strength/types';
 import type { StrengthRestTimerState } from '@/lib/strength/restTimer';
 
 export type ActiveSessionPhase = 'running' | 'paused';
 
 export type ActiveIndoorSession = {
+  sessionId?: string;
   kind: 'indoor';
   mode: 'indoor_run' | 'indoor_walk';
   title: string;
@@ -29,6 +34,7 @@ export type ActiveOutdoorCoord = {
 };
 
 export type ActiveOutdoorSession = {
+  sessionId?: string;
   kind: 'outdoor';
   mode: 'outdoor_run' | 'outdoor_walk';
   title: string;
@@ -43,8 +49,12 @@ export type ActiveOutdoorSession = {
 };
 
 export type ActiveStrengthSession = {
+  sessionId?: string;
   kind: 'strength';
   title: string;
+  sessionMode: StrengthSessionMode;
+  templateId?: string | null;
+  templateName?: string | null;
   phase: ActiveSessionPhase;
   workoutId: string;
   userId: string | null;
@@ -62,6 +72,7 @@ export type ActiveRunWalkSession =
   | ActiveStrengthSession;
 
 const KEY = 'tensr:active_run_walk_session';
+let sessionWriteChain: Promise<void> = Promise.resolve();
 
 function safeJsonParse<T>(raw: string | null): T | null {
   if (!raw) return null;
@@ -72,20 +83,28 @@ function safeJsonParse<T>(raw: string | null): T | null {
   }
 }
 
+function enqueueSessionWrite(task: () => Promise<void>) {
+  sessionWriteChain = sessionWriteChain.catch(() => undefined).then(task);
+  return sessionWriteChain;
+}
+
 export async function getActiveRunWalkSession(): Promise<ActiveRunWalkSession | null> {
+  await sessionWriteChain.catch(() => undefined);
   const raw = await AsyncStorage.getItem(KEY);
   return safeJsonParse<ActiveRunWalkSession>(raw);
 }
 
 export async function setActiveRunWalkSession(session: ActiveRunWalkSession | null) {
-  if (!session) {
-    await AsyncStorage.removeItem(KEY);
-    return;
-  }
+  await enqueueSessionWrite(async () => {
+    if (!session) {
+      await AsyncStorage.removeItem(KEY);
+      return;
+    }
 
-  await AsyncStorage.setItem(KEY, JSON.stringify(session));
+    await AsyncStorage.setItem(KEY, JSON.stringify(session));
+  });
 }
 
 export async function clearActiveRunWalkSession() {
-  await AsyncStorage.removeItem(KEY);
+  await setActiveRunWalkSession(null);
 }

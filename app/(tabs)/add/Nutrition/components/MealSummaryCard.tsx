@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 
+import ExpandableGraphSurface from '@/components/charts/ExpandableGraphSurface';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../../home/tokens';
 
@@ -13,6 +14,7 @@ type Props = {
 };
 
 const CHART_SIZE = 132;
+const EXPANDED_CHART_MAX = 260;
 
 const MealSummaryCard: React.FC<Props> = ({
   totalKcal,
@@ -46,53 +48,115 @@ const MealSummaryCard: React.FC<Props> = ({
           <Text style={styles.totalPillValue}>{Math.round(totalKcal)} kcal</Text>
         </View>
       </View>
+      <ExpandableGraphSurface
+        actionBackgroundColor={HOME_TONES.surface1}
+        actionIconColor={HOME_TONES.textPrimary}
+        surfaceStyle={styles.graphSurface}
+      >
+        {({ width, mode }) => {
+          const isExpanded = mode === 'expanded';
+          const useColumnLayout = isExpanded && width < 520;
+          const chartSize = isExpanded
+            ? Math.min(Math.max(width * 0.44, 188), EXPANDED_CHART_MAX)
+            : CHART_SIZE;
+          const radius = Math.round(chartSize * 0.48);
+          const innerRadius = Math.round(radius * 0.66);
+          const innerCircleColor = HOME_TONES.surface2;
 
-      <View style={styles.row}>
-        <View style={styles.chartWrap}>
-          {hasData ? (
-            <PieChart
-              data={data}
-              donut
-              showText={false}
-              innerCircleColor={colors.cardDark}
-              innerRadius={42}
-              radius={64}
-              centerLabelComponent={() => (
-                <View style={styles.centerLabelWrap}>
-                  <Text style={styles.centerLabel}>{Math.round(totalKcal)}</Text>
-                  <Text style={styles.centerSubLabel}>kcal</Text>
+          return (
+            <View
+              style={[
+                styles.graphContent,
+                isExpanded ? styles.graphContentExpanded : null,
+              ]}
+            >
+              <View
+                style={[
+                  styles.row,
+                  isExpanded ? styles.rowExpanded : null,
+                  useColumnLayout ? styles.rowExpandedColumn : null,
+                ]}
+              >
+                <View style={[styles.chartWrap, { width: chartSize, minHeight: chartSize }]}>
+                  {hasData ? (
+                    <PieChart
+                      data={data}
+                      donut
+                      showText={false}
+                      innerCircleColor={innerCircleColor}
+                      innerRadius={innerRadius}
+                      radius={radius}
+                      centerLabelComponent={() => (
+                        <View style={styles.centerLabelWrap}>
+                          <Text
+                            style={[
+                              styles.centerLabel,
+                              isExpanded ? styles.centerLabelExpanded : null,
+                            ]}
+                          >
+                            {Math.round(totalKcal)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.centerSubLabel,
+                              isExpanded ? styles.centerSubLabelExpanded : null,
+                            ]}
+                          >
+                            kcal
+                          </Text>
+                        </View>
+                      )}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.emptyChart,
+                        {
+                          width: chartSize,
+                          minHeight: chartSize,
+                          borderRadius: chartSize / 2,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.emptyTitle}>No ingredients yet</Text>
+                      <Text style={styles.emptyText}>
+                        Add foods to preview calories and macros.
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
-            />
-          ) : (
-            <View style={styles.emptyChart}>
-              <Text style={styles.emptyTitle}>No ingredients yet</Text>
-              <Text style={styles.emptyText}>Add foods to preview calories and macros.</Text>
-            </View>
-          )}
-        </View>
 
-        <View style={styles.metricCol}>
-          <MacroRow
-            label="Protein"
-            value={`${totalProtein.toFixed(1)} g`}
-            color={colors.macroProtein}
-            styles={styles}
-          />
-          <MacroRow
-            label="Carbs"
-            value={`${totalCarbs.toFixed(1)} g`}
-            color={colors.macroCarbs}
-            styles={styles}
-          />
-          <MacroRow
-            label="Fat"
-            value={`${totalFat.toFixed(1)} g`}
-            color={colors.macroFats}
-            styles={styles}
-          />
-        </View>
-      </View>
+                <View
+                  style={[
+                    styles.metricCol,
+                    isExpanded ? styles.metricColExpanded : null,
+                    useColumnLayout ? styles.metricColExpandedColumn : null,
+                  ]}
+                >
+                  <MacroRow
+                    label="Protein"
+                    value={`${totalProtein.toFixed(1)} g`}
+                    color={colors.macroProtein}
+                    styles={styles}
+                  />
+                  <MacroRow
+                    label="Carbs"
+                    value={`${totalCarbs.toFixed(1)} g`}
+                    color={colors.macroCarbs}
+                    styles={styles}
+                  />
+                  <MacroRow
+                    label="Fat"
+                    value={`${totalFat.toFixed(1)} g`}
+                    color={colors.macroFats}
+                    styles={styles}
+                  />
+                </View>
+              </View>
+            </View>
+          );
+        }}
+      </ExpandableGraphSurface>
     </View>
   );
 };
@@ -186,6 +250,27 @@ function createStyles(
       gap: 18,
       alignItems: 'center',
     },
+    rowExpanded: {
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    rowExpandedColumn: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+    },
+    graphSurface: {
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
+    },
+    graphContent: {
+      padding: 18,
+    },
+    graphContentExpanded: {
+      paddingHorizontal: 22,
+      paddingVertical: 24,
+    },
     chartWrap: {
       width: CHART_SIZE,
       minHeight: CHART_SIZE,
@@ -202,12 +287,20 @@ function createStyles(
       lineHeight: 24,
       letterSpacing: -0.7,
     },
+    centerLabelExpanded: {
+      fontSize: 32,
+      lineHeight: 34,
+    },
     centerSubLabel: {
       marginTop: 2,
       color: HOME_TONES.textSecondary,
       fontFamily: fonts.body,
       fontSize: 11,
       lineHeight: 14,
+    },
+    centerSubLabelExpanded: {
+      fontSize: 13,
+      lineHeight: 16,
     },
     emptyChart: {
       width: CHART_SIZE,
@@ -238,6 +331,13 @@ function createStyles(
     metricCol: {
       flex: 1,
       gap: 10,
+    },
+    metricColExpanded: {
+      minWidth: 220,
+    },
+    metricColExpandedColumn: {
+      minWidth: 0,
+      width: '100%',
     },
     metricRow: {
       flexDirection: 'row',

@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -26,6 +27,7 @@ import {
 import { formatDuration } from '@/lib/OutdoorSession/outdoorUtils';
 import { getRunWalkElapsedSeconds } from '@/lib/runWalkSessionClock';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useSupabaseSession } from '@/providers/SupabaseProvider';
 
 type ActiveRunWalkContextType = {
   activeSession: ActiveRunWalkSession | null;
@@ -64,28 +66,82 @@ function refreshActiveSessionTiming(
 }
 
 export function ActiveRunWalkProvider({ children }: { children: React.ReactNode }) {
+  const { session: authSession, loading: authLoading } = useSupabaseSession();
   const [activeSession, setActiveSessionState] = useState<ActiveRunWalkSession | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const blockedSessionIdRef = useRef<string | null>(null);
+  const syncVersionRef = useRef(0);
 
   const loadStoredSession = useCallback(async () => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!authSession) {
+      setActiveSessionState(null);
+      await setActiveRunWalkSession(null).catch(() => null);
+      return;
+    }
+
+    const syncVersion = syncVersionRef.current;
     const stored = await getActiveRunWalkSession();
+    if (syncVersionRef.current !== syncVersion) {
+      return;
+    }
+
+    if (stored?.sessionId && blockedSessionIdRef.current === stored.sessionId) {
+      setActiveSessionState(null);
+      await setActiveRunWalkSession(null).catch(() => null);
+      return;
+    }
+
     const refreshed = refreshActiveSessionTiming(stored);
+    if (syncVersionRef.current !== syncVersion) {
+      return;
+    }
+
     setActiveSessionState(refreshed);
+    if (refreshed?.sessionId) {
+      blockedSessionIdRef.current = null;
+    }
 
     if (refreshed !== stored) {
       await setActiveRunWalkSession(refreshed);
     }
-  }, []);
+  }, [authLoading, authSession]);
 
   useEffect(() => {
     let mounted = true;
 
     (async () => {
       try {
+        if (authLoading) {
+          return;
+        }
+
+        if (!authSession) {
+          setActiveSessionState(null);
+          await setActiveRunWalkSession(null).catch(() => null);
+          return;
+        }
+
+        const syncVersion = syncVersionRef.current;
         const stored = await getActiveRunWalkSession();
+        if (!mounted || syncVersionRef.current !== syncVersion) return;
+
+        if (stored?.sessionId && blockedSessionIdRef.current === stored.sessionId) {
+          setActiveSessionState(null);
+          await setActiveRunWalkSession(null).catch(() => null);
+          return;
+        }
+
         const refreshed = refreshActiveSessionTiming(stored);
+        if (!mounted || syncVersionRef.current !== syncVersion) return;
         if (!mounted) return;
         setActiveSessionState(refreshed);
+        if (refreshed?.sessionId) {
+          blockedSessionIdRef.current = null;
+        }
         if (refreshed !== stored) {
           await setActiveRunWalkSession(refreshed);
         }
@@ -97,7 +153,7 @@ export function ActiveRunWalkProvider({ children }: { children: React.ReactNode 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authLoading, authSession]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -112,14 +168,32 @@ export function ActiveRunWalkProvider({ children }: { children: React.ReactNode 
   }, [loadStoredSession]);
 
   const setSession = useCallback((session: ActiveRunWalkSession | null) => {
+    if (!authSession) {
+      setActiveSessionState(null);
+      setActiveRunWalkSession(null).catch(() => null);
+      return;
+    }
+
+    if (session?.sessionId && blockedSessionIdRef.current === session.sessionId) {
+      return;
+    }
+
+    syncVersionRef.current += 1;
+    if (session?.sessionId) {
+      blockedSessionIdRef.current = null;
+    }
     setActiveSessionState(session);
     setActiveRunWalkSession(session).catch(() => null);
-  }, []);
+  }, [authSession]);
 
   const clearSession = useCallback(() => {
+    syncVersionRef.current += 1;
+    if (activeSession?.sessionId) {
+      blockedSessionIdRef.current = activeSession.sessionId;
+    }
     setActiveSessionState(null);
     setActiveRunWalkSession(null).catch(() => null);
-  }, []);
+  }, [activeSession]);
 
   const value = useMemo(
     () => ({
@@ -150,6 +224,7 @@ function ActiveRunWalkResumeBanner() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { colors, fonts } = useAppTheme();
+  const { session: authSession, loading: authLoading } = useSupabaseSession();
   const { activeSession, hydrated } = useActiveRunWalk();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
@@ -164,7 +239,8 @@ function ActiveRunWalkResumeBanner() {
     ((activeSession.kind === 'indoor' && isIndoorScreen) ||
       (activeSession.kind === 'outdoor' && isOutdoorScreen) ||
       (activeSession.kind === 'strength' && isStrengthScreen));
-  const shouldHideBanner = !hydrated || !activeSession || onCurrentSessionScreen;
+  const shouldHideBanner =
+    authLoading || !authSession || !hydrated || !activeSession || onCurrentSessionScreen;
 
   useEffect(() => {
     if (!activeSession || activeSession.phase !== 'running' || !activeSession.clock) {

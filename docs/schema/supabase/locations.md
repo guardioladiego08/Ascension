@@ -3,6 +3,9 @@
 ## Primary SQL Sources
 
 - Migrations: `supabase/migrations/`
+- Indoor run/walk stats compatibility migration: `supabase/migrations/20260331_fix_indoor_run_walk_stats_meter_columns.sql`
+- Strength workout templates migration: `supabase/migrations/20260331_strength_workout_templates.sql`
+- Strength template schema-cache refresh migration: `supabase/migrations/20260401_strength_template_schema_cache_refresh.sql`
 - Signup auth trigger hardening migration: `supabase/migrations/20260329_signup_auth_trigger_hardening.sql`
 - Signup bootstrap compatibility migration: `supabase/migrations/20260329_signup_bootstrap_schema_compat.sql`
 - Signup username availability migration: `supabase/migrations/20260329_signup_username_availability_rpc.sql`
@@ -30,6 +33,7 @@
 - Outdoor session Supabase helpers: `lib/OutdoorSession/supabase.ts`
 - Strength workout session flow: `app/(tabs)/add/Strength/`
 - Strength workout client models/helpers: `lib/strength/`
+- Strength workout template client helpers: `lib/strength/templates.ts`
 
 ## Notes
 

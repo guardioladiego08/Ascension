@@ -2,6 +2,38 @@
 
 Use this file for durable schema context that should not live only in chat.
 
+## 2026-03-31 - Indoor run/walk summary rollups must stay on meter columns even after trigger hardening
+
+- `user.weekly_summary` no longer guarantees legacy distance columns like `total_miles_ran`, `total_miles_walked`, or `total_miles_run_walk`.
+- Indoor run/walk trigger helpers must update:
+  - `total_distance_ran_m`
+  - `total_distance_walked_m`
+  - `total_distance_run_walk_m`
+- The 2026-03-29 auth-delete-safe trigger migration can regress signup/delete safety fixes into stats helpers if it redefines those functions from older source text.
+- When a completed indoor session insert fails with Postgres `42703` against `total_miles_ran`, the authoritative fix is to replace `user.apply_indoor_run_walk_stats_delta(...)` on the hosted project with the meter-based version rather than changing the client payload.
+
+## 2026-04-01 - Strength template table DDL must be followed by a PostgREST schema cache reload
+
+- The strength template feature depends on PostgREST seeing these relations in the exposed `strength` schema:
+  - `strength.workout_templates`
+  - `strength.workout_template_blocks`
+  - `strength.workout_template_block_exercises`
+- A hosted project can still return `PGRST205` for `strength.workout_templates` even after the DDL exists if the API schema cache has not been reloaded yet.
+- The compatibility fix is to apply the cache-refresh migration `20260401_strength_template_schema_cache_refresh.sql` after the template-table migration so template reads and writes stop failing on schema-cache misses.
+
+## 2026-03-31 - Strength templates should stay private now but preserve share and fork metadata for future feed reuse
+
+- Strength workout templates now mirror the normalized workout structure instead of storing a flat JSON blob:
+  - `strength.workout_templates`
+  - `strength.workout_template_blocks`
+  - `strength.workout_template_block_exercises`
+- Template exercise rows store `target_set_count` only; weight and rep targets remain intentionally unset so the workout composer can keep using recent performance placeholders from `strength.strength_sets`.
+- Templates are currently user-owned and private by policy, but the schema already includes:
+  - `visibility` using the existing strength privacy enum (`private`, `followers`, `public`)
+  - `source_strength_workout_id` for "saved from workout" provenance
+  - `forked_from_template_id` for future follower reuse and template cloning flows
+- Template block exercise references use a deferred `public.exercises` foreign key just like workout block exercises so future account-deletion or cascade operations do not become order-dependent.
+
 ## 2026-03-29 - Signup auth bootstrap should never hard-fail auth user creation on auxiliary table writes
 
 - Hosted email signup currently depends on `public.handle_new_auth_user()` running successfully during `auth.users` insert.

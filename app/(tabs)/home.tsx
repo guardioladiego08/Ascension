@@ -13,6 +13,7 @@ import { caloriesEnabled, computeRings } from '@/lib/goals/goalLogic';
 import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 
 import RunWalkTypeModal, { RunWalkExerciseType } from './home/RunWalkTypeModal';
+import StrengthStartModal, { StrengthStartMode } from './home/StrengthStartModal';
 import { HomeActionTile } from './home/HomeActionTile';
 import { HomeCompletionCard } from './home/HomeCompletionCard';
 import { HomeGoalLanesCard } from './home/HomeGoalLanesCard';
@@ -40,6 +41,7 @@ export default function HomeScreen() {
   const { distanceUnit, weightUnit } = useUnits();
   const { activeSession, hydrated: activeSessionHydrated } = useActiveRunWalk();
   const styles = useMemo(() => createHomeStyles(colors, fonts), [colors, fonts]);
+  const [showStrengthModal, setShowStrengthModal] = useState(false);
   const [showRunWalkModal, setShowRunWalkModal] = useState(false);
   const showFloatingActiveSession = activeSessionHydrated && !!activeSession;
 
@@ -413,7 +415,7 @@ export default function HomeScreen() {
             icon={<MaterialCommunityIcons name="dumbbell" size={22} color={colors.highlight1} />}
             accentColor={colors.accentSoft}
             styles={styles}
-            onPress={() => router.push('/add/Strength/StrengthTrain')}
+            onPress={() => setShowStrengthModal(true)}
           />
 
           <HomeActionTile
@@ -536,6 +538,23 @@ export default function HomeScreen() {
               },
             });
           }
+        }}
+      />
+      <StrengthStartModal
+        visible={showStrengthModal}
+        onClose={() => setShowStrengthModal(false)}
+        onSelect={(mode: StrengthStartMode) => {
+          setShowStrengthModal(false);
+
+          if (mode === 'template') {
+            router.push('/add/Strength/templates');
+            return;
+          }
+
+          router.push({
+            pathname: '/add/Strength/StrengthTrain',
+            params: { sessionMode: 'freestyle' },
+          });
         }}
       />
     </View>

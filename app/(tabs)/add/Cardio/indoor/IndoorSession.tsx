@@ -45,6 +45,7 @@ import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
+const HOME_ROUTE = '/(tabs)/home';
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -142,6 +143,8 @@ export default function IndoorSession() {
   const seqRef = useRef(0);
   const sessionInitializedRef = useRef(false);
   const hydrationAppliedRef = useRef(false);
+  const sessionExitRef = useRef(false);
+  const sessionIdRef = useRef(makeId());
 
   // refs for interval accuracy (avoid stale closures)
   const elapsedRef = useRef(0);
@@ -238,7 +241,7 @@ export default function IndoorSession() {
   }
 
   useEffect(() => {
-    if (!activeSessionHydrated || hydrationAppliedRef.current) return;
+    if (!activeSessionHydrated || hydrationAppliedRef.current || sessionExitRef.current) return;
 
     const existingSession =
       activeSession?.kind === 'indoor' && activeSession.mode === mode
@@ -246,6 +249,7 @@ export default function IndoorSession() {
         : null;
 
     if (existingSession) {
+      sessionIdRef.current = existingSession.sessionId ?? makeId();
       const nextRunning = existingSession.phase === 'running';
       const normalizedClock = normalizeRunWalkClock({
         clock: existingSession.clock,
@@ -314,13 +318,19 @@ export default function IndoorSession() {
     setIsRunning(nextRunning);
   };
 
+  const beginSessionExit = () => {
+    sessionExitRef.current = true;
+    sessionInitializedRef.current = false;
+    clearActiveSession();
+  };
+
   /**
    * Global lock acquisition:
    * - If ANY run/walk session is active, block entry.
    * - This prevents "run while walk is in progress" and vice versa.
    */
   useEffect(() => {
-    if (!activeSessionHydrated || !hydrationAppliedRef.current) return;
+    if (!activeSessionHydrated || !hydrationAppliedRef.current || sessionExitRef.current) return;
     let mounted = true;
 
     (async () => {
@@ -376,9 +386,10 @@ export default function IndoorSession() {
   }, [activeSession, activeSessionHydrated, defaultSpeed, mode]);
 
   useEffect(() => {
-    if (!activeSessionHydrated || !sessionInitializedRef.current) return;
+    if (!activeSessionHydrated || !sessionInitializedRef.current || sessionExitRef.current) return;
 
     setActiveSession({
+      sessionId: sessionIdRef.current,
       kind: 'indoor',
       mode,
       title,
@@ -477,9 +488,8 @@ export default function IndoorSession() {
     }
     // no progress: clear lock and exit
     clearActiveRunWalkLock().catch(() => null);
-    clearActiveSession();
-    sessionInitializedRef.current = false;
-    router.back();
+    beginSessionExit();
+    router.replace(HOME_ROUTE);
   };
 
   // Finish -> draft -> clear lock -> reset -> go summary
@@ -520,8 +530,7 @@ export default function IndoorSession() {
     try {
       await upsertDraft(draft);
 
-      clearActiveSession();
-      sessionInitializedRef.current = false;
+      beginSessionExit();
       await clearActiveRunWalkLock();
 
       // Reset but keep running=false because we're leaving screen
@@ -540,15 +549,14 @@ export default function IndoorSession() {
 
   // Cancel confirmed -> clear lock -> reset with running=true (fix next start) -> leave
   const confirmDiscardCancel = async () => {
-    clearActiveSession();
-    sessionInitializedRef.current = false;
+    beginSessionExit();
     try {
       await clearActiveRunWalkLock();
     } catch {}
 
     // Reset and explicitly set nextRunning=true so this screen never “sticks” paused
     resetSessionState(true);
-    router.back();
+    router.replace(HOME_ROUTE);
   };
 
   return (

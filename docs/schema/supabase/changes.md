@@ -1,5 +1,23 @@
 # Supabase Schema Changes
 
+## 2026-04-01 - Strength template tables now force a PostgREST schema cache reload
+
+- What changed: Added migration `20260401_strength_template_schema_cache_refresh.sql` to issue `notify pgrst, 'reload schema'` after the strength template rollout and record the compatibility step in `public.schema_change_log` when available.
+- Why: Hosted projects can still raise `PGRST205` for `strength.workout_templates` if the template DDL has landed but the PostgREST schema cache has not refreshed yet.
+- Follow-up: Apply this migration on the hosted project together with `20260331_strength_workout_templates.sql` before retesting template save/load flows.
+
+## 2026-03-31 - Indoor run/walk summary triggers are back on meter-only weekly stats columns
+
+- What changed: Added migration `20260331_fix_indoor_run_walk_stats_meter_columns.sql` to replace `user.apply_indoor_run_walk_stats_delta(...)`, restore `user.weekly_summary` writes to `total_distance_ran_m`, `total_distance_walked_m`, and `total_distance_run_walk_m`, and keep the newer `auth_user_exists(...)` delete-safety guard in place.
+- Why: Saving a completed indoor session was failing with Postgres `42703` because a later trigger-hardening migration had reintroduced writes to removed legacy columns such as `total_miles_ran`.
+- Follow-up: Apply this migration on the hosted project before retesting indoor summaries, and treat any future edits to summary-trigger helpers as regression-prone if they are copied from pre-meter migrations.
+
+## 2026-03-31 - Strength templates now use normalized block tables with future share metadata
+
+- What changed: Added migration `20260331_strength_workout_templates.sql` creating `strength.workout_templates`, `strength.workout_template_blocks`, and `strength.workout_template_block_exercises` with ordered block membership, per-exercise target set counts, future-facing `visibility`, `source_strength_workout_id`, and `forked_from_template_id`, plus indexes and own-row RLS policies.
+- Why: The app needs reusable strength workout templates that can launch a session with preset exercise order and set counts today, while leaving a clean path for future social sharing and follower reuse.
+- Follow-up: Keep initial mobile reads and writes user-owned/private for now, and add a visibility-aware RPC or policy expansion later when template sharing is actually exposed in the social feed.
+
 ## 2026-03-29 - Signup auth trigger is now hardened against legacy bootstrap failures
 
 - What changed: Added migration `20260329_signup_auth_trigger_hardening.sql` to replace `public.handle_new_auth_user()` with a safer version that derives a normalized fallback username from metadata/email/id, seeds `public.profiles` when possible, and treats `profiles_stub` / `"user".users` bootstrap writes as best-effort warning paths instead of aborting the auth insert.

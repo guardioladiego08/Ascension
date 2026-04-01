@@ -35,13 +35,13 @@ export function createExerciseDraft(params: {
   weightUnit: UnitMass;
   previousSessionSets?: PreviousExerciseSetSuggestion[];
   roundCount?: number;
+  roundCountMode?: 'at_least_previous' | 'exact';
 }): ExerciseDraft {
   const previousSessionSets = params.previousSessionSets ?? [];
-  const targetRoundCount = Math.max(
-    1,
-    params.roundCount ?? 0,
-    previousSessionSets.length
-  );
+  const targetRoundCount =
+    params.roundCountMode === 'exact'
+      ? Math.max(1, params.roundCount ?? previousSessionSets.length)
+      : Math.max(1, params.roundCount ?? 0, previousSessionSets.length);
 
   return {
     instanceId: uuidv4(),

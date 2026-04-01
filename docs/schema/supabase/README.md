@@ -12,6 +12,9 @@ It does not replace the SQL source of truth. It points to it and captures the re
 
 ## Current Focus Areas
 
+- Strength template schema-cache compatibility after custom-schema DDL
+- Indoor run/walk summary triggers must use meter-based `weekly_summary` columns only; newer trigger-hardening migrations should not reintroduce `total_miles_*` writes.
+- Strength workout templates with normalized block exercise structure and future share visibility metadata
 - Signup username availability compatibility across legacy and canonical user-profile stores
 - Signup bootstrap compatibility between hosted auth triggers, `public.profiles`, and `"user".users`
 - Signup auth-trigger hardening so legacy bootstrap insert failures do not abort `auth.users` creation

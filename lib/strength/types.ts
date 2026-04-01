@@ -1,6 +1,7 @@
 export type UnitMass = 'kg' | 'lb';
 export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
 export type StrengthWorkoutBlockKind = 'exercise' | 'superset';
+export type StrengthSessionMode = 'freestyle' | 'template';
 
 export type SetDraft = {
   tempId: string;

@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
+import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
 import {
   deleteOutdoorSession,
   createOutdoorSession,
@@ -42,6 +43,7 @@ import {
   type OutdoorSessionDraft,
 } from '@/lib/OutdoorSession/draftStore';
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
+import OutdoorSummaryRouteCard from './components/OutdoorSummaryRouteCard';
 import {
   formatCurrentHealthError,
   getCurrentHeartRateSamplesForRange,
@@ -53,6 +55,7 @@ import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
 import type { HealthHeartRateSample } from '@/lib/health/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
+const KM_PER_MI = 1.609344;
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
@@ -75,6 +78,34 @@ function formatTimelineLabel(totalSeconds: number) {
   const mins = Math.floor(seconds / 60);
   const rem = seconds % 60;
   return `${String(mins).padStart(2, '0')}:${String(rem).padStart(2, '0')}`;
+}
+
+function formatShareErr(err: any): string {
+  if (!err) return 'Unknown share error';
+  const code = String(err?.code ?? '').trim();
+  if (code === '42P10') {
+    return 'Backend share function is outdated (42P10). Apply migration 20260227_fix_share_run_walk_session_user_no_on_conflict.sql.';
+  }
+
+  const message = String(err?.message ?? 'Share request failed').trim();
+  return code ? `${message} (${code})` : message;
+}
+
+function extractRouteCoords(samples: OutdoorSessionDraft['samples']) {
+  const coords: Array<{ lat: number; lon: number }> = [];
+
+  for (const sample of samples ?? []) {
+    if (!Number.isFinite(sample.lat) || !Number.isFinite(sample.lon)) {
+      continue;
+    }
+
+    coords.push({
+      lat: sample.lat,
+      lon: sample.lon,
+    });
+  }
+
+  return coords;
 }
 
 type HeartRateSyncState =
@@ -106,6 +137,9 @@ export default function SessionSummary() {
   const [loading, setLoading] = useState(Boolean(draftId));
 
   const [saving, setSaving] = useState(false);
+  const [sharingToFeed, setSharingToFeed] = useState(false);
+  const [shareToFeed, setShareToFeed] = useState(false);
+  const [sharedToFeed, setSharedToFeed] = useState(false);
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
   const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
@@ -174,6 +208,13 @@ export default function SessionSummary() {
     if (elapsedSeconds <= 0 || distanceMeters <= 0) return null;
     return distanceMeters / elapsedSeconds;
   }, [distanceMeters, draft?.avg_speed_mps, elapsedSeconds]);
+
+  const avgPacePerMi = useMemo(() => {
+    if (avgPace == null || !Number.isFinite(avgPace) || avgPace <= 0) return null;
+    return avgPace * KM_PER_MI;
+  }, [avgPace]);
+
+  const routeCoords = useMemo(() => extractRouteCoords(draft?.samples ?? []), [draft?.samples]);
 
   const runHeartRateSync = useCallback(
     async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
@@ -341,6 +382,44 @@ export default function SessionSummary() {
     startedAtISO,
   ]);
 
+  const shareCurrentSession = useCallback(
+    async (sessionId: string) => {
+      if (!sessionId || sharingToFeed) {
+        return false;
+      }
+
+      try {
+        setSharingToFeed(true);
+
+        await shareRunWalkSessionToFeed({
+          sessionId,
+          exerciseType: activityType === 'walk' ? 'outdoor_walk' : 'outdoor_run',
+          totalDistanceM: distanceMeters,
+          totalTimeS: elapsedSeconds,
+          avgPaceSPerMi: avgPacePerMi,
+          avgPaceSPerKm: avgPace,
+          visibility: 'followers',
+        });
+
+        setSharedToFeed(true);
+        setShareToFeed(true);
+        setSaveStatusText('Session saved and shared to your feed.');
+        return true;
+      } catch (shareErr: any) {
+        console.warn('[OutdoorSessionSummary] share failed', shareErr);
+        setSaveStatusText('Session saved. Sharing to your feed failed.');
+        Alert.alert(
+          'Share failed',
+          `Session saved, but sharing to your feed failed.${shareErr ? `\n\n${formatShareErr(shareErr)}` : ''}`
+        );
+        return false;
+      } finally {
+        setSharingToFeed(false);
+      }
+    },
+    [activityType, avgPace, avgPacePerMi, distanceMeters, elapsedSeconds, sharingToFeed]
+  );
+
   async function onSave() {
     if (saving || savedSessionId || loading) return;
 
@@ -401,7 +480,15 @@ export default function SessionSummary() {
 
       setSavedSessionId(sessionId);
       setGoalResult(nextGoalResult);
-      setSaveStatusText('Session saved.');
+
+      if (shareToFeed) {
+        const shared = await shareCurrentSession(sessionId);
+        if (!shared) {
+          setSaveStatusText('Session saved. Sharing to your feed failed.');
+        }
+      } else {
+        setSaveStatusText('Session saved.');
+      }
     } catch (error) {
       console.warn('[OutdoorSessionSummary] save failed', error);
 
@@ -483,6 +570,12 @@ export default function SessionSummary() {
             <Row label="Distance" value={formatDistance(distanceMeters, distanceUnit)} styles={styles} />
             <Row label="Avg Pace" value={formatPaceForUnit(avgPace, distanceUnit)} styles={styles} />
           </View>
+
+          <OutdoorSummaryRouteCard
+            coords={routeCoords}
+            title={activityType === 'walk' ? 'Outdoor walk route' : 'Outdoor run route'}
+            subtitle="Review the exact GPS path captured during this session."
+          />
 
           <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
             <View style={styles.heartRateHeaderRow}>
@@ -601,25 +694,82 @@ export default function SessionSummary() {
 
         <View style={styles.footer}>
           {savedSessionId ? (
-            <TouchableOpacity style={[globalStyles.buttonPrimary, styles.primary]} onPress={onDone}>
-              <Ionicons name="checkmark" size={20} color={colors.blkText} />
-              <Text style={globalStyles.buttonTextPrimary}>Done</Text>
-            </TouchableOpacity>
+            <>
+              {!sharedToFeed ? (
+                <TouchableOpacity
+                  style={[
+                    globalStyles.buttonSecondary,
+                    styles.secondaryAction,
+                    sharingToFeed ? styles.primaryDisabled : null,
+                  ]}
+                  onPress={() => {
+                    void shareCurrentSession(savedSessionId!);
+                  }}
+                  disabled={sharingToFeed}
+                >
+                  {sharingToFeed ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="share-social-outline" size={20} color={colors.text} />
+                      <Text style={globalStyles.buttonTextSecondary}>Post to Feed</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity style={[globalStyles.buttonPrimary, styles.primary]} onPress={onDone}>
+                <Ionicons name="checkmark" size={20} color={colors.blkText} />
+                <Text style={globalStyles.buttonTextPrimary}>Done</Text>
+              </TouchableOpacity>
+            </>
           ) : (
-            <TouchableOpacity
-              style={[globalStyles.buttonPrimary, styles.primary, saving && styles.primaryDisabled]}
-              onPress={onSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color={colors.blkText} />
-              ) : (
-                <>
-                  <Ionicons name="save-outline" size={20} color={colors.blkText} />
-                  <Text style={globalStyles.buttonTextPrimary}>Save Session</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[
+                  styles.shareCard,
+                  (saving || sharingToFeed) ? styles.primaryDisabled : null,
+                ]}
+                onPress={() => setShareToFeed((value) => !value)}
+                disabled={saving || sharingToFeed}
+              >
+                <View style={styles.shareCopy}>
+                  <Text style={styles.shareTitle}>Post this run to your feed</Text>
+                  <Text style={styles.shareSubtitle}>
+                    {shareToFeed
+                      ? 'Followers will be able to see this session once it is saved.'
+                      : 'Leave this off to save the session without posting it.'}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={shareToFeed ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={shareToFeed ? colors.highlight1 : colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[globalStyles.buttonPrimary, styles.primary, saving && styles.primaryDisabled]}
+                onPress={onSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={colors.blkText} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name={shareToFeed ? 'share-social-outline' : 'save-outline'}
+                      size={20}
+                      color={colors.blkText}
+                    />
+                    <Text style={globalStyles.buttonTextPrimary}>
+                      {shareToFeed ? 'Save + Share' : 'Save Session'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
           )}
         </View>
         </ScrollView>
@@ -896,7 +1046,38 @@ function createStyles(
     paddingBottom: 14,
     gap: 10,
   },
+  shareCard: {
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareCopy: {
+    flex: 1,
+  },
+  shareTitle: {
+    color: colors.text,
+    fontFamily: fonts.heading,
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  shareSubtitle: {
+    marginTop: 4,
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   primary: {
+    minHeight: 56,
+    gap: 10,
+  },
+  secondaryAction: {
     minHeight: 56,
     gap: 10,
   },
