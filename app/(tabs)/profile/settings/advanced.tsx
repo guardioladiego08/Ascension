@@ -52,7 +52,7 @@ export default function AdvancedSettingsScreen() {
               <Text style={styles.cardTitle}>Highlight color family</Text>
               <Text style={styles.cardDescription}>
                 Choose one 3-color performance palette for the app. Your
-                selection is applied globally and saved on this device.
+                selection is applied globally and saved to your account.
               </Text>
             </View>
 

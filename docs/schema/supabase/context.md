@@ -2,6 +2,59 @@
 
 Use this file for durable schema context that should not live only in chat.
 
+## 2026-04-04 - Hosted nutrition food foreign keys can still point at legacy foods tables
+
+- Some hosted projects still have live `food_id` foreign keys on nutrition tables pointing at a legacy `foods` table even when `nutrition.food_items` already exists.
+- The confirmed drift path so far is `nutrition.recipe_ingredients.food_id`, and `nutrition.diary_items.food_id` or `nutrition.user_favorite_foods.food_id` may lag the same way on partially migrated projects.
+- Compatibility seeds should inspect the live FK target and mirror demo food rows into that referenced table, otherwise ingredient or diary inserts can fail with `23503` even though the same ids were inserted into `nutrition.food_items`.
+- App runtime should still treat `nutrition.food_items` as the canonical catalog; this note is specifically for hosted-schema troubleshooting, migrations, and seeds.
+
+## 2026-04-04 - Hosted nutrition diary columns may still use enums instead of text
+
+- Some hosted projects have `nutrition.diary_items.meal_type` and possibly `nutrition.diary_items.meal_slot` stored as enum types even though the local 2026-03-22 migration path defines those columns as `text` plus a check constraint.
+- Compatibility seeds should look up the live column types and cast staged string values into those types during insert, otherwise demo diary inserts can fail with `42804` on stricter hosted schemas.
+- Keep the seed values aligned with the existing allowed labels:
+  - `breakfast`
+  - `lunch`
+  - `dinner`
+  - `snack`
+  - `pre-workout`
+  - `post-workout`
+
+## 2026-04-04 - Hosted nutrition diary food references may still use legacy numeric IDs
+
+- Some hosted projects still store `nutrition.diary_items.food_id` as a numeric type such as `bigint` instead of the UUID shape used by the newer `nutrition.food_items` catalog.
+- Compatibility seeds should maintain a logical-food to live-food-id map per target table, because different nutrition tables on the same hosted project can disagree about which food table and key type they still use.
+- When `nutrition.diary_items.food_id` is not UUID-backed, the seed should resolve each staged food entry through the live mapped target table before insert rather than writing the logical demo UUID directly.
+
+
+## 2026-04-02 - Strength radar previews depend on normalized muscle profiles plus workout-level visibility fallback
+
+- `strength.get_workout_muscle_profile(workout_id)` is now the shared aggregation helper for compact strength radar previews on social cards and profile activity cards.
+- The helper must derive its payload from `public.exercises.body_part_weights`, not the legacy `body_parts` array.
+- Per-workout aggregation rules are:
+  - weight each exercise by `strength.exercise_summary.vol` when volume is positive
+  - fall back to per-exercise set counts from `strength.strength_sets` when summary volume is missing or zero
+  - collapse raw muscles into these 8 display axes: `chest`, `back`, `shoulders`, `arms`, `core`, `quads`, `posterior_chain`, `calves`
+  - distribute `full_body` evenly across all 8 axes
+  - normalize the final profile to `0..1` by each workout's strongest axis so small card radars stay visually comparable
+- `public.get_strength_workout_summary_user(...)` now has two valid visibility paths for non-owners:
+  - a shared `social.posts` row with viewable post visibility
+  - direct workout visibility via `strength.strength_workouts.privacy`, gated by profile privacy and accepted-follow checks
+- `public.list_visible_strength_activity_cards_user(...)` is the canonical path for strength cards on profile activity grids because direct `strength.strength_workouts` reads remain own-row only under RLS.
+
+## 2026-04-02 - user.user_preferences is the canonical cross-device settings row
+
+- `user.user_preferences` should hold account-level settings that must follow the user across device installs and sign-ins.
+- The current canonical settings in that row are:
+  - `weight_unit`
+  - `distance_unit`
+  - health provider sync/auth fields
+  - `theme_palette_id`
+  - `strength_rest_timer_seconds`
+- When a setting is meant to restore automatically on a newly logged-in device, prefer extending this table instead of keeping it only in `AsyncStorage`.
+- Device-local storage can still be used as a cache or offline fallback, but the Supabase row is the source of truth for signed-in users.
+
 ## 2026-03-31 - Indoor run/walk summary rollups must stay on meter columns even after trigger hardening
 
 - `user.weekly_summary` no longer guarantees legacy distance columns like `total_miles_ran`, `total_miles_walked`, or `total_miles_run_walk`.

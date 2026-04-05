@@ -54,7 +54,8 @@ const RestTimerModal: React.FC<Props> = ({
         <Pressable style={styles.card} onPress={(event) => event.stopPropagation()}>
           <Text style={styles.title}>Rest timer</Text>
           <Text style={styles.subtitle}>
-            Set the default countdown used during strength workouts. This stays on-device only.
+            Set the default countdown used during strength workouts. This syncs
+            with your account on new devices.
           </Text>
 
           <View style={styles.previewCard}>

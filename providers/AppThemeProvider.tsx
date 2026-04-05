@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -22,6 +23,11 @@ import {
   type AppTheme,
 } from '@/constants/GlobalStyles';
 import { Fonts, type AppFonts } from '@/constants/Fonts';
+import { supabase } from '@/lib/supabase';
+import {
+  getCurrentUserPreferencesRow,
+  upsertCurrentUserPreferences,
+} from '@/lib/userPreferences';
 
 const LEGACY_STORAGE_KEY = 'app-theme.palette-id.v1';
 const STORAGE_KEY = 'app-theme.palette-preference.v2';
@@ -29,6 +35,10 @@ const STORAGE_KEY = 'app-theme.palette-preference.v2';
 type StoredPalettePreference = {
   explicit: true;
   paletteId: ThemePaletteId;
+};
+
+type ThemePreferenceRow = {
+  theme_palette_id: string | null;
 };
 
 type AppThemeContextValue = {
@@ -45,57 +55,130 @@ type AppThemeContextValue = {
 
 const AppThemeContext = createContext<AppThemeContextValue | null>(null);
 
+async function readStoredPalettePreference(): Promise<StoredPalettePreference | null> {
+  const stored = await AsyncStorage.getItem(STORAGE_KEY);
+  if (!stored) return null;
+
+  const parsed = JSON.parse(stored) as Partial<StoredPalettePreference>;
+  if (
+    parsed.explicit === true &&
+    typeof parsed.paletteId === 'string' &&
+    isThemePaletteId(parsed.paletteId)
+  ) {
+    return {
+      explicit: true,
+      paletteId: parsed.paletteId,
+    };
+  }
+
+  return null;
+}
+
+async function persistStoredPalettePreference(paletteId: ThemePaletteId) {
+  const preference: StoredPalettePreference = {
+    explicit: true,
+    paletteId,
+  };
+
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(preference));
+}
+
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
   const [selectedPaletteId, setSelectedPaletteIdState] =
     useState<ThemePaletteId>(DEFAULT_THEME_PALETTE_ID);
   const [isHydrated, setIsHydrated] = useState(false);
+  const isMountedRef = useRef(true);
+  const remoteSyncSequenceRef = useRef(0);
+  const localMutationSequenceRef = useRef(0);
+
+  const syncPalettePreferenceFromBackend = useCallback(async () => {
+    const syncSequence = ++remoteSyncSequenceRef.current;
+    const localMutationSequence = localMutationSequenceRef.current;
+    const localPreference = await readStoredPalettePreference().catch((error) => {
+      console.warn('[AppThemeProvider] Failed to load palette preference', error);
+      return null;
+    });
+
+    try {
+      const data = await getCurrentUserPreferencesRow<ThemePreferenceRow>(
+        'theme_palette_id'
+      );
+
+      const remotePaletteId =
+        data?.theme_palette_id && isThemePaletteId(data.theme_palette_id)
+          ? data.theme_palette_id
+          : null;
+
+      if (remotePaletteId) {
+        if (
+          !isMountedRef.current ||
+          syncSequence !== remoteSyncSequenceRef.current ||
+          localMutationSequence !== localMutationSequenceRef.current
+        ) {
+          return;
+        }
+
+        setSelectedPaletteIdState(remotePaletteId);
+        await persistStoredPalettePreference(remotePaletteId);
+        return;
+      }
+
+      if (localPreference) {
+        await upsertCurrentUserPreferences({
+          theme_palette_id: localPreference.paletteId,
+        });
+      }
+    } catch (error) {
+      console.warn('[AppThemeProvider] Failed to sync palette preference', error);
+    }
+  }, []);
 
   useEffect(() => {
-    let mounted = true;
+    isMountedRef.current = true;
 
-    const loadPalettePreference = async () => {
+    const hydrateLocalPalettePreference = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as Partial<StoredPalettePreference>;
-          if (
-            mounted &&
-            parsed.explicit === true &&
-            typeof parsed.paletteId === 'string' &&
-            isThemePaletteId(parsed.paletteId)
-          ) {
-            setSelectedPaletteIdState(parsed.paletteId);
-          }
+        const stored = await readStoredPalettePreference();
+        if (isMountedRef.current && stored) {
+          setSelectedPaletteIdState(stored.paletteId);
         }
       } catch (error) {
         console.warn('[AppThemeProvider] Failed to load palette preference', error);
       } finally {
         AsyncStorage.removeItem(LEGACY_STORAGE_KEY).catch(() => null);
-        if (mounted) {
+        if (isMountedRef.current) {
           setIsHydrated(true);
         }
       }
     };
 
-    loadPalettePreference();
+    void hydrateLocalPalettePreference();
+    void syncPalettePreferenceFromBackend();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      void syncPalettePreferenceFromBackend();
+    });
 
     return () => {
-      mounted = false;
+      isMountedRef.current = false;
+      subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [syncPalettePreferenceFromBackend]);
 
   const setSelectedPaletteId = useCallback(async (paletteId: ThemePaletteId) => {
+    localMutationSequenceRef.current += 1;
     setSelectedPaletteIdState(paletteId);
 
     try {
-      const preference: StoredPalettePreference = {
-        explicit: true,
-        paletteId,
-      };
-
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(preference));
+      await persistStoredPalettePreference(paletteId);
     } catch (error) {
       console.warn('[AppThemeProvider] Failed to save palette preference', error);
+    }
+
+    try {
+      await upsertCurrentUserPreferences({ theme_palette_id: paletteId });
+    } catch (error) {
+      console.warn('[AppThemeProvider] Failed to sync palette preference', error);
     }
   }, []);
 

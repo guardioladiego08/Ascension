@@ -6,6 +6,7 @@ import MetricLineChart from '@/components/charts/MetricLineChart';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
+import RunningBadgesSection from './RunningBadgesSection';
 import RunningMetricToggle from './RunningMetricToggle';
 import RunningSummaryCards from './RunningSummaryCards';
 import RunningTimelineToggle from './RunningTimelineToggle';
@@ -213,6 +214,7 @@ export default function RunningProgressPanel() {
       </View>
 
       <RunningSummaryCards items={summaryItems} />
+      <RunningBadgesSection />
     </View>
   );
 }

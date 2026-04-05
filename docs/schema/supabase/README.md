@@ -12,13 +12,16 @@ It does not replace the SQL source of truth. It points to it and captures the re
 
 ## Current Focus Areas
 
+- Account-synced `user.user_preferences` settings for units, health providers, theme palette, and strength rest timer
 - Strength template schema-cache compatibility after custom-schema DDL
 - Indoor run/walk summary triggers must use meter-based `weekly_summary` columns only; newer trigger-hardening migrations should not reintroduce `total_miles_*` writes.
 - Strength workout templates with normalized block exercise structure and future share visibility metadata
+- Strength workout muscle-profile aggregation and visibility-safe profile activity cards for radar previews
 - Signup username availability compatibility across legacy and canonical user-profile stores
 - Signup bootstrap compatibility between hosted auth triggers, `public.profiles`, and `"user".users`
 - Signup auth-trigger hardening so legacy bootstrap insert failures do not abort `auth.users` creation
 - Nutrition catalog/search compatibility and verification-state rollout
+- Hosted nutrition food-FK drift where some live `food_id` relations still target a legacy `foods` table
 - Strength workout structure via ordered workout blocks and normalized superset membership
 - Strength exercise catalog classification via canonical core movements and weighted muscle activation
 - Account deletion safety for summary and goal trigger cascades

@@ -16,11 +16,13 @@ Use it to find:
 - Docs folder: `docs/schema/supabase/`
 - Summary: `docs/schema/supabase/README.md`
 - Context: `docs/schema/supabase/context.md`
-- Current compatibility note: hosted nutrition environments may still be missing `verification_status` and favorite tables from the 2026-03-22 rollout, so app-side fallbacks remain required until those migrations are applied remotely.
+- Current compatibility note: hosted nutrition environments may still be missing `verification_status` and favorite tables from the 2026-03-22 rollout, and some live `food_id` foreign keys can still point at a legacy `foods` table instead of `nutrition.food_items`, so app-side fallbacks plus compatibility-aware seeds remain required until the hosted schema is fully aligned.
+- Current settings note: `user.user_preferences` is the canonical cross-device settings row for units, health-provider sync state, theme palette selection, and the default strength rest timer.
 - Current strength library note: shared exercise rows are the canonical visible library, and the 2026-03-27 exercise guard migration blocks future shared-vs-user name collisions after normalization.
 - Current strength template note: templates now live in normalized `strength.workout_templates*` tables with private-by-default ownership, per-exercise target set counts, and future-ready `visibility` / fork provenance for later feed sharing.
 - Current strength template compatibility note: hosted projects also need `20260401_strength_template_schema_cache_refresh.sql` after the template-table rollout so PostgREST reloads the `strength.workout_templates*` relations into its schema cache and the app stops hitting `PGRST205`.
 - Current exercise catalog note: `public.exercises.core_movement` stores canonical snake_case movement families, while `body_part_weights` is the source-of-truth muscle activation JSON and `body_parts` remains a derived compatibility column.
+- Current strength social note: strength social/profile previews now derive an 8-axis normalized `muscle_profile` from `public.exercises.body_part_weights`, and other-user profile activity cards should page through `public.list_visible_strength_activity_cards_user(...)` instead of direct `strength.strength_workouts` reads.
 - Current account-deletion note: hosted projects need the 2026-03-29 delete-safety trigger migration plus the deferred `workout_block_exercises.exercise_id` FK migration so account deletion can remove user-owned exercises and workout structures in one transaction.
 - Current signup note: username availability must be checked against the canonical bootstrap stores (`"user".users` and `public.profiles`) rather than only legacy lookup tables, otherwise Auth signup can fail with a generic database-save error.
 - Current signup bootstrap note: hosted projects also need `public.profiles` onboarding/privacy compatibility columns plus safe defaults on `"user".users` for auth-trigger bootstrap rows, otherwise signup can fail before the app ever gets a session.
@@ -44,6 +46,21 @@ Use it to find:
   - `supabase/migrations/20260331_fix_indoor_run_walk_stats_meter_columns.sql`
   - `supabase/migrations/20260331_strength_workout_templates.sql`
   - `supabase/migrations/20260401_strength_template_schema_cache_refresh.sql`
+  - `supabase/migrations/20260402_strength_muscle_profile_radar_support.sql`
+  - `supabase/migrations/20260402_user_preferences_account_synced_settings.sql`
+
+### Badges
+
+- Docs folder: `docs/schema/badges/`
+- Summary: `docs/schema/badges/README.md`
+- Context: `docs/schema/badges/context.md`
+- Current rollout note: the shared `badges` schema stores reusable badge families, tier thresholds, user progress snapshots, and unlock history across strength, running, and nutrition.
+- Current strength note: strength badges are source-linked to `strength_workout` unlock events so completion summaries and social badge chips can show only the badges earned by that workout.
+- Current running note: running badges reuse the same shared tables, store run-linked unlocks under `run_walk_session` for indoor and outdoor saves, and compute pace/time record badges from qualifying session-level averages when split data is not universally available.
+- Current nutrition note: nutrition badges reuse the same shared tables, store diary-linked unlocks under `nutrition_day`, and compute consistency, coverage, and record progress from persisted `nutrition.diary_days` totals, stored targets, `goal_hit`, and `nutrition.diary_items.meal_slot` counts.
+- Current icon note: badge series and tiers both store `icon_placeholder` strings until final icon assets replace the placeholder renderer.
+- Source locations: `docs/schema/badges/locations.md`
+- Change notes: `docs/schema/badges/changes.md`
 
 ## Rules
 

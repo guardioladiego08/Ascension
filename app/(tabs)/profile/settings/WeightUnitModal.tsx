@@ -58,7 +58,7 @@ const WeightUnitModal: React.FC<Props> = ({ visible, onClose }) => {
         <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
           <Text style={styles.title}>Weight unit</Text>
           <Text style={styles.subtitle}>
-            Choose how weights and volume are displayed.
+            Choose how weights and volume are displayed across your account.
           </Text>
 
           <View style={styles.options}>

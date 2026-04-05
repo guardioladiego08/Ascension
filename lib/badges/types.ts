@@ -1,0 +1,54 @@
+export type BadgeDomain = 'strength' | 'running' | 'nutrition';
+
+export type BadgeProgressItem = {
+  badgeSeriesId: string;
+  domain: BadgeDomain;
+  code: string;
+  name: string;
+  description: string | null;
+  badgeKind: string;
+  metricKey: string;
+  progressMode: string;
+  seriesIconPlaceholder: string;
+  displayOrder: number;
+  currentValue: number;
+  bestValue: number;
+  progressValue: number;
+  highestTierId: string | null;
+  highestTierCode: string | null;
+  highestTierName: string | null;
+  highestThresholdValue: number | null;
+  highestIconPlaceholder: string | null;
+  nextTierId: string | null;
+  nextTierCode: string | null;
+  nextTierName: string | null;
+  nextThresholdValue: number | null;
+  nextIconPlaceholder: string | null;
+  remainingToNext: number | null;
+  lastSourceType: string | null;
+  lastSourceId: string | null;
+  lastEvaluatedAt: string | null;
+};
+
+export type BadgeUnlockItem = {
+  unlockId: string;
+  userId: string;
+  badgeSeriesId: string;
+  badgeTierId: string;
+  domain: BadgeDomain;
+  code: string;
+  name: string;
+  description: string | null;
+  badgeKind: string;
+  metricKey: string;
+  progressMode: string;
+  seriesIconPlaceholder: string;
+  tierCode: string;
+  tierName: string;
+  thresholdValue: number;
+  tierIconPlaceholder: string;
+  unlockCopy: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  createdAt: string;
+};

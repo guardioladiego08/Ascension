@@ -11,7 +11,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import RouteOutlinePreview from '@/components/routes/RouteOutlinePreview';
+import StrengthRadarPreview from '@/components/strength/StrengthRadarPreview';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import {
+  fetchOutdoorRoutePreviewMap,
+  type RoutePreviewPoint,
+} from '@/lib/OutdoorSession/routePreview';
+import {
+  coerceStrengthMuscleProfile,
+  type StrengthMuscleProfile,
+} from '@/lib/strength/muscleProfile';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 
@@ -36,6 +46,10 @@ type UnifiedActivity = {
 
   // strength
   totalVolume?: number | null;
+  strengthMuscleProfile?: StrengthMuscleProfile | null;
+
+  // outdoor route preview
+  routePreview?: RoutePreviewPoint[] | null;
 };
 
 type Props = {
@@ -50,6 +64,7 @@ type Props = {
 const LB_PER_KG = 2.20462;
 
 const PAGE_SIZE = 24;
+const COLUMN_COUNT = 2;
 
 const TABLES = {
   strengthWorkouts: { schema: 'strength', table: 'strength_workouts' },
@@ -120,6 +135,13 @@ function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
   return 'walk-outline';
 }
 
+function labelFor(kind: ActivityKind, source: ActivitySource) {
+  if (kind === 'strength') return 'Strength';
+  if (kind === 'cycle') return source === 'outdoor' ? 'Outdoor ride' : 'Ride';
+  if (kind === 'walk') return source === 'outdoor' ? 'Outdoor walk' : 'Walk';
+  return source === 'outdoor' ? 'Outdoor run' : 'Run';
+}
+
 function kindFromText(t: string): ActivityKind {
   const v = (t ?? '').toLowerCase();
   if (v.includes('walk')) return 'walk';
@@ -137,6 +159,18 @@ async function trySelectOrNull<T>(
   if (!res.error) return { data: (res.data ?? []) as T[], error: null };
   if (res.error?.code === '42703') return null;
   return { data: [], error: res.error };
+}
+
+function isRpcUnavailableError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === 'PGRST204' ||
+    msg.includes('could not find the function') ||
+    msg.includes('schema cache')
+  );
 }
 
 function FilterPill({
@@ -190,16 +224,43 @@ export default function ActivityGrid({
   const sessionsDone = useRef(false);
   const outdoorDone = useRef(false);
 
-  const cardSize = useMemo(() => {
-    const usable = width - contentPaddingHorizontal * 2 - gap * 2;
-    return Math.floor(usable / 3);
+  const cardWidth = useMemo(() => {
+    const usable = width - contentPaddingHorizontal * 2 - gap * (COLUMN_COUNT - 1);
+    return Math.floor(usable / COLUMN_COUNT);
   }, [width, contentPaddingHorizontal, gap]);
+  const cardHeight = useMemo(() => Math.round(cardWidth * 1.12), [cardWidth]);
 
   // -----------------------------
   // Strength page
   // -----------------------------
   const fetchStrengthPage = useCallback(
     async (from: number, to: number) => {
+      const rpcLimit = Math.max(1, to - from + 1);
+      const rpcRes = await supabase.rpc('list_visible_strength_activity_cards_user', {
+        p_user_id: userId,
+        p_limit: rpcLimit,
+        p_offset: from,
+      });
+
+      if (!rpcRes.error) {
+        return ((rpcRes.data ?? []) as any[]).map(
+          (row) =>
+            ({
+              id: String(row.id),
+              source: 'strength',
+              kind: 'strength',
+              startedAt: String(row.started_at),
+              durationS: row.duration_s == null ? null : Number(row.duration_s),
+              totalVolume: row.total_volume_kg == null ? 0 : Number(row.total_volume_kg),
+              strengthMuscleProfile: coerceStrengthMuscleProfile(row.muscle_profile),
+            }) satisfies UnifiedActivity
+        );
+      }
+
+      if (!isRpcUnavailableError(rpcRes.error)) {
+        throw rpcRes.error;
+      }
+
       const base = supabase
         .schema(TABLES.strengthWorkouts.schema)
         .from(TABLES.strengthWorkouts.table);
@@ -280,6 +341,7 @@ export default function ActivityGrid({
           startedAt: w.started_at,
           durationS,
           totalVolume: volumeMap.get(String(w.id)) ?? 0,
+          strengthMuscleProfile: null,
         };
       });
 
@@ -360,7 +422,10 @@ export default function ActivityGrid({
       const res = await q;
       if (res.error) throw res.error;
 
-      const page = (res.data ?? []).map((r: any) => {
+      const rows = (res.data ?? []) as any[];
+      const previewMap = await fetchOutdoorRoutePreviewMap(rows.map((row) => String(row.id)));
+
+      const page = rows.map((r: any) => {
         const kind = kindFromText(String(r.activity_type ?? ''));
 
         const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
@@ -376,6 +441,7 @@ export default function ActivityGrid({
           paceKm,
           paceMi,
           speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
+          routePreview: previewMap.get(String(r.id)) ?? null,
         } as UnifiedActivity;
       });
 
@@ -559,6 +625,13 @@ export default function ActivityGrid({
 
   const renderCard = ({ item, index }: { item: UnifiedActivity; index: number }) => {
     const dateLabel = formatCardDate(item.startedAt);
+    const routePreviewVisible =
+      item.source === 'outdoor' &&
+      (item.kind === 'run' || item.kind === 'walk') &&
+      !!item.routePreview &&
+      item.routePreview.length >= 2;
+    const strengthRadarVisible =
+      item.kind === 'strength' && !!item.strengthMuscleProfile;
 
     return (
       <TouchableOpacity
@@ -585,15 +658,49 @@ export default function ActivityGrid({
         style={[
           styles.card,
           {
-            width: cardSize,
-            height: cardSize,
-            marginRight: index % 3 !== 2 ? gap : 0,
+            width: cardWidth,
+            height: cardHeight,
+            marginRight: index % COLUMN_COUNT !== COLUMN_COUNT - 1 ? gap : 0,
             marginBottom: gap,
           },
         ]}
       >
-        <View style={styles.badge}>
-          <Ionicons name={iconFor(item.kind)} size={12} color={colors.text} />
+        <View style={styles.cardHero}>
+          {routePreviewVisible || strengthRadarVisible ? (
+            <View style={styles.cardPreviewWrap}>
+              {routePreviewVisible ? (
+                <RouteOutlinePreview
+                  points={item.routePreview}
+                  strokeColor={colors.highlight1}
+                  glowColor={colors.highlight2}
+                  startColor={colors.highlight3}
+                  endColor={colors.danger}
+                  backgroundColor={colors.cardDark}
+                  accentColor={colors.accentSoft}
+                  strokeWidth={3.2}
+                />
+              ) : null}
+              {strengthRadarVisible ? (
+                <StrengthRadarPreview
+                  profile={item.strengthMuscleProfile}
+                  backgroundColor={colors.cardDark}
+                  accentColor={colors.accentSoft}
+                  glowColor={colors.highlight2}
+                  gridColor={colors.borderStrong}
+                  strokeColor={colors.highlight1}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.cardFallbackHero}>
+              <Ionicons name={iconFor(item.kind)} size={20} color={colors.highlight1} />
+              <Text style={styles.cardFallbackText}>{labelFor(item.kind, item.source)}</Text>
+            </View>
+          )}
+
+          <View style={styles.badge}>
+            <Ionicons name={iconFor(item.kind)} size={12} color={colors.text} />
+          </View>
         </View>
 
         <View style={styles.overlay}>
@@ -662,7 +769,7 @@ export default function ActivityGrid({
       data={items}
       renderItem={renderCard}
       keyExtractor={(i) => `${i.source}:${i.id}`}
-      numColumns={3}
+      numColumns={COLUMN_COUNT}
       ListHeaderComponent={headerWithFilter}
       ListEmptyComponent={EmptyState}
       contentContainerStyle={{
@@ -735,42 +842,72 @@ function createStyles(
     },
     card: {
       backgroundColor: colors.card,
-      borderRadius: 12,
+      borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.border,
+    },
+    cardHero: {
+      flex: 1,
+      padding: 8,
+      backgroundColor: colors.cardDark,
+    },
+    cardPreviewWrap: {
+      flex: 1,
+      borderRadius: 10,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.cardDark,
+    },
+    cardFallbackHero: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.card2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 8,
+    },
+    cardFallbackText: {
+      color: colors.textMuted,
+      fontFamily: fonts.label,
+      fontSize: 11,
+      lineHeight: 14,
+      textAlign: 'center',
+      textTransform: 'uppercase',
     },
     badge: {
       position: 'absolute',
       top: 8,
       left: 8,
-      width: 24,
-      height: 24,
+      width: 28,
+      height: 28,
       borderRadius: 999,
       backgroundColor: colors.accentSoft,
       alignItems: 'center',
       justifyContent: 'center',
     },
     overlay: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      padding: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
       backgroundColor: colors.popUpCard,
+      minHeight: 66,
     },
     dateText: {
       color: colors.textMuted,
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 13,
-      marginBottom: 2,
+      fontSize: 11,
+      lineHeight: 14,
+      marginBottom: 4,
     },
     overlayText: {
       color: colors.text,
       fontFamily: fonts.heading,
-      fontSize: 10,
-      lineHeight: 13,
+      fontSize: 12,
+      lineHeight: 16,
     },
     volumeRow: {
       flexDirection: 'row',
@@ -791,8 +928,8 @@ function createStyles(
     unitChipText: {
       color: colors.text,
       fontFamily: fonts.label,
-      fontSize: 9,
-      lineHeight: 12,
+      fontSize: 10,
+      lineHeight: 13,
       textTransform: 'uppercase',
     },
   });

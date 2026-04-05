@@ -7,10 +7,22 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest --watchAll"
+    "test": "jest --watchAll",
+    "test:ci": "jest --runInBand",
+    "test:home": "jest tests/home --runInBand"
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "watchman": false,
+    "moduleNameMapper": {
+      "^expo-modules-core/src/Refs$": "<rootDir>/tests/jest/expoModulesCoreRefs.js",
+      "^expo-modules-core/src/web/index\\.web$": "<rootDir>/tests/jest/expoModulesCoreWebIndex.js",
+      "^expo-modules-core/src/uuid/uuid\\.web$": "<rootDir>/tests/jest/expoModulesCoreUuidWeb.js",
+      "^@/(.*)$": "<rootDir>/$1"
+    },
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ]
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.0",

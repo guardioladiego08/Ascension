@@ -8,6 +8,10 @@ import React, {
   useState,
 } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  getCurrentUserPreferencesRow,
+  upsertCurrentUserPreferences,
+} from '@/lib/userPreferences';
 
 export type DistanceUnit = 'mi' | 'km';
 export type WeightUnit = 'lb' | 'kg';
@@ -32,9 +36,6 @@ type UnitsContextValue = {
 
 const UnitsContext = createContext<UnitsContextValue | null>(null);
 
-const SCHEMA = 'user';
-const TABLE = 'user_preferences';
-
 const DIST_COL = 'distance_unit';
 const WEIGHT_COL = 'weight_unit';
 
@@ -58,54 +59,38 @@ export function UnitsProvider({ children }: { children: React.ReactNode }) {
   const [distanceSaveError, setDistanceSaveError] = useState<string | null>(null);
   const [weightSaveError, setWeightSaveError] = useState<string | null>(null);
 
-  const upsertUnits = useCallback(async (partial: Partial<Record<typeof DIST_COL | typeof WEIGHT_COL, string>>) => {
-    const {
-      data: { session },
-      error: authErr,
-    } = await supabase.auth.getSession();
-    if (authErr) throw authErr;
-    if (!session?.user) throw new Error('Not signed in');
-
-    const payload = { user_id: session.user.id, ...partial };
-    const { error } = await supabase
-      .schema(SCHEMA)
-      .from(TABLE)
-      .upsert(payload, { onConflict: 'user_id' });
-
-    if (error) throw error;
-  }, []);
+  const upsertUnits = useCallback(
+    async (partial: Partial<Record<typeof DIST_COL | typeof WEIGHT_COL, string>>) => {
+      await upsertCurrentUserPreferences(partial, { requireAuth: true });
+    },
+    []
+  );
 
   const refreshUnits = useCallback(async () => {
-    const {
-      data: { session },
-      error: authErr,
-    } = await supabase.auth.getSession();
-    if (authErr) {
-      console.warn('[UnitsContext] getSession failed:', authErr);
-      return;
-    }
-    if (!session?.user) return;
+    try {
+      const data = await getCurrentUserPreferencesRow<Record<string, unknown>>(
+        `${DIST_COL}, ${WEIGHT_COL}`
+      );
 
-    const { data, error } = await supabase
-      .schema(SCHEMA)
-      .from(TABLE)
-      .select(`${DIST_COL}, ${WEIGHT_COL}`)
-      .eq('user_id', session.user.id)
-      .maybeSingle();
+      if (!data) return;
 
-    if (error) {
-      console.warn('[UnitsContext] load user_preferences failed:', error);
-      return;
-    }
-
-    if (data) {
       setDistanceUnitState(normalizeDistanceUnit(data[DIST_COL]));
       setWeightUnitState(normalizeWeightUnit(data[WEIGHT_COL]));
+    } catch (error) {
+      console.warn('[UnitsContext] load user_preferences failed:', error);
     }
   }, []);
 
   useEffect(() => {
-    refreshUnits();
+    void refreshUnits();
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      void refreshUnits();
+    });
+
+    return () => {
+      subscription.subscription.unsubscribe();
+    };
   }, [refreshUnits]);
 
   const setDistanceUnit = useCallback(async (unit: DistanceUnit) => {

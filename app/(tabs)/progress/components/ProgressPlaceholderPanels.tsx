@@ -4,6 +4,8 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import RunningProgressPanel from './running/RunningProgressPanel';
+import StrengthProgressPanel from './strength/StrengthProgressPanel';
+import NutritionProgressPanel from './nutrition/NutritionProgressPanel';
 import type { ProgressTabDefinition } from './progressTabs';
 
 type Props = {
@@ -42,6 +44,10 @@ export default function ProgressPlaceholderPanels({
             <View style={styles.panelShell}>
               {tab.id === 'running' ? (
                 <RunningProgressPanel />
+              ) : tab.id === 'strength' ? (
+                <StrengthProgressPanel />
+              ) : tab.id === 'nutrition' ? (
+                <NutritionProgressPanel />
               ) : (
                 <View style={styles.placeholderContent}>
                   <Text style={styles.eyebrow}>Progress Section</Text>

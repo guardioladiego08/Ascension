@@ -112,9 +112,12 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
     }
 
     await Location.startLocationUpdatesAsync(OUTDOOR_LOCATION_TASK, {
-      accuracy: Location.Accuracy.Highest,
+      accuracy: Location.Accuracy.BestForNavigation,
       timeInterval: 1000,
       distanceInterval: 2,
+      deferredUpdatesDistance: 0,
+      deferredUpdatesInterval: 1000,
+      activityType: Location.ActivityType.Fitness,
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {

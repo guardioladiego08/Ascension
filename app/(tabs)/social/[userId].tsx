@@ -15,6 +15,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import BadgeUnlockStrip from '@/components/badges/BadgeUnlockStrip';
 import LogoHeader from '@/components/my components/logoHeader';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
@@ -26,6 +27,8 @@ import ProfileHeaderSection, {
 import LifetimeStatsTable from '../profile/components/LifetimeStatsTable';
 import ActivityGrid from '../profile/components/ActivityGrid';
 
+import { getRecentBadgeUnlocks } from '@/lib/badges/api';
+import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { supabase } from '@/lib/supabase';
 import {
   getMyUserId,
@@ -115,6 +118,15 @@ export default function ViewProfileScreen() {
   const [postsLoadingMore, setPostsLoadingMore] = useState(false);
   const [postsHasMore, setPostsHasMore] = useState(true);
   const [postsError, setPostsError] = useState<string | null>(null);
+  const [strengthBadges, setStrengthBadges] = useState<BadgeUnlockItem[]>([]);
+  const [strengthBadgesLoading, setStrengthBadgesLoading] = useState(false);
+  const [strengthBadgesError, setStrengthBadgesError] = useState<string | null>(null);
+  const [runningBadges, setRunningBadges] = useState<BadgeUnlockItem[]>([]);
+  const [runningBadgesLoading, setRunningBadgesLoading] = useState(false);
+  const [runningBadgesError, setRunningBadgesError] = useState<string | null>(null);
+  const [nutritionBadges, setNutritionBadges] = useState<BadgeUnlockItem[]>([]);
+  const [nutritionBadgesLoading, setNutritionBadgesLoading] = useState(false);
+  const [nutritionBadgesError, setNutritionBadgesError] = useState<string | null>(null);
 
   const fullName = useMemo(() => {
     if (!profile) return '';
@@ -245,6 +257,126 @@ export default function ViewProfileScreen() {
     loadPostsFirstPage();
   }, [detailTab, loadPostsFirstPage]);
 
+  useEffect(() => {
+    if (!profile?.id || !canViewContent) {
+      setStrengthBadges([]);
+      setStrengthBadgesLoading(false);
+      setStrengthBadgesError(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setStrengthBadgesLoading(true);
+        setStrengthBadgesError(null);
+
+        const rows = await getRecentBadgeUnlocks({
+          domain: 'strength',
+          userId: profile.id,
+          limit: 8,
+        });
+
+        if (!isActive) return;
+        setStrengthBadges(rows);
+      } catch (error: any) {
+        console.warn('[ViewProfile] recent badge load failed', error);
+        if (!isActive) return;
+        setStrengthBadges([]);
+        setStrengthBadgesError(error?.message ?? 'Could not load recent strength badges.');
+      } finally {
+        if (isActive) {
+          setStrengthBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [canViewContent, profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id || !canViewContent) {
+      setRunningBadges([]);
+      setRunningBadgesLoading(false);
+      setRunningBadgesError(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setRunningBadgesLoading(true);
+        setRunningBadgesError(null);
+
+        const rows = await getRecentBadgeUnlocks({
+          domain: 'running',
+          userId: profile.id,
+          limit: 8,
+        });
+
+        if (!isActive) return;
+        setRunningBadges(rows);
+      } catch (error: any) {
+        console.warn('[ViewProfile] recent running badge load failed', error);
+        if (!isActive) return;
+        setRunningBadges([]);
+        setRunningBadgesError(error?.message ?? 'Could not load recent running badges.');
+      } finally {
+        if (isActive) {
+          setRunningBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [canViewContent, profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id || !canViewContent) {
+      setNutritionBadges([]);
+      setNutritionBadgesLoading(false);
+      setNutritionBadgesError(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setNutritionBadgesLoading(true);
+        setNutritionBadgesError(null);
+
+        const rows = await getRecentBadgeUnlocks({
+          domain: 'nutrition',
+          userId: profile.id,
+          limit: 8,
+        });
+
+        if (!isActive) return;
+        setNutritionBadges(rows);
+      } catch (error: any) {
+        console.warn('[ViewProfile] recent nutrition badge load failed', error);
+        if (!isActive) return;
+        setNutritionBadges([]);
+        setNutritionBadgesError(error?.message ?? 'Could not load recent nutrition badges.');
+      } finally {
+        if (isActive) {
+          setNutritionBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [canViewContent, profile?.id]);
+
   const onRefreshPosts = useCallback(async () => {
     setPostsRefreshing(true);
     await loadPostsFirstPage();
@@ -353,6 +485,14 @@ export default function ViewProfileScreen() {
       }
 
       if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+        if (post.isOutdoorSession) {
+          router.push({
+            pathname: '/progress/outdoor/[id]',
+            params: { id: post.sessionId },
+          });
+          return;
+        }
+
         router.push({
           pathname: '/progress/run_walk/[sessionId]',
           params: { sessionId: post.sessionId, postId: post.id },
@@ -503,6 +643,43 @@ export default function ViewProfileScreen() {
       {/* Tabs only if you can view the content */}
       {profile && canViewContent ? renderDetailTabs() : null}
 
+      {profile && canViewContent ? (
+        <View style={styles.badgeSection}>
+          {nutritionBadgesLoading ? (
+            <Text style={styles.badgeStateText}>Loading recent nutrition badges...</Text>
+          ) : nutritionBadgesError ? (
+            <Text style={styles.badgeErrorText}>{nutritionBadgesError}</Text>
+          ) : nutritionBadges.length > 0 ? (
+            <BadgeUnlockStrip
+              title="Recent nutrition badges"
+              badges={nutritionBadges}
+            />
+          ) : null}
+
+          {runningBadgesLoading ? (
+            <Text style={styles.badgeStateText}>Loading recent running badges...</Text>
+          ) : runningBadgesError ? (
+            <Text style={styles.badgeErrorText}>{runningBadgesError}</Text>
+          ) : runningBadges.length > 0 ? (
+            <BadgeUnlockStrip
+              title="Recent running badges"
+              badges={runningBadges}
+            />
+          ) : null}
+
+          {strengthBadgesLoading ? (
+            <Text style={styles.badgeStateText}>Loading recent strength badges...</Text>
+          ) : strengthBadgesError ? (
+            <Text style={styles.badgeErrorText}>{strengthBadgesError}</Text>
+          ) : strengthBadges.length > 0 ? (
+            <BadgeUnlockStrip
+              title="Recent strength badges"
+              badges={strengthBadges}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
       <View style={styles.headerDivider} />
     </>
   );
@@ -603,6 +780,7 @@ export default function ViewProfileScreen() {
               onPressUser={() => onOpenProfile(item.userId)}
               onPressProfile={onOpenProfile}
               onPressSession={onOpenSession}
+              showRoutePreview={!!meId && item.userId !== meId}
             />
           )}
           ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
@@ -1159,6 +1337,22 @@ function createStyles(
     },
     filterChipTextActive: {
       color: colors.blkText,
+    },
+    badgeSection: {
+      marginTop: 16,
+      gap: 12,
+    },
+    badgeStateText: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    badgeErrorText: {
+      color: colors.danger,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 17,
     },
     headerDivider: {
       height: 1,

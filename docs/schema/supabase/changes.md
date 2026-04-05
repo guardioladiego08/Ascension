@@ -1,5 +1,35 @@
 # Supabase Schema Changes
 
+## 2026-04-04 - Nutrition demo seed now mirrors foods into live FK targets
+
+- What changed: Updated `supabase/seeds/nutrition_progress_year_dashboard_demo.sql` so it stages demo foods once, inspects the live `food_id` foreign-key targets used by `nutrition.recipe_ingredients`, `nutrition.diary_items`, and `nutrition.user_favorite_foods`, and upserts those rows into each referenced food table instead of assuming every hosted project already points at `nutrition.food_items`.
+- Why: The hosted project raised `23503` on `nutrition.recipe_ingredients.food_id` because that foreign key still referenced a legacy `foods` table, so seeding only `nutrition.food_items` was not enough for partially migrated environments.
+- Follow-up: Keep nutrition seeds compatibility-aware until hosted foreign keys are fully aligned with `nutrition.food_items`, and prefer documenting exact remote FK drift in this folder whenever a hosted project disagrees with the local migrations.
+
+## 2026-04-04 - Nutrition demo seed now casts diary meal fields into live column types
+
+- What changed: Updated `supabase/seeds/nutrition_progress_year_dashboard_demo.sql` to inspect the live types of `nutrition.diary_items.meal_type` and `nutrition.diary_items.meal_slot`, then insert staged string values through explicit casts when the hosted project still uses enums instead of text columns.
+- Why: The hosted project raised `42804` because `nutrition.diary_items.meal_type` was typed as `meal_type`, while the seed was inserting raw text values that only match the newer local migration path.
+- Follow-up: Keep nutrition demo seeds tolerant of both enum-backed and text-backed diary schemas until hosted projects are fully aligned with the 2026-03-22 logging migration.
+
+## 2026-04-04 - Nutrition demo seed now maps logical foods to live diary food IDs
+
+- What changed: Updated `supabase/seeds/nutrition_progress_year_dashboard_demo.sql` to seed compatible food tables with either UUID or numeric primary keys, record a per-target live food-id map, and use that map when inserting `nutrition.diary_items` rows on hosted projects where `food_id` is still numeric.
+- Why: The hosted project raised `42804` because `nutrition.diary_items.food_id` expected `bigint`, while the seed was still passing the logical UUIDs used by the newer nutrition catalog.
+- Follow-up: Keep nutrition seeds table-aware until hosted projects stop mixing UUID-backed `food_items` paths with older numeric `foods` references.
+
+## 2026-04-02 - Strength workouts now expose normalized muscle-profile RPCs for radar previews
+
+- What changed: Added migration `20260402_strength_muscle_profile_radar_support.sql` to create `strength.get_workout_muscle_profile(...)`, add `public.get_strength_workout_muscle_profile_user(...)`, extend `public.get_strength_workout_summary_user(...)` with `muscle_profile`, and add `public.list_visible_strength_activity_cards_user(...)` for profile grids.
+- Why: Compact strength radar cards need a server-derived body-part profile that can be reused in social posts, summary screens, and other-user profile activity grids without client-side N+1 joins or direct-own-row table reads.
+- Follow-up: Keep `public.exercises.body_part_weights` as the only source of truth for future strength visualizations, and treat catalog misclassifications in imported exercise rows as data-quality issues rather than charting bugs.
+
+## 2026-04-02 - user_preferences now stores account-synced theme and strength rest timer settings
+
+- What changed: Added migration `20260402_user_preferences_account_synced_settings.sql` to extend `user.user_preferences` with nullable `theme_palette_id` and `strength_rest_timer_seconds` columns, add validation constraints, and reload the PostgREST schema cache after the column rollout.
+- Why: Units were already backend-backed, but advanced theme selection and the strength rest timer were still device-local, so users would lose those settings when signing into a new device.
+- Follow-up: Keep future account-level settings in `user.user_preferences` when they need cross-device restore behavior, and use local storage only as a cache/offline fallback.
+
 ## 2026-04-01 - Strength template tables now force a PostgREST schema cache reload
 
 - What changed: Added migration `20260401_strength_template_schema_cache_refresh.sql` to issue `notify pgrst, 'reload schema'` after the strength template rollout and record the compatibility step in `public.schema_change_log` when available.

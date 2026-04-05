@@ -1,10 +1,16 @@
 import { supabase } from '@/lib/supabase';
 
+export type ExerciseBodyPartWeight = {
+  muscle: string;
+  weight: number;
+};
+
 export type ExerciseRecord = {
   id: string;
   user_id: string | null;
   exercise_name: string;
   body_parts: string[] | null;
+  body_part_weights: ExerciseBodyPartWeight[] | null;
   workout_category: string | null;
   info: string | null;
   created_at: string;
@@ -20,10 +26,11 @@ type CreateCustomExerciseInput = {
 
 type MaybeExerciseBodyParts = {
   body_parts?: string[] | string | null;
+  body_part_weights?: ExerciseBodyPartWeight[] | string | null;
 };
 
 const EXERCISE_SELECT =
-  'id,user_id,exercise_name,body_parts,workout_category,info,created_at';
+  'id,user_id,exercise_name,body_parts,body_part_weights,workout_category,info,created_at';
 const PAGE_SIZE = 1000;
 
 type ExerciseIdentity = Pick<ExerciseRecord, 'id' | 'user_id' | 'exercise_name' | 'created_at'>;
@@ -176,7 +183,9 @@ export async function createCustomExercise(input: CreateCustomExerciseInput) {
 
 export function getExerciseBodyParts(exercise: MaybeExerciseBodyParts) {
   const raw = exercise.body_parts;
-  if (!raw) return [];
+  if (!raw) {
+    return getExerciseBodyPartWeights(exercise).map((entry) => entry.muscle);
+  }
 
   if (Array.isArray(raw)) {
     return raw.map(String).filter(Boolean);
@@ -198,6 +207,35 @@ export function getExerciseBodyParts(exercise: MaybeExerciseBodyParts) {
       .split(',')
       .map((value) => value.trim())
       .filter(Boolean);
+  }
+
+  return [];
+}
+
+export function getExerciseBodyPartWeights(exercise: MaybeExerciseBodyParts) {
+  const raw = exercise.body_part_weights;
+  if (!raw) return [];
+
+  const normalize = (value: any): ExerciseBodyPartWeight | null => {
+    const muscle = String(value?.muscle ?? '').trim();
+    const weight = Number(value?.weight);
+    if (!muscle || !Number.isFinite(weight) || weight <= 0) return null;
+    return { muscle, weight };
+  };
+
+  if (Array.isArray(raw)) {
+    return raw.map(normalize).filter(Boolean) as ExerciseBodyPartWeight[];
+  }
+
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map(normalize).filter(Boolean) as ExerciseBodyPartWeight[];
+      }
+    } catch {
+      return [];
+    }
   }
 
   return [];

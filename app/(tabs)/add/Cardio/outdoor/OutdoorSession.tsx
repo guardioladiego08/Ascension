@@ -40,7 +40,10 @@ import {
   startOutdoorBackgroundTracking,
   stopOutdoorBackgroundTracking,
 } from '@/lib/OutdoorSession/backgroundTracking';
-import { appendOutdoorLocations } from '@/lib/OutdoorSession/locationTracking';
+import {
+  appendOutdoorLocations,
+  getLiveOutdoorPaceSecPerKm,
+} from '@/lib/OutdoorSession/locationTracking';
 import {
   createPausedRunWalkClock,
   getRunWalkElapsedMs,
@@ -122,13 +125,19 @@ export default function OutdoorSession() {
   const sessionExitRef = useRef(false);
   const sessionIdRef = useRef(makeId());
   const clockRef = useRef(createPausedRunWalkClock(0));
+  const appStateRef = useRef(AppState.currentState);
+  const backgroundTrackingActiveRef = useRef(false);
 
   const hasProgress = elapsedSeconds > 0 || distanceMeters > 0;
 
   const currentPace = useMemo(() => {
     if (phase === 'idle') return null;
-    return paceSecPerKm(distanceMeters, elapsedSeconds);
-  }, [distanceMeters, elapsedSeconds, phase]);
+    return getLiveOutdoorPaceSecPerKm(
+      samplesRef.current,
+      distanceMeters,
+      elapsedSeconds
+    );
+  }, [coords, distanceMeters, elapsedSeconds, phase]);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -195,18 +204,27 @@ export default function OutdoorSession() {
     if (phaseRef.current !== 'running') return;
     syncElapsedFromClock(Date.now(), 'running');
     stopTimer();
+
+    if (backgroundTrackingActiveRef.current) {
+      stopLocation();
+      return;
+    }
+
     const backgroundStarted = await startOutdoorBackgroundTracking();
     if (!backgroundStarted) {
       console.warn(
         '[OutdoorSession] background tracking did not start; route logging may pause while the app is not active'
       );
+      return;
     }
+    backgroundTrackingActiveRef.current = true;
     stopLocation();
   }
 
   async function restoreForegroundTracking() {
     if (sessionExitRef.current) return;
     await stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
 
     const storedSession = await reloadOutdoorSessionFromStorage(lockMode).catch(() => null);
     if (storedSession) {
@@ -220,6 +238,9 @@ export default function OutdoorSession() {
 
     syncElapsedFromClock(Date.now(), 'running');
     startTimer();
+    if (locationSubRef.current) {
+      return;
+    }
     const locationStarted = await startLocation();
     if (!locationStarted) {
       clockRef.current = pauseRunWalkClock(clockRef.current);
@@ -260,12 +281,20 @@ export default function OutdoorSession() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
       if (nextState === 'active') {
         void restoreForegroundTracking();
         return;
       }
 
-      if (nextState === 'inactive' || nextState === 'background') {
+      if (nextState === 'inactive' && previousState === 'active' && phaseRef.current === 'running') {
+        syncElapsedFromClock(Date.now(), 'running');
+        return;
+      }
+
+      if (nextState === 'background' && previousState !== 'background') {
         void moveTrackingToBackground();
       }
     });
@@ -394,9 +423,9 @@ export default function OutdoorSession() {
 
     locationSubRef.current = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Highest,
-        timeInterval: 1000,
-        distanceInterval: 2,
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 750,
+        distanceInterval: 1,
       },
       (loc) => {
         if (phaseRef.current !== 'running') return;
@@ -470,6 +499,8 @@ export default function OutdoorSession() {
     clockRef.current = resumeRunWalkClock(createPausedRunWalkClock(0));
     sessionInitializedRef.current = true;
     await stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
+    const backgroundReady = await prepareOutdoorBackgroundTracking();
     startTimer();
     const locationStarted = await startLocation();
     if (!locationStarted) {
@@ -480,7 +511,6 @@ export default function OutdoorSession() {
       sessionStartedAtRef.current = null;
       return;
     }
-    const backgroundReady = await prepareOutdoorBackgroundTracking();
     if (!backgroundReady) {
       console.warn(
         '[OutdoorSession] background location permission not granted; outdoor tracking will pause if the app is locked or moved to the background'
@@ -496,6 +526,7 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
     void stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
   }
 
   async function onResume() {
@@ -503,6 +534,7 @@ export default function OutdoorSession() {
     phaseRef.current = 'running';
     setPhase('running');
     await stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
     startTimer();
     const locationStarted = await startLocation();
     if (!locationStarted) {
@@ -523,6 +555,7 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
     await stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
 
     const endedAtISO = new Date().toISOString();
     const startedAtISO =
@@ -575,6 +608,7 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
     await stopOutdoorBackgroundTracking();
+    backgroundTrackingActiveRef.current = false;
     beginSessionExit();
     setPhase('idle');
     resetSession();

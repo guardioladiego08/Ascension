@@ -12,6 +12,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import BadgeSummarySection from '@/components/badges/BadgeSummarySection';
+import { getBadgeUnlocksForSource } from '@/lib/badges/api';
+import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
@@ -53,6 +56,7 @@ import {
 } from '@/lib/health/provider';
 import { buildHeartRateTimelinePoints } from '@/lib/health/heartRateTimeline';
 import type { HealthHeartRateSample } from '@/lib/health/types';
+import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 const KM_PER_MI = 1.609344;
@@ -143,6 +147,9 @@ export default function SessionSummary() {
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
   const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
+  const [runningBadges, setRunningBadges] = useState<BadgeUnlockItem[]>([]);
+  const [runningBadgesLoading, setRunningBadgesLoading] = useState(false);
+  const [runningBadgesErrorText, setRunningBadgesErrorText] = useState<string | null>(null);
   const [heartRateSamples, setHeartRateSamples] = useState<HealthHeartRateSample[]>([]);
   const [heartRateSyncState, setHeartRateSyncState] = useState<HeartRateSyncState>('idle');
   const [heartRateSyncMessage, setHeartRateSyncMessage] = useState<string | null>(null);
@@ -213,8 +220,57 @@ export default function SessionSummary() {
     if (avgPace == null || !Number.isFinite(avgPace) || avgPace <= 0) return null;
     return avgPace * KM_PER_MI;
   }, [avgPace]);
+  const isRunningSession = activityType === 'run';
 
   const routeCoords = useMemo(() => extractRouteCoords(draft?.samples ?? []), [draft?.samples]);
+
+  useEffect(() => {
+    if (!savedSessionId || !isRunningSession) {
+      setRunningBadges([]);
+      setRunningBadgesLoading(false);
+      setRunningBadgesErrorText(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setRunningBadgesLoading(true);
+        setRunningBadgesErrorText(null);
+
+        const auth = await supabase.auth.getUser();
+        const ownerId = auth.data.user?.id;
+        if (!ownerId) {
+          throw new Error('Not authenticated.');
+        }
+
+        const rows = await getBadgeUnlocksForSource({
+          ownerId,
+          sourceType: 'run_walk_session',
+          sourceId: savedSessionId,
+          domain: 'running',
+          limit: 6,
+        });
+
+        if (!isActive) return;
+        setRunningBadges(rows);
+      } catch (error: any) {
+        if (!isActive) return;
+        console.warn('[OutdoorSessionSummary] running badge load failed', error);
+        setRunningBadges([]);
+        setRunningBadgesErrorText(error?.message ?? 'Could not load running badges.');
+      } finally {
+        if (isActive) {
+          setRunningBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isRunningSession, savedSessionId]);
 
   const runHeartRateSync = useCallback(
     async (opts?: { delayMs?: number; reason?: 'auto' | 'manual' }) => {
@@ -690,6 +746,18 @@ export default function SessionSummary() {
               description="This session completed your cardio goal for today."
             />
           </View>
+        ) : null}
+
+        {savedSessionId && isRunningSession ? (
+          <BadgeSummarySection
+            title="Running unlocks"
+            subtitle="Newly earned badges from this saved run appear here."
+            emptyText="No new running badges unlocked in this session."
+            loadingText="Checking running badges..."
+            badges={runningBadges}
+            loading={runningBadgesLoading}
+            errorText={runningBadgesErrorText}
+          />
         ) : null}
 
         <View style={styles.footer}>

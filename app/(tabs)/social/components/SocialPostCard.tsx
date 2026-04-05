@@ -12,6 +12,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import BadgeUnlockStrip from '@/components/badges/BadgeUnlockStrip';
+import RouteOutlinePreview from '@/components/routes/RouteOutlinePreview';
+import StrengthRadarPreview from '@/components/strength/StrengthRadarPreview';
+import { getBadgeUnlocksForSource } from '@/lib/badges/api';
+import type { BadgeDomain, BadgeUnlockItem } from '@/lib/badges/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import {
   createPostComment,
@@ -194,6 +199,23 @@ function buildMetricList(
     }
   }
 
+  if (post.activityType === 'nutrition') {
+    const calories = pickNumber(m, ['kcal_total', 'calories', 'total_calories']);
+    if (calories != null && calories > 0) {
+      out.push({ label: 'Calories', value: `${Math.round(calories)} kcal` });
+    }
+
+    const protein = pickNumber(m, ['protein_g_total', 'protein_g', 'protein']);
+    if (protein != null && protein > 0) {
+      out.push({ label: 'Protein', value: `${Math.round(protein)} g` });
+    }
+
+    const mealCount = pickNumber(m, ['meal_count', 'item_count', 'entries']);
+    if (mealCount != null && mealCount > 0) {
+      out.push({ label: 'Entries', value: `${Math.round(mealCount)}` });
+    }
+  }
+
   if (out.length === 0) {
     const durationS = pickNumber(m, ['total_time_s', 'duration_s']);
     if (durationS != null && durationS > 0) {
@@ -208,6 +230,7 @@ function buildHeroMetric(post: SocialFeedPost, metrics: Metric[]): Metric | null
   if (metrics.length > 0) return metrics[0];
 
   if (post.activityType === 'strength') return { label: 'Activity', value: 'Strength' };
+  if (post.activityType === 'nutrition') return { label: 'Activity', value: 'Nutrition' };
   if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
     return { label: 'Activity', value: TYPE_LABEL[post.activityType] };
   }
@@ -344,6 +367,7 @@ export default function SocialPostCard({
   onToggleLike,
   onAdjustCommentCount,
   onPressSession,
+  showRoutePreview = false,
 }: {
   post: SocialFeedPost;
   distanceUnit: 'mi' | 'km';
@@ -355,6 +379,7 @@ export default function SocialPostCard({
   onToggleLike: () => void | Promise<void>;
   onAdjustCommentCount?: (delta: number) => void;
   onPressSession?: (post: SocialFeedPost) => void;
+  showRoutePreview?: boolean;
 }) {
   const { colors, styles } = useSocialPostTheme();
   const metrics = useMemo(
@@ -369,12 +394,49 @@ export default function SocialPostCard({
   const gradient = typeGradients[post.activityType] ?? typeGradients.other;
   const title = post.title?.trim() || `${typeLabel} session`;
   const summaryMetrics = metrics.slice(0, 3);
+  const routePreviewVisible =
+    showRoutePreview &&
+    post.isOutdoorSession &&
+    (post.activityType === 'run' || post.activityType === 'walk') &&
+    !!post.routePreview &&
+    post.routePreview.length >= 2;
+  const strengthRadarVisible =
+    post.activityType === 'strength' && !!post.strengthMuscleProfile;
+  const heroKickerText = routePreviewVisible
+    ? 'OUTDOOR ROUTE'
+    : strengthRadarVisible
+      ? 'BODY PROFILE'
+      : typeLabel.toUpperCase();
   const hasSessionLink =
     !!post.sessionId &&
     (post.activityType === 'run' ||
       post.activityType === 'walk' ||
       post.activityType === 'ride' ||
       post.activityType === 'strength');
+  const badgeSourceId = post.sourceId ?? post.sessionId;
+  const badgeDomain: BadgeDomain | null =
+    post.activityType === 'strength'
+      ? 'strength'
+      : post.activityType === 'run'
+      ? 'running'
+      : post.activityType === 'nutrition'
+      ? 'nutrition'
+      : null;
+  const badgeSourceType =
+    badgeDomain === 'strength'
+      ? post.sourceType ?? 'strength_workout'
+      : badgeDomain === 'running'
+      ? post.sourceType ?? 'run_walk_session'
+      : badgeDomain === 'nutrition'
+      ? post.sourceType ?? 'nutrition_day'
+      : null;
+  const badgeStripTitle =
+    badgeDomain === 'running'
+      ? 'Run badges'
+      : badgeDomain === 'nutrition'
+      ? 'Nutrition badges'
+      : 'Workout badges';
+  const canLoadSessionBadges = !!badgeDomain && !!badgeSourceId && !!badgeSourceType;
 
   const [likes, setLikes] = useState<SocialPostLike[]>([]);
   const [comments, setComments] = useState<SocialPostComment[]>([]);
@@ -384,6 +446,10 @@ export default function SocialPostCard({
   const [commentDraft, setCommentDraft] = useState('');
   const [commentBusy, setCommentBusy] = useState(false);
   const [busyCommentId, setBusyCommentId] = useState<string | null>(null);
+  const [sessionBadges, setSessionBadges] = useState<BadgeUnlockItem[]>([]);
+  const [sessionBadgesLoading, setSessionBadgesLoading] = useState(false);
+  const [sessionBadgesLoaded, setSessionBadgesLoaded] = useState(false);
+  const [sessionBadgesError, setSessionBadgesError] = useState<string | null>(null);
 
   useEffect(() => {
     setLikes([]);
@@ -394,6 +460,10 @@ export default function SocialPostCard({
     setCommentDraft('');
     setCommentBusy(false);
     setBusyCommentId(null);
+    setSessionBadges([]);
+    setSessionBadgesLoading(false);
+    setSessionBadgesLoaded(false);
+    setSessionBadgesError(null);
   }, [post.id]);
 
   async function loadEngagement() {
@@ -429,6 +499,61 @@ export default function SocialPostCard({
     if (!expanded || engagementLoaded) return;
     void loadEngagement();
   }, [expanded, engagementLoaded, post.id]);
+
+  useEffect(() => {
+    if (!expanded || !canLoadSessionBadges || sessionBadgesLoaded || sessionBadgesLoading) {
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setSessionBadgesLoading(true);
+        setSessionBadgesError(null);
+
+        const rows = await getBadgeUnlocksForSource({
+          ownerId: post.userId,
+          sourceType: badgeSourceType!,
+          sourceId: badgeSourceId!,
+          domain: badgeDomain!,
+          limit: 4,
+        });
+
+        if (!isActive) return;
+        setSessionBadges(rows);
+      } catch (error: any) {
+        if (!isActive) return;
+        setSessionBadges([]);
+        setSessionBadgesError(
+          error?.message ??
+            (badgeDomain === 'running'
+              ? 'Could not load run badges.'
+              : badgeDomain === 'nutrition'
+              ? 'Could not load nutrition badges.'
+              : 'Could not load workout badges.')
+        );
+      } finally {
+        if (isActive) {
+          setSessionBadgesLoading(false);
+          setSessionBadgesLoaded(true);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    badgeDomain,
+    badgeSourceId,
+    badgeSourceType,
+    canLoadSessionBadges,
+    expanded,
+    post.userId,
+    sessionBadgesLoaded,
+    sessionBadgesLoading,
+  ]);
 
   const handleHeroPress = () => {
     if (hasSessionLink && onPressSession) {
@@ -542,26 +667,56 @@ export default function SocialPostCard({
           end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          <View style={styles.heroKickerRow}>
-            <Ionicons name={typeIcon} size={13} color={colors.highlight1} />
-            <Text style={styles.heroKicker}>{typeLabel.toUpperCase()}</Text>
-          </View>
-
-          <Text style={styles.title}>{title}</Text>
-          {post.subtitle ? <Text style={styles.subtitle}>{post.subtitle}</Text> : null}
-
-          {heroMetric ? (
-            <View style={styles.heroMetricBlock}>
-              <Text style={styles.heroMetricValue}>{heroMetric.value}</Text>
-              <Text style={styles.heroMetricLabel}>{heroMetric.label}</Text>
+          {routePreviewVisible || strengthRadarVisible ? (
+            <View style={styles.heroPreviewWrap}>
+              {routePreviewVisible ? (
+                <RouteOutlinePreview
+                  points={post.routePreview}
+                  strokeColor={colors.highlight1}
+                  glowColor={colors.highlight2}
+                  startColor={colors.highlight3}
+                  endColor={colors.danger}
+                  backgroundColor={colors.cardDark}
+                  accentColor={colors.accentSoft}
+                />
+              ) : null}
+              {strengthRadarVisible ? (
+                <StrengthRadarPreview
+                  profile={post.strengthMuscleProfile}
+                  backgroundColor={colors.cardDark}
+                  accentColor={colors.accentSoft}
+                  glowColor={colors.highlight2}
+                  gridColor={colors.borderStrong}
+                  strokeColor={colors.highlight1}
+                />
+              ) : null}
             </View>
           ) : null}
 
-          {post.caption ? (
-            <Text style={styles.captionPreview} numberOfLines={expanded ? 3 : 2}>
-              {post.caption}
-            </Text>
-          ) : null}
+          <View style={styles.heroFooter}>
+            <View style={styles.heroKickerRow}>
+              <Ionicons name={typeIcon} size={13} color={colors.highlight1} />
+              <Text style={styles.heroKicker}>
+                {heroKickerText}
+              </Text>
+            </View>
+
+            <Text style={styles.title}>{title}</Text>
+            {post.subtitle ? <Text style={styles.subtitle}>{post.subtitle}</Text> : null}
+
+            {heroMetric ? (
+              <View style={styles.heroMetricBlock}>
+                <Text style={styles.heroMetricValue}>{heroMetric.value}</Text>
+                <Text style={styles.heroMetricLabel}>{heroMetric.label}</Text>
+              </View>
+            ) : null}
+
+            {post.caption ? (
+              <Text style={styles.captionPreview} numberOfLines={expanded ? 3 : 2}>
+                {post.caption}
+              </Text>
+            ) : null}
+          </View>
         </LinearGradient>
       </TouchableOpacity>
 
@@ -598,6 +753,18 @@ export default function SocialPostCard({
           ) : null}
 
           {post.caption ? <Text style={styles.captionFull}>{post.caption}</Text> : null}
+
+          {canLoadSessionBadges && (sessionBadgesLoading || sessionBadges.length > 0) ? (
+            <BadgeUnlockStrip
+              title={badgeStripTitle}
+              badges={sessionBadges}
+              compact
+            />
+          ) : null}
+
+          {expanded && sessionBadgesError ? (
+            <Text style={styles.errorText}>{sessionBadgesError}</Text>
+          ) : null}
 
           {hasSessionLink && onPressSession ? (
             <TouchableOpacity
@@ -761,18 +928,30 @@ function createStyles(
 
   heroPress: { paddingHorizontal: 12, paddingBottom: 12 },
   hero: {
-    minHeight: 170,
+    minHeight: 212,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     padding: 14,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  heroPreviewWrap: {
+    height: 122,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.cardDark,
+  },
+  heroFooter: {
+    marginTop: 'auto',
   },
   heroKickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
+    marginTop: 12,
   },
   heroKicker: {
     color: colors.textMuted,

@@ -25,6 +25,8 @@ import {
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
 import MetricLineChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
+import { getBadgeUnlocksForSource } from '@/lib/badges/api';
+import type { BadgeUnlockItem } from '@/lib/badges/types';
 import {
   formatCurrentHealthError,
   getCurrentHeartRateSamplesForRange,
@@ -38,12 +40,18 @@ import {
   clearActiveRunWalkSession,
   getActiveRunWalkSession,
 } from '@/lib/activeRunWalkSessionStore';
+import {
+  coerceStrengthMuscleProfile,
+  type StrengthMuscleProfile,
+} from '@/lib/strength/muscleProfile';
 import { saveStrengthWorkoutTemplateFromWorkout } from '@/lib/strength/templates';
 import type { StrengthSessionMode } from '@/lib/strength/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 import SaveTemplateModal from './components/SaveTemplateModal';
+import WorkoutBadgeSummarySection from './components/WorkoutBadgeSummarySection';
+import WorkoutMuscleProfileCard from './components/WorkoutMuscleProfileCard';
 
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
@@ -105,6 +113,18 @@ function formatShareErr(err: any): string {
   return code ? `${message} (${code})` : message;
 }
 
+function isRpcUnavailableError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const message = String(error?.message ?? '').toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === 'PGRST204' ||
+    message.includes('could not find the function') ||
+    message.includes('schema cache')
+  );
+}
+
 function buildDefaultTemplateName(exercises: ExerciseSummaryRow[]) {
   const firstExerciseName = exercises[0]?.exercise_name?.trim();
   if (!firstExerciseName) {
@@ -163,6 +183,7 @@ export default function StrengthSummaryPage() {
   const [workout, setWorkout] = React.useState<any>(null);
   const [exercises, setExercises] = React.useState<ExerciseSummaryRow[]>([]);
   const [setsByExercise, setSetsByExercise] = React.useState<Record<string, any[]>>({});
+  const [muscleProfile, setMuscleProfile] = React.useState<StrengthMuscleProfile | null>(null);
   const [canDelete, setCanDelete] = React.useState(true);
   const [shareToFeed, setShareToFeed] = React.useState(false);
   const [sharing, setSharing] = React.useState(false);
@@ -176,6 +197,9 @@ export default function StrengthSummaryPage() {
   const [templateName, setTemplateName] = React.useState('');
   const [savingTemplate, setSavingTemplate] = React.useState(false);
   const [savedTemplateName, setSavedTemplateName] = React.useState<string | null>(null);
+  const [newBadges, setNewBadges] = React.useState<BadgeUnlockItem[]>([]);
+  const [badgesLoading, setBadgesLoading] = React.useState(false);
+  const [badgesErrorText, setBadgesErrorText] = React.useState<string | null>(null);
   const autoSyncScheduledRef = React.useRef(false);
   const activeSyncTokenRef = React.useRef(0);
 
@@ -319,6 +343,22 @@ export default function StrengthSummaryPage() {
 
         const meRes = await supabase.auth.getUser();
         const meId = meRes.data.user?.id ?? null;
+        const muscleProfilePromise = (async () => {
+          const muscleRpc = await supabase.rpc('get_strength_workout_muscle_profile_user', {
+            p_workout_id: id,
+            p_post_id: postId ?? null,
+          });
+
+          if (muscleRpc.error) {
+            if (!isRpcUnavailableError(muscleRpc.error)) {
+              console.warn('[StrengthSummary] muscle profile load failed', muscleRpc.error);
+            }
+            return null;
+          }
+
+          const muscleRow = Array.isArray(muscleRpc.data) ? muscleRpc.data[0] : muscleRpc.data;
+          return coerceStrengthMuscleProfile((muscleRow as any)?.muscle_profile ?? null);
+        })();
 
         const enrichSummariesWithExerciseNames = async (summaries: ExerciseSummaryRow[]) => {
           if (summaries.length === 0) return summaries;
@@ -386,6 +426,7 @@ export default function StrengthSummaryPage() {
           setWorkout(directWorkout.data);
           setExercises(enrichedSummaries);
           setSetsByExercise(grouped);
+          setMuscleProfile(await muscleProfilePromise);
           const isOwnWorkout =
             !!meId && String((directWorkout.data as any).user_id ?? '') === meId;
           setCanDelete(isOwnWorkout);
@@ -448,6 +489,10 @@ export default function StrengthSummaryPage() {
         setWorkout(workoutRow);
         setExercises(enrichedSummaries);
         setSetsByExercise(grouped);
+        setMuscleProfile(
+          coerceStrengthMuscleProfile((row as any).muscle_profile ?? null) ??
+            (await muscleProfilePromise)
+        );
         const isOwnWorkout = Boolean((row as any).can_delete);
         setCanDelete(isOwnWorkout);
         if (isOwnWorkout && workoutRow?.ended_at) {
@@ -474,6 +519,7 @@ export default function StrengthSummaryPage() {
     autoSyncScheduledRef.current = false;
     activeSyncTokenRef.current = 0;
     setHeartRateSamples([]);
+    setMuscleProfile(null);
     setHeartRateLoaded(false);
     setHeartRateSyncState('idle');
     setHeartRateSyncMessage(null);
@@ -482,7 +528,53 @@ export default function StrengthSummaryPage() {
     setSavingTemplate(false);
     setSavedTemplateName(null);
     setTemplateName('');
+    setNewBadges([]);
+    setBadgesLoading(false);
+    setBadgesErrorText(null);
   }, [id]);
+
+  React.useEffect(() => {
+    const ownerId = String(workout?.user_id ?? '').trim();
+    if (!id || !ownerId) {
+      setNewBadges([]);
+      setBadgesLoading(false);
+      setBadgesErrorText(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setBadgesLoading(true);
+        setBadgesErrorText(null);
+
+        const rows = await getBadgeUnlocksForSource({
+          ownerId,
+          sourceType: 'strength_workout',
+          sourceId: id,
+          domain: 'strength',
+          limit: 8,
+        });
+
+        if (!isActive) return;
+        setNewBadges(rows);
+      } catch (error: any) {
+        console.warn('[StrengthSummary] badge load failed', error);
+        if (!isActive) return;
+        setNewBadges([]);
+        setBadgesErrorText(error?.message ?? 'Could not load workout badges.');
+      } finally {
+        if (isActive) {
+          setBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [id, workout?.user_id]);
 
   React.useEffect(() => {
     if (sessionMode !== 'freestyle') {
@@ -834,6 +926,8 @@ export default function StrengthSummaryPage() {
             </View>
           </View>
 
+          {muscleProfile ? <WorkoutMuscleProfileCard profile={muscleProfile} /> : null}
+
           {canDelete && workout?.ended_at ? (
             <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
               <View style={styles.heartRateHeaderRow}>
@@ -943,6 +1037,14 @@ export default function StrengthSummaryPage() {
                 description="This workout completed your strength goal for today."
               />
             </View>
+          ) : null}
+
+          {canDelete || badgesLoading || newBadges.length > 0 || badgesErrorText ? (
+            <WorkoutBadgeSummarySection
+              badges={newBadges}
+              loading={badgesLoading}
+              errorText={badgesErrorText}
+            />
           ) : null}
 
           {/* ---- Per Exercise Summary ---- */}

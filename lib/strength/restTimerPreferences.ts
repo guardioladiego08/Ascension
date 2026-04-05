@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import {
+  getCurrentUserPreferencesRow,
+  upsertCurrentUserPreferences,
+} from '@/lib/userPreferences';
+
 const STORAGE_KEY = 'tensr:strength_rest_timer_preferences.v1';
 
 export const DEFAULT_STRENGTH_REST_TIMER_SECONDS = 90;
@@ -10,6 +15,10 @@ export const STRENGTH_REST_TIMER_PRESET_SECONDS = [30, 45, 60, 90, 120, 180];
 
 export type StrengthRestTimerPreferences = {
   defaultDurationSeconds: number;
+};
+
+type StrengthRestTimerPreferenceRow = {
+  strength_rest_timer_seconds: number | null;
 };
 
 function clampStrengthRestTimerDuration(seconds: number) {
@@ -41,7 +50,7 @@ function normalizeStoredPreferences(
   };
 }
 
-export async function getStrengthRestTimerPreferences(): Promise<StrengthRestTimerPreferences> {
+async function getLocalStrengthRestTimerPreferences(): Promise<StrengthRestTimerPreferences> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -60,15 +69,61 @@ export async function getStrengthRestTimerPreferences(): Promise<StrengthRestTim
   }
 }
 
+async function persistLocalStrengthRestTimerPreferences(
+  preferences: StrengthRestTimerPreferences
+) {
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+}
+
+export async function getStrengthRestTimerPreferences(): Promise<StrengthRestTimerPreferences> {
+  const localPreferences = await getLocalStrengthRestTimerPreferences();
+
+  try {
+    const data = await getCurrentUserPreferencesRow<StrengthRestTimerPreferenceRow>(
+      'strength_rest_timer_seconds'
+    );
+
+    const remoteSeconds = Number(data?.strength_rest_timer_seconds);
+    if (Number.isFinite(remoteSeconds)) {
+      const remotePreferences = normalizeStoredPreferences({
+        defaultDurationSeconds: remoteSeconds,
+      });
+
+      await persistLocalStrengthRestTimerPreferences(remotePreferences);
+      return remotePreferences;
+    }
+
+    if (
+      localPreferences.defaultDurationSeconds !== DEFAULT_STRENGTH_REST_TIMER_SECONDS
+    ) {
+      await upsertCurrentUserPreferences({
+        strength_rest_timer_seconds: localPreferences.defaultDurationSeconds,
+      });
+    }
+  } catch (error) {
+    console.warn('[StrengthRestTimerPreferences] Failed to sync preferences', error);
+  }
+
+  return localPreferences;
+}
+
 export async function setStrengthRestTimerDefaultSeconds(seconds: number) {
   const nextPreferences = normalizeStoredPreferences({
     defaultDurationSeconds: seconds,
   });
 
   try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextPreferences));
+    await persistLocalStrengthRestTimerPreferences(nextPreferences);
   } catch (error) {
     console.warn('[StrengthRestTimerPreferences] Failed to save preferences', error);
+  }
+
+  try {
+    await upsertCurrentUserPreferences({
+      strength_rest_timer_seconds: nextPreferences.defaultDurationSeconds,
+    });
+  } catch (error) {
+    console.warn('[StrengthRestTimerPreferences] Failed to sync preferences', error);
   }
 
   return nextPreferences.defaultDurationSeconds;

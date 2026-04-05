@@ -1,6 +1,15 @@
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
+import {
+  fetchOutdoorRoutePreviewMap,
+  type RoutePreviewPoint,
+} from '@/lib/OutdoorSession/routePreview';
+import {
+  coerceStrengthMuscleProfile,
+  type StrengthMuscleProfile,
+} from '@/lib/strength/muscleProfile';
+
 export type SocialActivityType = 'run' | 'walk' | 'ride' | 'strength' | 'nutrition' | 'other';
 export type PostVisibility = 'public' | 'followers' | 'private';
 
@@ -30,6 +39,9 @@ export type SocialFeedPost = {
   likeCount: number;
   commentCount: number;
   isLikedByMe: boolean;
+  isOutdoorSession: boolean;
+  routePreview: RoutePreviewPoint[] | null;
+  strengthMuscleProfile: StrengthMuscleProfile | null;
 };
 
 export type SocialPostLike = {
@@ -83,11 +95,14 @@ function normalizeMetrics(value: unknown): Record<string, number | string | null
       out[k] = v ? 1 : 0;
       continue;
     }
-
-    out[k] = String(v);
   }
 
   return out;
+}
+
+function extractStrengthMuscleProfile(value: unknown): StrengthMuscleProfile | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return coerceStrengthMuscleProfile((value as Record<string, unknown>).muscle_profile);
 }
 
 function normalizeMediaUrls(value: unknown): string[] {
@@ -354,6 +369,12 @@ function cleanUsername(value: unknown): string | null {
   return raw.replace(/^@+/, '').trim() || null;
 }
 
+function inferOutdoorRunWalkPost(row: any): boolean {
+  const title = String(row?.title ?? '').toLowerCase();
+  const subtitle = String(row?.subtitle ?? '').toLowerCase();
+  return title.includes('outdoor') || subtitle.includes('outdoor');
+}
+
 function isGenericIdentityLabel(value: string): boolean {
   const v = value.trim().toLowerCase();
   return v === 'user' || v === 'null' || v === 'undefined' || v === 'unknown';
@@ -523,12 +544,17 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
     }
   }
 
-  return postRows.map((row) => {
+  const posts = postRows.map((row) => {
     const ownerId = String(row.user_id);
     const userSummary = userSummaryMap.get(ownerId);
     const username = userSummary?.username ?? fallbackUsername(ownerId);
     const displayName = userSummary?.displayName ?? username;
     const profileImageUrl = userSummary?.profileImageUrl ?? null;
+    const activityType = coerceActivityType(row.activity_type);
+    const rawMetrics = row.metrics;
+    const isOutdoorSession =
+      inferOutdoorRunWalkPost(row) &&
+      (activityType === 'run' || activityType === 'walk' || activityType === 'ride');
 
     return {
       id: String(row.id),
@@ -536,7 +562,7 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       username,
       displayName,
       profileImageUrl,
-      activityType: coerceActivityType(row.activity_type),
+      activityType,
       sourceType: row.source_type == null ? null : String(row.source_type),
       sourceId: row.source_id == null ? null : String(row.source_id),
       sessionId: row.session_id == null ? null : String(row.session_id),
@@ -545,13 +571,37 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       caption: row.caption == null ? null : String(row.caption),
       visibility: coerceVisibility(row.visibility),
       createdAt: String(row.created_at),
-      metrics: normalizeMetrics(row.metrics),
+      metrics: normalizeMetrics(rawMetrics),
       mediaUrls: normalizeMediaUrls(row.media_urls),
       likeCount: asInt(row.like_count),
       commentCount: asInt(row.comment_count),
       isLikedByMe: likedSet.has(String(row.id)),
+      isOutdoorSession,
+      routePreview: null,
+      strengthMuscleProfile:
+        activityType === 'strength' ? extractStrengthMuscleProfile(rawMetrics) : null,
     } satisfies SocialFeedPost;
   });
+
+  const previewSessionIds = posts
+    .filter(
+      (post) =>
+        post.isOutdoorSession &&
+        (post.activityType === 'run' || post.activityType === 'walk') &&
+        !!post.sessionId
+    )
+    .map((post) => post.sessionId as string);
+
+  if (previewSessionIds.length === 0) return posts;
+
+  const previewMap = await fetchOutdoorRoutePreviewMap(previewSessionIds);
+
+  return posts.map((post) => ({
+    ...post,
+    isOutdoorSession:
+      post.isOutdoorSession || (post.sessionId ? !!previewMap.get(post.sessionId) : false),
+    routePreview: post.sessionId ? previewMap.get(post.sessionId) ?? null : null,
+  }));
 }
 
 export async function getPostLikes(postId: string, limit = 20): Promise<SocialPostLike[]> {
@@ -711,6 +761,27 @@ async function mergePostSourceMetadata(postRows: any[]): Promise<any[]> {
       media_urls: row.media_urls ?? meta.media_urls ?? [],
     };
   });
+}
+
+async function getStrengthWorkoutMuscleProfile(
+  workoutId: string,
+  postId?: string | null
+): Promise<StrengthMuscleProfile | null> {
+  const trimmedWorkoutId = String(workoutId ?? '').trim();
+  if (!trimmedWorkoutId) return null;
+
+  const rpcRes = await supabase.rpc('get_strength_workout_muscle_profile_user', {
+    p_workout_id: trimmedWorkoutId,
+    p_post_id: postId ?? null,
+  });
+
+  if (isMissingDbObject(rpcRes.error) || isRpcUnavailableError(rpcRes.error)) {
+    return null;
+  }
+  if (rpcRes.error) throw rpcRes.error;
+
+  const row = Array.isArray(rpcRes.data) ? rpcRes.data[0] : rpcRes.data;
+  return coerceStrengthMuscleProfile((row as any)?.muscle_profile ?? null);
 }
 
 export async function getSocialCounts(userId: string): Promise<SocialCounts> {
@@ -907,6 +978,12 @@ export async function shareStrengthWorkoutToFeed(args: {
   const visibility = args.visibility ?? 'followers';
   const workoutUuid = asUuidOrNull(args.workoutId);
   const fallbackRpcId = workoutUuid ?? stableUuidFromRef(String(args.workoutId ?? ''));
+  const muscleProfile = workoutUuid
+    ? await getStrengthWorkoutMuscleProfile(workoutUuid).catch((error) => {
+        console.warn('[social] get_strength_workout_muscle_profile_user failed', error);
+        return null;
+      })
+    : null;
 
   const metrics = {
     total_volume_kg: Number.isFinite(args.totalVolumeKg) ? Number(args.totalVolumeKg) : 0,
@@ -916,6 +993,7 @@ export async function shareStrengthWorkoutToFeed(args: {
       args.durationS != null && Number.isFinite(args.durationS)
         ? Math.max(0, Math.trunc(args.durationS))
         : null,
+    muscle_profile: muscleProfile,
     source_workout_ref: workoutUuid ? null : String(args.workoutId ?? '').trim() || null,
   };
 

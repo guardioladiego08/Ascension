@@ -58,7 +58,8 @@ const DistanceUnitModal: React.FC<Props> = ({ visible, onClose }) => {
         <Pressable style={styles.card} onPress={e => e.stopPropagation()}>
           <Text style={styles.title}>Distance unit</Text>
           <Text style={styles.subtitle}>
-            Choose how distances are displayed for running and cycling.
+            Choose how distances are displayed for running and cycling across
+            your account.
           </Text>
 
           <View style={styles.options}>

@@ -218,6 +218,14 @@ export default function Social() {
       }
 
       if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+        if (post.isOutdoorSession) {
+          router.push({
+            pathname: '/progress/outdoor/[id]',
+            params: { id: post.sessionId },
+          });
+          return;
+        }
+
         router.push({
           pathname: '/progress/run_walk/[sessionId]',
           params: { sessionId: post.sessionId, postId: post.id },
@@ -317,6 +325,7 @@ export default function Social() {
                       onPressUser={() => onOpenProfile(item.userId)}
                       onPressProfile={onOpenProfile}
                       onPressSession={onOpenSession}
+                      showRoutePreview
                     />
                   )}
                   ItemSeparatorComponent={() => <View style={{ height: 14 }} />}

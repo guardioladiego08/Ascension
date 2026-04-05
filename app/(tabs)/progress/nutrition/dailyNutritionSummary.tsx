@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import BadgeSummarySection from '@/components/badges/BadgeSummarySection';
 import { supabase } from '@/lib/supabase';
 import LogoHeader from '@/components/my components/logoHeader';
 import DailyStatsCard from './components/DailyStatsCard';
@@ -19,12 +20,15 @@ import {
   isGoalCategoryClosed,
   type DailyGoalResults,
 } from '@/lib/goals/goalLogic';
+import { getBadgeUnlocksForSource } from '@/lib/badges/api';
+import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
 
 type DiaryDay = {
   id: string;
+  user_id: string;
   date: string;
   kcal_total: number | string | null;
   protein_g_total: number | string | null;
@@ -77,6 +81,9 @@ export default function DailyNutritionSummary() {
   const [items, setItems] = useState<DisplayItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
+  const [nutritionBadges, setNutritionBadges] = useState<BadgeUnlockItem[]>([]);
+  const [nutritionBadgesLoading, setNutritionBadgesLoading] = useState(false);
+  const [nutritionBadgesErrorText, setNutritionBadgesErrorText] = useState<string | null>(null);
   const dateStr = useMemo(() => (date as string) ?? toLocalISODate(), [date]);
 
   const dayLabel = useMemo(() => {
@@ -127,6 +134,9 @@ export default function DailyNutritionSummary() {
           if (isMounted) {
             setDay(null);
             setItems([]);
+            setNutritionBadges([]);
+            setNutritionBadgesLoading(false);
+            setNutritionBadgesErrorText(null);
           }
           return;
         }
@@ -183,6 +193,37 @@ export default function DailyNutritionSummary() {
         });
 
         if (isMounted) setItems(displayItems);
+
+        try {
+          if (isMounted) {
+            setNutritionBadgesLoading(true);
+            setNutritionBadgesErrorText(null);
+          }
+
+          const rows = await getBadgeUnlocksForSource({
+            ownerId: user.id,
+            sourceType: 'nutrition_day',
+            sourceId: dayRow.id,
+            domain: 'nutrition',
+            limit: 6,
+          });
+
+          if (isMounted) {
+            setNutritionBadges(rows);
+          }
+        } catch (badgeErr: any) {
+          console.warn('Error loading nutrition badges', badgeErr);
+          if (isMounted) {
+            setNutritionBadges([]);
+            setNutritionBadgesErrorText(
+              badgeErr?.message ?? 'Could not load nutrition badges for this day.'
+            );
+          }
+        } finally {
+          if (isMounted) {
+            setNutritionBadgesLoading(false);
+          }
+        }
       } catch (err: any) {
         console.warn('Error loading daily summary', err);
         if (isMounted) {
@@ -334,6 +375,16 @@ export default function DailyNutritionSummary() {
                   />
                 </View>
               ) : null}
+
+              <BadgeSummarySection
+                title="Nutrition badges"
+                subtitle="New nutrition unlocks earned from this logged day appear here right after your diary totals update."
+                emptyText="Log meals across the day to start earning nutrition badges."
+                loadingText="Loading nutrition badges..."
+                badges={nutritionBadges}
+                loading={nutritionBadgesLoading}
+                errorText={nutritionBadgesErrorText}
+              />
 
               <View style={styles.sectionHeader}>
                 <View>

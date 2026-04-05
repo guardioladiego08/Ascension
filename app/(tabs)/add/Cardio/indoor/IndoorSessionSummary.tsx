@@ -12,8 +12,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUnits } from '@/contexts/UnitsContext';
+import BadgeSummarySection from '@/components/badges/BadgeSummarySection';
 import LogoHeader from '@/components/my components/logoHeader';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getBadgeUnlocksForSource } from '@/lib/badges/api';
+import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { supabase } from '@/lib/supabase';
 import { shareRunWalkSessionToFeed } from '@/lib/social/feed';
 import GoalAchievementCard from '@/components/goals/GoalAchievementCard';
@@ -95,6 +98,11 @@ function formatShareErr(err: any): string {
   return code ? `${message} (${code})` : message;
 }
 
+function isRunningExerciseType(value: string | null | undefined) {
+  const normalized = String(value ?? '').toLowerCase();
+  return normalized.includes('run') && !normalized.includes('walk');
+}
+
 type HeartRateSyncState =
   | 'idle'
   | 'scheduled'
@@ -118,6 +126,9 @@ export default function IndoorSessionSummary() {
   const [savedSessionId, setSavedSessionId] = useState<string | null>(null);
   const [goalResult, setGoalResult] = useState<DailyGoalResults | null>(null);
   const [saveStatusText, setSaveStatusText] = useState<string | null>(null);
+  const [runningBadges, setRunningBadges] = useState<BadgeUnlockItem[]>([]);
+  const [runningBadgesLoading, setRunningBadgesLoading] = useState(false);
+  const [runningBadgesErrorText, setRunningBadgesErrorText] = useState<string | null>(null);
   const [heartRateSamples, setHeartRateSamples] = useState<HealthHeartRateSample[]>([]);
   const [heartRateSyncState, setHeartRateSyncState] = useState<HeartRateSyncState>('idle');
   const [heartRateSyncMessage, setHeartRateSyncMessage] = useState<string | null>(null);
@@ -183,6 +194,7 @@ export default function IndoorSessionSummary() {
         return 'INDOOR RUN SUMMARY';
     }
   }, [draft]);
+  const isRunningSession = isRunningExerciseType(draft?.exercise_type ?? null);
 
   const displayDistance = draft ? mToDisplay(draft.total_distance_m, distUnit) : 0;
 
@@ -434,6 +446,54 @@ export default function IndoorSessionSummary() {
       setDeleting(false);
     }
   }, [draftId, router]);
+
+  useEffect(() => {
+    if (!savedSessionId || !isRunningSession) {
+      setRunningBadges([]);
+      setRunningBadgesLoading(false);
+      setRunningBadgesErrorText(null);
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      try {
+        setRunningBadgesLoading(true);
+        setRunningBadgesErrorText(null);
+
+        const auth = await supabase.auth.getUser();
+        const ownerId = auth.data.user?.id;
+        if (!ownerId) {
+          throw new Error('Not authenticated.');
+        }
+
+        const rows = await getBadgeUnlocksForSource({
+          ownerId,
+          sourceType: 'run_walk_session',
+          sourceId: savedSessionId,
+          domain: 'running',
+          limit: 6,
+        });
+
+        if (!isActive) return;
+        setRunningBadges(rows);
+      } catch (error: any) {
+        if (!isActive) return;
+        console.warn('[IndoorSessionSummary] running badge load failed', error);
+        setRunningBadges([]);
+        setRunningBadgesErrorText(error?.message ?? 'Could not load running badges.');
+      } finally {
+        if (isActive) {
+          setRunningBadgesLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [isRunningSession, savedSessionId]);
 
   const onSave = async () => {
     if (!draftId || !draft) return;
@@ -799,6 +859,18 @@ export default function IndoorSessionSummary() {
                 description="This session completed your cardio goal for today."
               />
             </View>
+          ) : null}
+
+          {savedSessionId && isRunningSession ? (
+            <BadgeSummarySection
+              title="Running unlocks"
+              subtitle="Newly earned badges from this saved run appear here."
+              emptyText="No new running badges unlocked in this session."
+              loadingText="Checking running badges..."
+              badges={runningBadges}
+              loading={runningBadgesLoading}
+              errorText={runningBadgesErrorText}
+            />
           ) : null}
 
           <View style={styles.chartsWrap}>
