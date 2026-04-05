@@ -13,19 +13,25 @@ Use this file for durable schema context that should not live only in chat.
 
 - Some hosted projects have `nutrition.diary_items.meal_type` and possibly `nutrition.diary_items.meal_slot` stored as enum types even though the local 2026-03-22 migration path defines those columns as `text` plus a check constraint.
 - Compatibility seeds should look up the live column types and cast staged string values into those types during insert, otherwise demo diary inserts can fail with `42804` on stricter hosted schemas.
-- Keep the seed values aligned with the existing allowed labels:
+- Some hosted projects also expose a narrower `meal_type` enum that accepts only core meal classes such as `breakfast`, `lunch`, `dinner`, and `snack`, while workout-phase labels like `post-workout` remain valid only for `meal_slot`.
+- Compatibility seeds should therefore preserve workout timing detail in `meal_slot` but map unsupported workout-specific `meal_type` values to a safe core fallback such as `snack`.
+- Keep the seed values aligned with the live allowed labels:
   - `breakfast`
   - `lunch`
   - `dinner`
   - `snack`
-  - `pre-workout`
-  - `post-workout`
 
 ## 2026-04-04 - Hosted nutrition diary food references may still use legacy numeric IDs
 
 - Some hosted projects still store `nutrition.diary_items.food_id` as a numeric type such as `bigint` instead of the UUID shape used by the newer `nutrition.food_items` catalog.
 - Compatibility seeds should maintain a logical-food to live-food-id map per target table, because different nutrition tables on the same hosted project can disagree about which food table and key type they still use.
 - When `nutrition.diary_items.food_id` is not UUID-backed, the seed should resolve each staged food entry through the live mapped target table before insert rather than writing the logical demo UUID directly.
+
+## 2026-04-04 - Hosted legacy food tables may still use text primary keys
+
+- Some hosted projects still expose legacy food tables such as `public.foods` with `id` stored as `text` instead of `uuid` or numeric types.
+- Compatibility seeds should treat text-backed food IDs as another supported legacy path, not as an unsupported edge case, because nutrition foreign keys can still point at those tables on partially migrated projects.
+- When seeding into text-backed food tables, use a stable logical-to-live ID map and route dependent inserts such as `nutrition.recipe_ingredients`, `nutrition.user_favorite_foods`, and `nutrition.diary_items` through that map so all food references stay consistent with the live target table.
 
 
 ## 2026-04-02 - Strength radar previews depend on normalized muscle profiles plus workout-level visibility fallback

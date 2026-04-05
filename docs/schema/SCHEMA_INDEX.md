@@ -16,7 +16,7 @@ Use it to find:
 - Docs folder: `docs/schema/supabase/`
 - Summary: `docs/schema/supabase/README.md`
 - Context: `docs/schema/supabase/context.md`
-- Current compatibility note: hosted nutrition environments may still be missing `verification_status` and favorite tables from the 2026-03-22 rollout, and some live `food_id` foreign keys can still point at a legacy `foods` table instead of `nutrition.food_items`, so app-side fallbacks plus compatibility-aware seeds remain required until the hosted schema is fully aligned.
+- Current compatibility note: hosted nutrition environments may still be missing `verification_status` and favorite tables from the 2026-03-22 rollout, some live `food_id` foreign keys can still point at a legacy `foods` table instead of `nutrition.food_items`, some of those legacy food tables still use text-backed primary keys, and some hosted `nutrition.diary_items.meal_type` enums accept only core meal classes, so app-side fallbacks plus compatibility-aware seeds remain required until the hosted schema is fully aligned.
 - Current settings note: `user.user_preferences` is the canonical cross-device settings row for units, health-provider sync state, theme palette selection, and the default strength rest timer.
 - Current strength library note: shared exercise rows are the canonical visible library, and the 2026-03-27 exercise guard migration blocks future shared-vs-user name collisions after normalization.
 - Current strength template note: templates now live in normalized `strength.workout_templates*` tables with private-by-default ownership, per-exercise target set counts, and future-ready `visibility` / fork provenance for later feed sharing.

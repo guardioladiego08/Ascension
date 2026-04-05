@@ -1,22 +1,13 @@
--- Nutrition progress dashboard demo seed
--- Generates deterministic nutrition history spanning ~1 month by default so it can run
--- in hosted SQL editors without timing out as easily.
--- Safe to rerun for a dedicated demo account: seeded nutrition days in the generated date set
--- are replaced when `v_replace_existing_days` is true.
---
--- Pairs best with:
--- - `supabase/seeds/running_progress_year_dashboard_demo.sql`
--- - `supabase/seeds/strength_progress_year_dashboard_demo.sql`
--- using the same demo user id, so the nutrition performance section can light up shared
--- training-day comparisons.
+-- Nutrition progress dashboard smoke seed
+-- Generates a lightweight 14-day nutrition history intended for hosted SQL editors.
+-- This is the fast-path alternative when the larger nutrition progress demo times out.
 --
 -- How to use:
--- 1) Set `v_user_id` to a real `auth.users.id` used for testing.
--- 2) Leave `v_replace_existing_days = true` only for a dedicated demo account.
+-- 1) Set `v_user_id` to your test account.
+-- 2) Leave `v_replace_existing_days = true` only for a dedicated demo user.
 -- 3) Run this file in the Supabase SQL Editor.
--- 4) Increase `v_week_count` only if your database connection can handle a longer seed run.
--- 5) Open Progress -> Nutrition to test intake trends, adherence, timing, repeat behavior,
---    source mix, and badge progress.
+-- 4) Open Progress -> Nutrition to validate trends, adherence, timing, repeat behavior,
+--    source mix, and recent consistency cards.
 
 begin;
 
@@ -24,9 +15,12 @@ do $$
 declare
   v_user_id uuid := '8e97a18c-d549-424c-8aa2-aed32961de70';
   v_timezone text := 'America/Los_Angeles';
-  v_week_count integer := 4;
+  v_day_count integer := 14;
   v_replace_existing_days boolean := true;
   v_food_seeded_at timestamptz := timezone('utc', now());
+  v_today_local date := timezone(v_timezone, now())::date;
+  v_start_date date := (timezone(v_timezone, now())::date - 14);
+  v_end_date date := (timezone(v_timezone, now())::date - 1);
 
   v_food_oats uuid := '11111111-1111-4111-8111-111111111101';
   v_food_greek_yogurt uuid := '11111111-1111-4111-8111-111111111102';
@@ -53,24 +47,10 @@ declare
   v_has_favorite_foods boolean := false;
   v_has_favorite_meals boolean := false;
 
-  v_now_local_ts timestamp without time zone;
-  v_current_week_start date;
-  v_start_week date;
-  v_week_start date;
-  v_day date;
-
-  v_week_idx integer;
-  v_deload_factor numeric(10, 3);
-  v_progress_factor numeric(10, 3);
-  v_underfuel_saturday boolean;
-  v_skip_monday boolean;
-  v_skip_sunday boolean;
-
-  v_qty numeric(10, 3);
   v_seeded_days integer := 0;
   v_existing_days integer := 0;
   v_replaced_days integer := 0;
-  v_inserted_days integer := 0;
+  v_upserted_days integer := 0;
   v_inserted_items integer := 0;
   v_food_target record;
   v_food_row record;
@@ -153,6 +133,14 @@ begin
     protein_target numeric(10, 2) not null,
     carbs_target numeric(10, 2) not null,
     fat_target numeric(10, 2) not null
+  ) on commit drop;
+
+  create temporary table tmp_nutrition_seed_pattern (
+    diary_date date primary key,
+    day_index integer not null,
+    iso_dow integer not null,
+    is_training_day boolean not null,
+    is_underfueled boolean not null
   ) on commit drop;
 
   create temporary table tmp_seed_food_catalog (
@@ -524,7 +512,7 @@ begin
 
     if v_food_target_missing_required is not null then
       raise exception
-        'Nutrition demo seed cannot populate %.% because required columns are not mapped: %',
+        'Nutrition smoke seed cannot populate %.% because required columns are not mapped: %',
         v_food_target.target_schema,
         v_food_target.target_table,
         v_food_target_missing_required;
@@ -532,7 +520,7 @@ begin
 
     if coalesce(v_food_target_column_list, '') = '' or coalesce(v_food_target_select_list, '') = '' then
       raise exception
-        'Nutrition demo seed found no compatible mapped columns for %.%',
+        'Nutrition smoke seed found no compatible mapped columns for %.%',
         v_food_target.target_schema,
         v_food_target.target_table;
     end if;
@@ -569,15 +557,11 @@ begin
         v_food_target.target_table,
         f.id::text
       from tmp_seed_food_catalog f
-        on conflict (logical_food_id, target_schema, target_table) do update
-        set live_food_id_text = excluded.live_food_id_text;
+      on conflict (logical_food_id, target_schema, target_table) do update
+      set live_food_id_text = excluded.live_food_id_text;
     elsif v_food_target_id_type in ('text', 'character varying', 'character') then
       for v_food_row in
-        select
-          id,
-          name,
-          brand,
-          barcode
+        select id, name, brand, barcode
         from tmp_seed_food_catalog
       loop
         v_live_food_id_text := null;
@@ -655,17 +639,13 @@ begin
     elsif v_food_target_id_type in ('bigint', 'integer', 'smallint') then
       if coalesce(v_food_target_column_list_without_id, '') = '' or coalesce(v_food_target_select_list_without_id, '') = '' then
         raise exception
-          'Nutrition demo seed cannot insert into %.% because non-uuid ids require insert columns other than id',
+          'Nutrition smoke seed cannot insert into %.% because non-uuid ids require insert columns other than id',
           v_food_target.target_schema,
           v_food_target.target_table;
       end if;
 
       for v_food_row in
-        select
-          id,
-          name,
-          brand,
-          barcode
+        select id, name, brand, barcode
         from tmp_seed_food_catalog
       loop
         v_live_food_id_text := null;
@@ -740,20 +720,12 @@ begin
         on conflict (logical_food_id, target_schema, target_table) do update
         set live_food_id_text = excluded.live_food_id_text;
       end loop;
-    elsif v_food_target_id_type is distinct from 'uuid' then
+    else
       raise exception
-        'Nutrition demo seed does not yet support %.% id type % for compatibility food seeding',
+        'Nutrition smoke seed does not yet support %.% id type % for compatibility food seeding',
         v_food_target.target_schema,
         v_food_target.target_table,
         v_food_target_id_type;
-    else
-      execute format(
-        'insert into %I.%I (%s) select %s from tmp_seed_food_catalog f on conflict (id) do nothing',
-        v_food_target.target_schema,
-        v_food_target.target_table,
-        v_food_target_column_list,
-        v_food_target_select_list
-      );
     end if;
   end loop;
 
@@ -765,12 +737,8 @@ begin
     and a.attnum > 0
     and not a.attisdropped;
 
-  select
-    target_schema,
-    target_table
-  into
-    v_recipe_food_target_schema,
-    v_recipe_food_target_table
+  select target_schema, target_table
+  into v_recipe_food_target_schema, v_recipe_food_target_table
   from tmp_seed_food_fk_targets
   where source_table = 'recipe_ingredients';
 
@@ -805,7 +773,7 @@ begin
 
   if v_recipe_food_target_schema is null or v_recipe_food_target_table is null then
     raise exception
-      'Nutrition demo seed could not determine a compatible live food table for nutrition.recipe_ingredients.food_id type %',
+      'Nutrition smoke seed could not determine a compatible live food table for nutrition.recipe_ingredients.food_id type %',
       v_recipe_ingredient_food_id_type;
   end if;
 
@@ -825,12 +793,8 @@ begin
       and a.attnum > 0
       and not a.attisdropped;
 
-    select
-      target_schema,
-      target_table
-    into
-      v_favorite_food_target_schema,
-      v_favorite_food_target_table
+    select target_schema, target_table
+    into v_favorite_food_target_schema, v_favorite_food_target_table
     from tmp_seed_food_fk_targets
     where source_table = 'user_favorite_foods';
 
@@ -865,7 +829,7 @@ begin
 
     if v_favorite_food_target_schema is null or v_favorite_food_target_table is null then
       raise exception
-        'Nutrition demo seed could not determine a compatible live food table for nutrition.user_favorite_foods.food_id type %',
+        'Nutrition smoke seed could not determine a compatible live food table for nutrition.user_favorite_foods.food_id type %',
         v_favorite_food_id_type;
     end if;
 
@@ -909,12 +873,8 @@ begin
     and a.attnum > 0
     and not a.attisdropped;
 
-  select
-    target_schema,
-    target_table
-  into
-    v_diary_food_target_schema,
-    v_diary_food_target_table
+  select target_schema, target_table
+  into v_diary_food_target_schema, v_diary_food_target_table
   from tmp_seed_food_fk_targets
   where source_table = 'diary_items';
 
@@ -947,20 +907,18 @@ begin
     end if;
   end if;
 
-  if coalesce(v_diary_item_food_id_type, 'uuid') <> 'uuid' then
-    if v_diary_food_target_schema is null or v_diary_food_target_table is null then
-      raise exception
-        'Nutrition demo seed could not determine a compatible live food table for nutrition.diary_items.food_id type %',
-        v_diary_item_food_id_type;
-    end if;
-
-    v_diary_item_food_id_expr := format(
-      '(select m.live_food_id_text::%s from tmp_seed_food_id_map m where m.logical_food_id = e.food_id and m.target_schema = %L and m.target_table = %L)',
-      v_diary_item_food_id_type,
-      v_diary_food_target_schema,
-      v_diary_food_target_table
-    );
+  if v_diary_food_target_schema is null or v_diary_food_target_table is null then
+    raise exception
+      'Nutrition smoke seed could not determine a compatible live food table for nutrition.diary_items.food_id type %',
+      v_diary_item_food_id_type;
   end if;
+
+  v_diary_item_food_id_expr := format(
+    '(select m.live_food_id_text::%s from tmp_seed_food_id_map m where m.logical_food_id = e.food_id and m.target_schema = %L and m.target_table = %L)',
+    v_diary_item_food_id_type,
+    v_diary_food_target_schema,
+    v_diary_food_target_table
+  );
 
   insert into nutrition.recipes (
     id,
@@ -979,46 +937,11 @@ begin
     is_private
   )
   values
-    (
-      v_recipe_oats,
-      v_user_id,
-      'Power Oats Bowl',
-      'High-carb breakfast bowl for training mornings.',
-      'demo_seed:nutrition_progress_year:v1',
-      515, 35.3, 70.5, 13.6, 11.1, 23, 151, 274, true
-    ),
-    (
-      v_recipe_yogurt,
-      v_user_id,
-      'Greek Yogurt Crunch',
-      'Balanced yogurt bowl with berries and crunch.',
-      'demo_seed:nutrition_progress_year:v1',
-      363, 24.8, 40.3, 10.0, 5.5, 18, 121, 281, true
-    ),
-    (
-      v_recipe_chicken_bowl,
-      v_user_id,
-      'Chicken Rice Bowl',
-      'Reliable lunch and dinner prep bowl.',
-      'demo_seed:nutrition_progress_year:v1',
-      516, 41.0, 60.3, 11.5, 4.3, 3, 104, 377, true
-    ),
-    (
-      v_recipe_smoothie,
-      v_user_id,
-      'Recovery Smoothie',
-      'Quick post-workout protein and carb refill.',
-      'demo_seed:nutrition_progress_year:v1',
-      337, 26.8, 57.6, 1.6, 5.1, 34, 216, 274, true
-    ),
-    (
-      v_recipe_salmon_plate,
-      v_user_id,
-      'Salmon Sweet Potato Plate',
-      'Higher-fat dinner with steady carbs.',
-      'demo_seed:nutrition_progress_year:v1',
-      480, 35.5, 39.0, 20.7, 6.5, 6, 167, 355, true
-    )
+    (v_recipe_oats, v_user_id, 'Power Oats Bowl', 'High-carb breakfast bowl for training mornings.', 'demo_seed:nutrition_progress_smoke:v1', 515, 35.3, 70.5, 13.6, 11.1, 23, 151, 274, true),
+    (v_recipe_yogurt, v_user_id, 'Greek Yogurt Crunch', 'Balanced yogurt bowl with berries and crunch.', 'demo_seed:nutrition_progress_smoke:v1', 363, 24.8, 40.3, 10.0, 5.5, 18, 121, 281, true),
+    (v_recipe_chicken_bowl, v_user_id, 'Chicken Rice Bowl', 'Reliable lunch and dinner prep bowl.', 'demo_seed:nutrition_progress_smoke:v1', 516, 41.0, 60.3, 11.5, 4.3, 3, 104, 377, true),
+    (v_recipe_smoothie, v_user_id, 'Recovery Smoothie', 'Quick post-workout protein and carb refill.', 'demo_seed:nutrition_progress_smoke:v1', 337, 26.8, 57.6, 1.6, 5.1, 34, 216, 274, true),
+    (v_recipe_salmon_plate, v_user_id, 'Salmon Sweet Potato Plate', 'Higher-fat dinner with steady carbs.', 'demo_seed:nutrition_progress_smoke:v1', 480, 35.5, 39.0, 20.7, 6.5, 6, 167, 355, true)
   on conflict (id) do update
   set
     user_id = excluded.user_id,
@@ -1066,21 +989,17 @@ begin
     (v_recipe_oats, v_food_banana, 1.0, 'medium', 118, 105, 1.3, 27.0, 0.4, 3.1, 1, 2, null, v_user_id),
     (v_recipe_oats, v_food_blueberries, 1.0, 'serving', 70, 40, 0.5, 10.0, 0.2, 2.0, 0, 3, null, v_user_id),
     (v_recipe_oats, v_food_almond_butter, 1.0, 'tbsp', 16, 100, 3.5, 3.5, 9.0, 2.0, 55, 4, null, v_user_id),
-
     (v_recipe_yogurt, v_food_greek_yogurt, 1.0, 'cup', 170, 120, 18.0, 6.0, 0.0, 0, 65, 0, null, v_user_id),
     (v_recipe_yogurt, v_food_blueberries, 1.0, 'serving', 70, 40, 0.5, 10.0, 0.2, 2.0, 0, 1, null, v_user_id),
     (v_recipe_yogurt, v_food_oats, 0.5, 'serving', 20, 75, 2.5, 13.5, 1.5, 2.0, 0, 2, null, v_user_id),
     (v_recipe_yogurt, v_food_trail_mix, 0.75, 'packet', 21, 128, 3.8, 11.3, 8.3, 1.5, 56, 3, null, v_user_id),
-
     (v_recipe_chicken_bowl, v_food_chicken, 1.0, 'portion', 140, 180, 35.0, 0.0, 4.0, 0, 95, 0, null, v_user_id),
     (v_recipe_chicken_bowl, v_food_rice, 1.15, 'cup', 173, 236, 4.6, 51.8, 0.5, 0.6, 6, 1, null, v_user_id),
-    (v_recipe_chicken_bowl, v_food_avocado, 1.25, 'half', 62.5, 100, 1.3, 5.0, 8.8, 3.8, 3.8, 2, null, v_user_id),
-
+    (v_recipe_chicken_bowl, v_food_avocado, 1.25, 'half', 62.5, 100, 1.3, 5.0, 8.8, 3.8, 4, 2, null, v_user_id),
     (v_recipe_smoothie, v_food_whey, 1.0, 'scoop', 30, 120, 25.0, 3.0, 1.0, 0, 95, 0, null, v_user_id),
     (v_recipe_smoothie, v_food_banana, 1.0, 'medium', 118, 105, 1.3, 27.0, 0.4, 3.1, 1, 1, null, v_user_id),
     (v_recipe_smoothie, v_food_blueberries, 1.0, 'serving', 70, 40, 0.5, 10.0, 0.2, 2.0, 0, 2, null, v_user_id),
     (v_recipe_smoothie, v_food_sports_drink, 0.8, 'bottle', 400, 72, 0.0, 17.6, 0.0, 0, 120, 3, null, v_user_id),
-
     (v_recipe_salmon_plate, v_food_salmon, 1.0, 'portion', 150, 280, 32.0, 0.0, 17.0, 0, 95, 0, null, v_user_id),
     (v_recipe_salmon_plate, v_food_sweet_potato, 1.0, 'medium', 180, 160, 3.0, 37.0, 0.2, 5.0, 70, 1, null, v_user_id),
     (v_recipe_salmon_plate, v_food_avocado, 0.5, 'half', 25, 40, 0.5, 2.0, 3.5, 1.5, 2, 2, null, v_user_id);
@@ -1149,283 +1068,307 @@ begin
     using v_user_id;
   end if;
 
-  v_now_local_ts := timezone(v_timezone, now());
-  v_current_week_start := date_trunc('week', v_now_local_ts)::date;
-  v_start_week := v_current_week_start - ((v_week_count - 1) * 7);
+  insert into tmp_nutrition_seed_pattern (
+    diary_date,
+    day_index,
+    iso_dow,
+    is_training_day,
+    is_underfueled
+  )
+  select
+    d::date,
+    row_number() over (order by d) - 1,
+    extract(isodow from d)::integer,
+    extract(isodow from d)::integer in (2, 4, 6),
+    (extract(isodow from d)::integer = 6 and d >= v_end_date - 6)
+  from generate_series(v_start_date, v_end_date, interval '1 day') as d;
 
-  for v_week_idx in 0..(v_week_count - 1) loop
-    v_week_start := v_start_week + (v_week_idx * 7);
-    v_deload_factor := case when mod(v_week_idx + 1, 4) = 0 then 0.92 else 1.00 end;
-    v_progress_factor := least(1.18::numeric, 0.96::numeric + (least(v_week_idx, 40) * 0.004::numeric));
-    v_underfuel_saturday := mod(v_week_idx, 8) = 5 and v_week_idx < v_week_count - 1;
-    v_skip_monday := mod(v_week_idx, 9) = 4 and v_week_idx < v_week_count - 2;
-    v_skip_sunday := mod(v_week_idx, 7) = 2 and v_week_idx < v_week_count - 2;
+  insert into tmp_nutrition_seed_days (
+    diary_date,
+    timezone_str,
+    kcal_target,
+    protein_target,
+    carbs_target,
+    fat_target
+  )
+  select
+    p.diary_date,
+    v_timezone,
+    case
+      when p.is_training_day then 2450 + (mod(p.day_index, 2) * 60)
+      when p.iso_dow in (6, 7) then 2300
+      else 2200 + (mod(p.day_index, 3) * 40)
+    end,
+    case when p.is_training_day then 180 else 170 end,
+    case
+      when p.is_training_day then 280 + (mod(p.day_index, 2) * 12)
+      else 210 + (mod(p.day_index, 3) * 8)
+    end,
+    case when p.is_training_day then 70 else 72 end
+  from tmp_nutrition_seed_pattern p;
 
-    v_day := v_week_start;
-    if not v_skip_monday and v_day < v_now_local_ts::date then
-      insert into tmp_nutrition_seed_days
-        (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-      values
-        (
-          v_day,
-          v_timezone,
-          round(2100 * v_progress_factor * v_deload_factor, 2),
-          165,
-          185 + (mod(v_week_idx, 3) * 6),
-          72
-        )
-      on conflict (diary_date) do nothing;
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '07:15') at time zone v_timezone,
+    'breakfast',
+    'breakfast',
+    null,
+    v_recipe_oats,
+    round((0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 3),
+    'portion',
+    round(274 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(515 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(35.3 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(70.5 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(13.6 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(11.1 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(23 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    round(151 * (0.92::numeric + mod(p.day_index, 3) * 0.04::numeric), 2),
+    'demo oats breakfast'
+  from tmp_nutrition_seed_pattern p
+  where mod(p.day_index, 2) = 0;
 
-      v_qty := round((0.90::numeric + mod(v_week_idx, 3) * 0.05::numeric) * v_deload_factor, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '07:20') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_yogurt, v_qty, 'portion', round(281 * v_qty, 2), round(363 * v_qty, 2), round(24.8 * v_qty, 2), round(40.3 * v_qty, 2), round(10.0 * v_qty, 2), round(5.5 * v_qty, 2), round(18 * v_qty, 2), round(121 * v_qty, 2), 'demo breakfast');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '07:20') at time zone v_timezone,
+    'breakfast',
+    'breakfast',
+    null,
+    v_recipe_yogurt,
+    round((0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 3),
+    'portion',
+    round(281 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(363 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(24.8 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(40.3 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(10.0 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(5.5 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(18 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(121 * (0.94::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    'demo yogurt breakfast'
+  from tmp_nutrition_seed_pattern p
+  where mod(p.day_index, 2) = 1;
 
-      v_qty := round(0.88::numeric + mod(v_week_idx, 2) * 0.08::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:35') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo lunch');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '12:30') at time zone v_timezone,
+    'lunch',
+    'lunch',
+    null,
+    v_recipe_chicken_bowl,
+    round((0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 3),
+    'portion',
+    round(377 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(516 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(41.0 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(60.3 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(11.5 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(4.3 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(3 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    round(104 * (0.88::numeric + mod(p.day_index, 3) * 0.05::numeric), 2),
+    'demo lunch bowl'
+  from tmp_nutrition_seed_pattern p;
 
-      v_qty := round(0.90::numeric + mod(v_week_idx, 4) * 0.03::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '18:45') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_salmon_plate, v_qty, 'portion', round(355 * v_qty, 2), round(480 * v_qty, 2), round(35.5 * v_qty, 2), round(39.0 * v_qty, 2), round(20.7 * v_qty, 2), round(6.5 * v_qty, 2), round(6 * v_qty, 2), round(167 * v_qty, 2), 'demo dinner');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '19:00') at time zone v_timezone,
+    'dinner',
+    'dinner',
+    null,
+    v_recipe_salmon_plate,
+    round((0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 3),
+    'portion',
+    round(355 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(480 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(35.5 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(39.0 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(20.7 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(6.5 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(6 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    round(167 * (0.92::numeric + mod(p.day_index, 2) * 0.06::numeric), 2),
+    'demo salmon dinner'
+  from tmp_nutrition_seed_pattern p
+  where mod(p.day_index, 2) = 0;
 
-      if mod(v_week_idx, 3) = 0 then
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '21:10') at time zone v_timezone, 'snack', 'snack', v_food_trail_mix, null, 1.0, 'packet', 28, 170, 5.0, 15.0, 11.0, 2.0, 12.0, 75, 'demo late snack');
-      end if;
-    end if;
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '19:05') at time zone v_timezone,
+    'dinner',
+    'dinner',
+    null,
+    v_recipe_chicken_bowl,
+    round((0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 3),
+    'portion',
+    round(377 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(516 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(41.0 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(60.3 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(11.5 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(4.3 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(3 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    round(104 * (0.96::numeric + mod(p.day_index, 2) * 0.05::numeric), 2),
+    'demo chicken dinner'
+  from tmp_nutrition_seed_pattern p
+  where mod(p.day_index, 2) = 1;
 
-    v_day := v_week_start + 1;
-    if v_day < v_now_local_ts::date then
-      insert into tmp_nutrition_seed_days
-        (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-      values
-        (
-          v_day,
-          v_timezone,
-          round(2450 * v_progress_factor * v_deload_factor, 2),
-          180,
-          280 + (mod(v_week_idx, 4) * 8),
-          70
-        )
-      on conflict (diary_date) do nothing;
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '16:35') at time zone v_timezone,
+    'pre-workout',
+    'pre-workout',
+    v_food_banana,
+    null,
+    case when p.is_underfueled then 0.5 else 1.0 end,
+    'medium',
+    case when p.is_underfueled then 59 else 118 end,
+    case when p.is_underfueled then 52.5 else 105 end,
+    case when p.is_underfueled then 0.65 else 1.3 end,
+    case when p.is_underfueled then 13.5 else 27.0 end,
+    case when p.is_underfueled then 0.2 else 0.4 end,
+    case when p.is_underfueled then 1.55 else 3.1 end,
+    case when p.is_underfueled then 7.0 else 14.0 end,
+    case when p.is_underfueled then 0.5 else 1.0 end,
+    'demo pre-workout banana'
+  from tmp_nutrition_seed_pattern p
+  where p.is_training_day;
 
-      v_qty := round((0.94::numeric + mod(v_week_idx, 4) * 0.04::numeric) * v_deload_factor, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '07:05') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_oats, v_qty, 'portion', round(274 * v_qty, 2), round(515 * v_qty, 2), round(35.3 * v_qty, 2), round(70.5 * v_qty, 2), round(13.6 * v_qty, 2), round(11.1 * v_qty, 2), round(23 * v_qty, 2), round(151 * v_qty, 2), 'demo training breakfast');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '16:50') at time zone v_timezone,
+    'pre-workout',
+    'pre-workout',
+    v_food_sports_drink,
+    null,
+    case when p.is_underfueled then 0.5 else 1.0 end,
+    'bottle',
+    case when p.is_underfueled then 250 else 500 end,
+    case when p.is_underfueled then 45 else 90 end,
+    0,
+    case when p.is_underfueled then 11 else 22 end,
+    0,
+    0,
+    case when p.is_underfueled then 11 else 22 end,
+    case when p.is_underfueled then 75 else 150 end,
+    'demo pre-workout hydration'
+  from tmp_nutrition_seed_pattern p
+  where p.is_training_day;
 
-      v_qty := round(0.70::numeric + mod(v_week_idx, 3) * 0.05::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:25') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo lunch');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '18:45') at time zone v_timezone,
+    'post-workout',
+    'post-workout',
+    null,
+    v_recipe_smoothie,
+    case when p.is_underfueled then 0.80 else 1.00 end,
+    'portion',
+    round(274 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(337 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(26.8 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(57.6 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(1.6 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(5.1 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(34 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    round(216 * case when p.is_underfueled then 0.80 else 1.00 end, 2),
+    'demo recovery smoothie'
+  from tmp_nutrition_seed_pattern p
+  where p.is_training_day;
 
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '16:35') at time zone v_timezone, 'pre-workout', 'pre-workout', v_food_banana, null, 1.0, 'medium', 118, 105, 1.3, 27.0, 0.4, 3.1, 14.0, 1, 'demo pre-workout');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '15:10') at time zone v_timezone,
+    'snack',
+    'snack',
+    v_food_protein_bar,
+    null,
+    1.0,
+    'bar',
+    60,
+    210,
+    20.0,
+    23.0,
+    7.0,
+    5.0,
+    6.0,
+    180,
+    'demo protein snack'
+  from tmp_nutrition_seed_pattern p
+  where p.iso_dow in (3, 7);
 
-      v_qty := case when mod(v_week_idx, 6) = 2 then 0.60 else 1.00 end;
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '16:50') at time zone v_timezone, 'pre-workout', 'pre-workout', v_food_sports_drink, null, v_qty, 'bottle', round(500 * v_qty, 2), round(90 * v_qty, 2), 0, round(22 * v_qty, 2), 0, 0, round(22 * v_qty, 2), round(150 * v_qty, 2), 'demo pre-workout hydration');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '21:00') at time zone v_timezone,
+    'snack',
+    'snack',
+    v_food_trail_mix,
+    null,
+    case when p.is_underfueled then 0.75 else 1.0 end,
+    'packet',
+    round(28 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(170 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(5 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(15 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(11 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(2 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(12 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    round(75 * case when p.is_underfueled then 0.75 else 1.0 end, 2),
+    'demo late snack'
+  from tmp_nutrition_seed_pattern p
+  where p.iso_dow in (1, 5);
 
-      v_qty := case when mod(v_week_idx, 7) = 3 then 0.80 else 1.00 end;
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '18:55') at time zone v_timezone, 'post-workout', 'post-workout', null, v_recipe_smoothie, v_qty, 'portion', round(274 * v_qty, 2), round(337 * v_qty, 2), round(26.8 * v_qty, 2), round(57.6 * v_qty, 2), round(1.6 * v_qty, 2), round(5.1 * v_qty, 2), round(34 * v_qty, 2), round(216 * v_qty, 2), 'demo post-workout');
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '09:30') at time zone v_timezone,
+    'snack',
+    'snack',
+    v_food_sourdough,
+    null,
+    2.0,
+    'slice',
+    90,
+    240,
+    8.0,
+    48.0,
+    2.0,
+    2.0,
+    4.0,
+    440,
+    'demo weekend toast'
+  from tmp_nutrition_seed_pattern p
+  where p.iso_dow = 7;
 
-      v_qty := round((1.00::numeric + mod(v_week_idx, 2) * 0.06::numeric) * case when mod(v_week_idx, 6) = 2 then 0.88 else 1.00 end, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '20:05') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo dinner');
-    end if;
-
-    if v_week_idx >= v_week_count - 2 then
-      v_day := v_week_start + 2;
-      if v_day < v_now_local_ts::date then
-        insert into tmp_nutrition_seed_days
-          (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-        values
-          (
-            v_day,
-            v_timezone,
-            round(2180 * v_progress_factor, 2),
-            172,
-            210,
-            68
-          )
-        on conflict (diary_date) do nothing;
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '07:25') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_yogurt, 0.95, 'portion', round(281 * 0.95, 2), round(363 * 0.95, 2), round(24.8 * 0.95, 2), round(40.3 * 0.95, 2), round(10.0 * 0.95, 2), round(5.5 * 0.95, 2), round(18 * 0.95, 2), round(121 * 0.95, 2), 'demo streak breakfast');
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '12:30') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_chicken_bowl, 0.95, 'portion', round(377 * 0.95, 2), round(516 * 0.95, 2), round(41.0 * 0.95, 2), round(60.3 * 0.95, 2), round(11.5 * 0.95, 2), round(4.3 * 0.95, 2), round(3 * 0.95, 2), round(104 * 0.95, 2), 'demo streak lunch');
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '18:40') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_chicken_bowl, 0.90, 'portion', round(377 * 0.90, 2), round(516 * 0.90, 2), round(41.0 * 0.90, 2), round(60.3 * 0.90, 2), round(11.5 * 0.90, 2), round(4.3 * 0.90, 2), round(3 * 0.90, 2), round(104 * 0.90, 2), 'demo streak dinner');
-      end if;
-    end if;
-
-    v_day := v_week_start + 3;
-    if v_day < v_now_local_ts::date then
-      insert into tmp_nutrition_seed_days
-        (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-      values
-        (
-          v_day,
-          v_timezone,
-          round(2380 * v_progress_factor * v_deload_factor, 2),
-          175,
-          260 + (mod(v_week_idx, 5) * 6),
-          69
-        )
-      on conflict (diary_date) do nothing;
-
-      v_qty := round((0.92::numeric + mod(v_week_idx, 3) * 0.04::numeric) * v_deload_factor, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '07:00') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_yogurt, v_qty, 'portion', round(281 * v_qty, 2), round(363 * v_qty, 2), round(24.8 * v_qty, 2), round(40.3 * v_qty, 2), round(10.0 * v_qty, 2), round(5.5 * v_qty, 2), round(18 * v_qty, 2), round(121 * v_qty, 2), 'demo breakfast');
-
-      v_qty := round(0.82::numeric + mod(v_week_idx, 2) * 0.05::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:20') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo lunch');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '16:15') at time zone v_timezone, 'pre-workout', 'pre-workout', v_food_protein_bar, null, 1.0, 'bar', 60, 210, 20.0, 23.0, 7.0, 5.0, 6.0, 180, 'demo pre-workout');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '19:00') at time zone v_timezone, 'post-workout', 'post-workout', null, v_recipe_smoothie, 0.92, 'portion', round(274 * 0.92, 2), round(337 * 0.92, 2), round(26.8 * 0.92, 2), round(57.6 * 0.92, 2), round(1.6 * 0.92, 2), round(5.1 * 0.92, 2), round(34 * 0.92, 2), round(216 * 0.92, 2), 'demo post-workout');
-
-      v_qty := round(0.94::numeric + mod(v_week_idx, 4) * 0.03::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '20:15') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_salmon_plate, v_qty, 'portion', round(355 * v_qty, 2), round(480 * v_qty, 2), round(35.5 * v_qty, 2), round(39.0 * v_qty, 2), round(20.7 * v_qty, 2), round(6.5 * v_qty, 2), round(6 * v_qty, 2), round(167 * v_qty, 2), 'demo dinner');
-    end if;
-
-    if v_week_idx >= v_week_count - 2 then
-      v_day := v_week_start + 4;
-      if v_day < v_now_local_ts::date then
-        insert into tmp_nutrition_seed_days
-          (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-        values
-          (
-            v_day,
-            v_timezone,
-            round(2300 * v_progress_factor, 2),
-            168,
-            215,
-            70
-          )
-        on conflict (diary_date) do nothing;
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '07:05') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_oats, 0.90, 'portion', round(274 * 0.90, 2), round(515 * 0.90, 2), round(35.3 * 0.90, 2), round(70.5 * 0.90, 2), round(13.6 * 0.90, 2), round(11.1 * 0.90, 2), round(23 * 0.90, 2), round(151 * 0.90, 2), 'demo streak breakfast');
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '12:25') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_salmon_plate, 0.95, 'portion', round(355 * 0.95, 2), round(480 * 0.95, 2), round(35.5 * 0.95, 2), round(39.0 * 0.95, 2), round(20.7 * 0.95, 2), round(6.5 * 0.95, 2), round(6 * 0.95, 2), round(167 * 0.95, 2), 'demo streak lunch');
-
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '18:55') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_chicken_bowl, 0.92, 'portion', round(377 * 0.92, 2), round(516 * 0.92, 2), round(41.0 * 0.92, 2), round(60.3 * 0.92, 2), round(11.5 * 0.92, 2), round(4.3 * 0.92, 2), round(3 * 0.92, 2), round(104 * 0.92, 2), 'demo streak dinner');
-
-        if mod(v_week_idx, 2) = 0 then
-          insert into tmp_nutrition_seed_entries
-          values
-            (v_day, (v_day::timestamp + time '21:05') at time zone v_timezone, 'snack', 'snack', v_food_trail_mix, null, 0.75, 'packet', 21, 127.5, 3.75, 11.25, 8.25, 1.5, 9.0, 56.25, 'demo late snack');
-        end if;
-      end if;
-    end if;
-
-    v_day := v_week_start + 5;
-    if v_day < v_now_local_ts::date then
-      insert into tmp_nutrition_seed_days
-        (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-      values
-        (
-          v_day,
-          v_timezone,
-          round(2550 * v_progress_factor, 2),
-          185,
-          295 + (mod(v_week_idx, 4) * 8),
-          75
-        )
-      on conflict (diary_date) do nothing;
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '08:15') at time zone v_timezone, 'breakfast', 'breakfast', v_food_sourdough, null, 2.0, 'slice', 90, 240, 8.0, 48.0, 2.0, 2.0, 4.0, 440, 'demo breakfast toast');
-
-      v_qty := case when v_underfuel_saturday then 0.75 else 1.00 end;
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '08:18') at time zone v_timezone, 'breakfast', 'breakfast', v_food_almond_butter, null, v_qty, 'tbsp', round(16 * v_qty, 2), round(100 * v_qty, 2), round(3.5 * v_qty, 2), round(3.5 * v_qty, 2), round(9.0 * v_qty, 2), round(2.0 * v_qty, 2), round(1.5 * v_qty, 2), round(55 * v_qty, 2), 'demo breakfast fat');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '10:40') at time zone v_timezone, 'pre-workout', 'pre-workout', v_food_banana, null, case when v_underfuel_saturday then 0.5 else 1.0 end, 'medium', case when v_underfuel_saturday then 59 else 118 end, case when v_underfuel_saturday then 52.5 else 105 end, case when v_underfuel_saturday then 0.65 else 1.3 end, case when v_underfuel_saturday then 13.5 else 27 end, case when v_underfuel_saturday then 0.2 else 0.4 end, case when v_underfuel_saturday then 1.55 else 3.1 end, case when v_underfuel_saturday then 7 else 14 end, case when v_underfuel_saturday then 0.5 else 1 end, 'demo pre-workout');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:25') at time zone v_timezone, 'post-workout', 'post-workout', v_food_whey, null, case when v_underfuel_saturday then 0.75 else 1.0 end, 'scoop', case when v_underfuel_saturday then 22.5 else 30 end, case when v_underfuel_saturday then 90 else 120 end, case when v_underfuel_saturday then 18.75 else 25 end, case when v_underfuel_saturday then 2.25 else 3 end, case when v_underfuel_saturday then 0.75 else 1 end, 0, 1.0, case when v_underfuel_saturday then 71.25 else 95 end, 'demo post-workout');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:27') at time zone v_timezone, 'post-workout', 'post-workout', v_food_sports_drink, null, case when v_underfuel_saturday then 0.5 else 1.0 end, 'bottle', case when v_underfuel_saturday then 250 else 500 end, case when v_underfuel_saturday then 45 else 90 end, 0, case when v_underfuel_saturday then 11 else 22 end, 0, 0, case when v_underfuel_saturday then 11 else 22 end, case when v_underfuel_saturday then 75 else 150 end, 'demo post-workout carbs');
-
-      v_qty := case when v_underfuel_saturday then 0.75 else round(1.02::numeric + mod(v_week_idx, 3) * 0.04::numeric, 3) end;
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '18:50') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo dinner');
-    end if;
-
-    v_day := v_week_start + 6;
-    if not v_skip_sunday and v_day < v_now_local_ts::date then
-      insert into tmp_nutrition_seed_days
-        (diary_date, timezone_str, kcal_target, protein_target, carbs_target, fat_target)
-      values
-        (
-          v_day,
-          v_timezone,
-          round(2260 * v_progress_factor, 2),
-          170,
-          240 + (mod(v_week_idx, 3) * 8),
-          68
-        )
-      on conflict (diary_date) do nothing;
-
-      v_qty := round(1.00::numeric + mod(v_week_idx, 3) * 0.03::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '08:05') at time zone v_timezone, 'breakfast', 'breakfast', null, v_recipe_oats, v_qty, 'portion', round(274 * v_qty, 2), round(515 * v_qty, 2), round(35.3 * v_qty, 2), round(70.5 * v_qty, 2), round(13.6 * v_qty, 2), round(11.1 * v_qty, 2), round(23 * v_qty, 2), round(151 * v_qty, 2), 'demo breakfast');
-
-      v_qty := round(1.05::numeric + mod(v_week_idx, 2) * 0.05::numeric, 3);
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '12:40') at time zone v_timezone, 'lunch', 'lunch', null, v_recipe_chicken_bowl, v_qty, 'portion', round(377 * v_qty, 2), round(516 * v_qty, 2), round(41.0 * v_qty, 2), round(60.3 * v_qty, 2), round(11.5 * v_qty, 2), round(4.3 * v_qty, 2), round(3 * v_qty, 2), round(104 * v_qty, 2), 'demo lunch');
-
-      insert into tmp_nutrition_seed_entries
-      values
-        (v_day, (v_day::timestamp + time '18:30') at time zone v_timezone, 'dinner', 'dinner', null, v_recipe_salmon_plate, 1.00, 'portion', 355, 480, 35.5, 39.0, 20.7, 6.5, 6.0, 167, 'demo dinner');
-
-      if mod(v_week_idx, 4) = 1 then
-        insert into tmp_nutrition_seed_entries
-        values
-          (v_day, (v_day::timestamp + time '15:10') at time zone v_timezone, 'snack', 'snack', v_food_protein_bar, null, 1.0, 'bar', 60, 210, 20.0, 23.0, 7.0, 5.0, 6.0, 180, 'demo snack');
-      end if;
-    end if;
-  end loop;
+  insert into tmp_nutrition_seed_entries
+  select
+    p.diary_date,
+    (p.diary_date::timestamp + time '09:32') at time zone v_timezone,
+    'snack',
+    'snack',
+    v_food_almond_butter,
+    null,
+    1.0,
+    'tbsp',
+    16,
+    100,
+    3.5,
+    3.5,
+    9.0,
+    2.0,
+    1.5,
+    55,
+    'demo weekend toast topping'
+  from tmp_nutrition_seed_pattern p
+  where p.iso_dow = 7;
 
   select count(*)
   into v_seeded_days
@@ -1535,7 +1478,7 @@ begin
     fat_g_target = excluded.fat_g_target,
     goal_hit = excluded.goal_hit;
 
-  get diagnostics v_inserted_days = row_count;
+  get diagnostics v_upserted_days = row_count;
 
   execute format(
     $fmt$
@@ -1597,16 +1540,15 @@ begin
   get diagnostics v_inserted_items = row_count;
 
   raise notice
-    'Nutrition progress demo ready for user %: % foods/recipes refreshed, % seeded days generated, % existing days matched, % days replaced, % days upserted, % diary items inserted, range % -> %.',
+    'Nutrition smoke demo ready for user %: % days generated, % existing days matched, % days replaced, % days upserted, % diary items inserted, range % -> %.',
     v_user_id,
-    20,
     v_seeded_days,
     v_existing_days,
     v_replaced_days,
-    v_inserted_days,
+    v_upserted_days,
     v_inserted_items,
-    v_start_week,
-    (v_now_local_ts::date - 1);
+    v_start_date,
+    v_end_date;
 end;
 $$;
 

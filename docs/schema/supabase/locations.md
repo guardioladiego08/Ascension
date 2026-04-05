@@ -22,6 +22,9 @@
 
 - Tests: `supabase/tests/`
 - Seeds: `supabase/seeds/`
+- Hosted-safe nutrition UI smoke seed: `supabase/seeds/nutrition_progress_dashboard_ui_smoke_demo.sql`
+- Hosted-safe nutrition smoke seed: `supabase/seeds/nutrition_progress_dashboard_smoke_demo.sql`
+- Larger nutrition dashboard demo seed: `supabase/seeds/nutrition_progress_year_dashboard_demo.sql`
 - Debug diagnostics: `supabase/debug/`
 - Signup failure diagnostic: `supabase/debug/inspect_auth_signup_failure.sql`
 

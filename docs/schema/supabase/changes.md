@@ -1,5 +1,29 @@
 # Supabase Schema Changes
 
+## 2026-04-04 - Hosted nutrition smoke seeds now treat workout-phase detail as meal-slot data
+
+- What changed: Updated `supabase/seeds/nutrition_progress_dashboard_ui_smoke_demo.sql` so training-day recovery entries now use a core `meal_type` fallback (`snack`) while keeping `post-workout` in `meal_slot`.
+- Why: A hosted project rejected `post-workout` when the seed cast it into the live `meal_type` enum, which indicates some environments still expose a narrower enum than the local text-plus-check migration path.
+- Follow-up: For hosted nutrition compatibility paths, keep workout-phase labels in `meal_slot` and reserve `meal_type` for broadly supported core classes unless the live enum is confirmed to allow the richer labels.
+
+## 2026-04-04 - Added an ultra-light nutrition UI smoke seed for hosted SQL Editor fallback
+
+- What changed: Added `supabase/seeds/nutrition_progress_dashboard_ui_smoke_demo.sql`, a minimal 14-day meals-only nutrition seed that writes recipe-based diary items, upserts diary rollups, and avoids compatibility-heavy diary food seeding entirely.
+- Why: Even the lighter hosted-safe nutrition smoke seed could still hit upstream SQL Editor timeouts, so the repo needed a last-resort script optimized specifically for fast UI validation through the hosted editor path.
+- Follow-up: Use the UI smoke seed first when the goal is simply to validate nutrition progress rendering in hosted environments; use the richer smoke or full demo seeds only when direct-food source realism is worth the extra execution cost.
+
+## 2026-04-04 - Added a hosted-safe nutrition smoke seed for progress-page testing
+
+- What changed: Added `supabase/seeds/nutrition_progress_dashboard_smoke_demo.sql`, a lighter 14-day nutrition demo seed that preserves the hosted schema-compatibility work for legacy food tables and live enum columns but uses a much smaller set-based diary history payload.
+- Why: The larger nutrition dashboard seed kept hitting upstream timeouts in the hosted Supabase SQL Editor even after reducing its default history window.
+- Follow-up: Use the smoke seed first when validating the nutrition progress UI in hosted environments, and reserve the larger dashboard demo seed for direct database connections or local workflows that can tolerate longer-running scripts.
+
+## 2026-04-04 - Nutrition demo seed now supports text-backed legacy food IDs
+
+- What changed: Updated `supabase/seeds/nutrition_progress_year_dashboard_demo.sql` so compatibility food seeding now supports legacy food tables whose `id` column is `text`, reuses barcode/name matching before inserting new rows, and routes recipe-ingredient plus favorite-food inserts through the per-target live food-id map.
+- Why: The hosted project raised `P0001` because `public.foods.id` was `text`, which the prior compatibility layer treated as unsupported even though nutrition foreign keys can still point at that table in partially migrated environments.
+- Follow-up: Keep nutrition seed compatibility logic aligned across all food-dependent inserts, because adding support for a new live key type in the catalog seeding branch is not enough unless `recipe_ingredients`, `user_favorite_foods`, and `diary_items` all resolve through the same live ID map.
+
 ## 2026-04-04 - Nutrition demo seed now mirrors foods into live FK targets
 
 - What changed: Updated `supabase/seeds/nutrition_progress_year_dashboard_demo.sql` so it stages demo foods once, inspects the live `food_id` foreign-key targets used by `nutrition.recipe_ingredients`, `nutrition.diary_items`, and `nutrition.user_favorite_foods`, and upserts those rows into each referenced food table instead of assuming every hosted project already points at `nutrition.food_items`.

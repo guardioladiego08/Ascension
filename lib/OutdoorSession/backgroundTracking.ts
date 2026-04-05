@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 
 import {
   getActiveRunWalkSession,
@@ -13,6 +14,15 @@ export const OUTDOOR_LOCATION_TASK = 'tensr-outdoor-location-task';
 
 const OUTDOOR_TRACKING_READY_KEY = 'tensr:outdoor-background-permission-ready';
 type TaskManagerModule = typeof import('expo-task-manager');
+
+export type OutdoorBackgroundTrackingDiagnostics = {
+  taskManagerAvailable: boolean;
+  backgroundLocationAvailable: boolean;
+  backgroundPermissionStatus: Location.LocationPermissionResponse['status'] | 'unavailable';
+  backgroundPermissionScope: 'whenInUse' | 'always' | 'none' | null;
+  cachedPermissionReady: boolean;
+  backgroundUpdatesStarted: boolean;
+};
 
 let taskManagerModule: TaskManagerModule | null = null;
 
@@ -51,6 +61,50 @@ if (
   });
 }
 
+function hasGrantedBackgroundPermission(
+  permission: Location.LocationPermissionResponse
+) {
+  if (permission.status !== 'granted') {
+    return false;
+  }
+
+  if (Platform.OS !== 'ios') {
+    return true;
+  }
+
+  return permission.ios?.scope === 'always';
+}
+
+export async function getOutdoorBackgroundTrackingDiagnostics(): Promise<OutdoorBackgroundTrackingDiagnostics> {
+  if (!taskManagerModule) {
+    return {
+      taskManagerAvailable: false,
+      backgroundLocationAvailable: false,
+      backgroundPermissionStatus: 'unavailable',
+      backgroundPermissionScope: null,
+      cachedPermissionReady: false,
+      backgroundUpdatesStarted: false,
+    };
+  }
+
+  const [cachedReady, backgroundLocationAvailable, backgroundUpdatesStarted] = await Promise.all([
+    AsyncStorage.getItem(OUTDOOR_TRACKING_READY_KEY).catch(() => null),
+    Location.isBackgroundLocationAvailableAsync().catch(() => false),
+    Location.hasStartedLocationUpdatesAsync(OUTDOOR_LOCATION_TASK).catch(() => false),
+  ]);
+  const backgroundPermission: Location.LocationPermissionResponse | null =
+    await Location.getBackgroundPermissionsAsync().catch(() => null);
+
+  return {
+    taskManagerAvailable: true,
+    backgroundLocationAvailable,
+    backgroundPermissionStatus: backgroundPermission?.status ?? 'unavailable',
+    backgroundPermissionScope: backgroundPermission?.ios?.scope ?? null,
+    cachedPermissionReady: cachedReady === 'true',
+    backgroundUpdatesStarted,
+  };
+}
+
 export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
   if (!taskManagerModule) {
     return false;
@@ -68,12 +122,16 @@ export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
 
     const background = await Location.getBackgroundPermissionsAsync();
     const backgroundStatus =
-      background.status === 'granted'
+      hasGrantedBackgroundPermission(background)
         ? background.status
         : (await Location.requestBackgroundPermissionsAsync()).status;
-    const granted = backgroundStatus === 'granted';
+    const granted =
+      backgroundStatus === 'granted' &&
+      hasGrantedBackgroundPermission(await Location.getBackgroundPermissionsAsync());
     if (granted) {
       await AsyncStorage.setItem(OUTDOOR_TRACKING_READY_KEY, 'true');
+    } else {
+      await AsyncStorage.removeItem(OUTDOOR_TRACKING_READY_KEY);
     }
     return granted;
   } catch (error) {
@@ -89,9 +147,16 @@ export async function hasPreparedOutdoorBackgroundTracking(): Promise<boolean> {
 
   try {
     const cached = await AsyncStorage.getItem(OUTDOOR_TRACKING_READY_KEY);
-    if (cached === 'true') return true;
+    if (cached === 'true') {
+      const background = await Location.getBackgroundPermissionsAsync();
+      if (hasGrantedBackgroundPermission(background)) {
+        return true;
+      }
+      await AsyncStorage.removeItem(OUTDOOR_TRACKING_READY_KEY);
+      return false;
+    }
     const background = await Location.getBackgroundPermissionsAsync();
-    return background.status === 'granted';
+    return hasGrantedBackgroundPermission(background);
   } catch {
     return false;
   }
@@ -103,6 +168,12 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
   }
 
   try {
+    const isBackgroundLocationAvailable =
+      await Location.isBackgroundLocationAvailableAsync();
+    if (!isBackgroundLocationAvailable) {
+      return false;
+    }
+
     const ready = await hasPreparedOutdoorBackgroundTracking();
     if (!ready) return false;
 
@@ -114,7 +185,7 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
     await Location.startLocationUpdatesAsync(OUTDOOR_LOCATION_TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
       timeInterval: 1000,
-      distanceInterval: 2,
+      distanceInterval: 1,
       deferredUpdatesDistance: 0,
       deferredUpdatesInterval: 1000,
       activityType: Location.ActivityType.Fitness,
