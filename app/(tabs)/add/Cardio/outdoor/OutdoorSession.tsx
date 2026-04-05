@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  ScrollView,
   View,
   Text,
   StyleSheet,
@@ -19,6 +20,7 @@ import { HOME_TONES } from '../../../home/tokens';
 
 import OutdoorMetrics from './components/OutdoorMetrics';
 import OutdoorMapSlide from './components/OutdoorMapSlide';
+import OutdoorTrackingDebugPanel from './components/OutdoorTrackingDebugPanel';
 import ConfirmCancelModal from './components/ConfrmCancelModal';
 import FinishConfirmModal from './components/FinishConfirmModal';
 
@@ -39,11 +41,16 @@ import {
   type OutdoorSessionDraft,
 } from '@/lib/OutdoorSession/draftStore';
 import {
+  clearOutdoorBackgroundTrackingDebugEvents,
+  getOutdoorBackgroundTrackingDebugEvents,
   getOutdoorBackgroundTrackingDiagnostics,
+  recordOutdoorBackgroundTrackingDebugEvent,
   prepareOutdoorBackgroundTracking,
   reloadOutdoorSessionFromStorage,
   startOutdoorBackgroundTracking,
   stopOutdoorBackgroundTracking,
+  type OutdoorBackgroundTrackingDebugEvent,
+  type OutdoorBackgroundTrackingDiagnostics,
 } from '@/lib/OutdoorSession/backgroundTracking';
 import {
   appendOutdoorLocations,
@@ -113,6 +120,12 @@ export default function OutdoorSession() {
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [distanceMeters, setDistanceMeters] = useState(0);
+  const [trackingDiagnostics, setTrackingDiagnostics] =
+    useState<OutdoorBackgroundTrackingDiagnostics | null>(null);
+  const [trackingDebugEvents, setTrackingDebugEvents] = useState<
+    OutdoorBackgroundTrackingDebugEvent[]
+  >([]);
+  const [debugAppState, setDebugAppState] = useState(AppState.currentState);
 
   const [coords, setCoords] = useState<LatLng[]>([]);
   const coordsRef = useRef<LatLng[]>([]);
@@ -137,6 +150,7 @@ export default function OutdoorSession() {
   const storageSyncInFlightRef = useRef(false);
   const stopBackgroundAfterForegroundRef = useRef(false);
   const backgroundStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const permissionFlowInFlightRef = useRef(false);
 
   const hasProgress = elapsedSeconds > 0 || distanceMeters > 0;
 
@@ -230,6 +244,31 @@ export default function OutdoorSession() {
     }
 
     console.warn(`[OutdoorSession] ${message}`, diagnostics);
+  }
+
+  async function runDuringPermissionFlow<T>(task: () => Promise<T>) {
+    permissionFlowInFlightRef.current = true;
+    try {
+      return await task();
+    } finally {
+      permissionFlowInFlightRef.current = false;
+    }
+  }
+
+  async function refreshTrackingDebugPanel() {
+    const [diagnostics, events] = await Promise.all([
+      getOutdoorBackgroundTrackingDiagnostics().catch(() => null),
+      getOutdoorBackgroundTrackingDebugEvents().catch(() => []),
+    ]);
+
+    setTrackingDiagnostics(diagnostics);
+    setTrackingDebugEvents(events);
+    setDebugAppState(appStateRef.current);
+  }
+
+  async function recordScreenDebugEvent(message: string, details?: unknown) {
+    await recordOutdoorBackgroundTrackingDebugEvent(message, details, 'screen');
+    await refreshTrackingDebugPanel();
   }
 
   function clearBackgroundStopTimeout() {
@@ -424,6 +463,8 @@ export default function OutdoorSession() {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const previousState = appStateRef.current;
       appStateRef.current = nextState;
+      setDebugAppState(nextState);
+      void recordScreenDebugEvent('App state changed', { from: previousState, to: nextState });
 
       if (nextState === 'active') {
         void restoreForegroundTracking();
@@ -433,6 +474,7 @@ export default function OutdoorSession() {
       if (
         (nextState === 'inactive' || nextState === 'background') &&
         previousState !== nextState &&
+        !permissionFlowInFlightRef.current &&
         phaseRef.current === 'running'
       ) {
         void moveTrackingToBackground();
@@ -443,6 +485,10 @@ export default function OutdoorSession() {
       subscription.remove();
     };
   }, [lockMode]);
+
+  useEffect(() => {
+    void refreshTrackingDebugPanel();
+  }, []);
 
   useEffect(() => {
     if (!activeSessionHydrated || !hydrationAppliedRef.current || sessionExitRef.current) return;
@@ -544,6 +590,7 @@ export default function OutdoorSession() {
 
       void persistActiveSessionSnapshot('running');
       void syncStoredSessionRoute();
+      void refreshTrackingDebugPanel();
     }, 1500);
 
     return () => {
@@ -571,7 +618,14 @@ export default function OutdoorSession() {
   async function startLocation() {
     stopLocation();
 
-    const perm = await Location.requestForegroundPermissionsAsync();
+    const perm = await runDuringPermissionFlow(async () => {
+      const existing = await Location.getForegroundPermissionsAsync();
+      if (existing.status === 'granted') {
+        return existing;
+      }
+
+      return await Location.requestForegroundPermissionsAsync();
+    });
     if (perm.status !== 'granted') {
       Alert.alert(
         'Location permission required',
@@ -654,6 +708,8 @@ export default function OutdoorSession() {
   async function onStart() {
     sessionExitRef.current = false;
     sessionIdRef.current = makeId();
+    await clearOutdoorBackgroundTrackingDebugEvents();
+    await recordScreenDebugEvent('Session start tapped', { lockMode, title });
     resetSession();
     const startedAtISO = new Date().toISOString();
     sessionStartedAtRef.current = startedAtISO;
@@ -664,10 +720,11 @@ export default function OutdoorSession() {
     await stopOutdoorBackgroundTracking();
     clearBackgroundStopTimeout();
     backgroundTrackingActiveRef.current = false;
-    const backgroundReady = await prepareOutdoorBackgroundTracking();
+    const backgroundReady = await runDuringPermissionFlow(prepareOutdoorBackgroundTracking);
     startTimer();
     const locationStarted = await startLocation();
     if (!locationStarted) {
+      await recordScreenDebugEvent('Foreground location watcher failed to start');
       stopTimer();
       phaseRef.current = 'idle';
       setPhase('idle');
@@ -698,6 +755,7 @@ export default function OutdoorSession() {
     stopTimer();
     stopLocation();
     clearBackgroundStopTimeout();
+    void recordScreenDebugEvent('Session paused');
     void persistActiveSessionSnapshot('paused');
     void stopOutdoorBackgroundTracking();
     backgroundHandoffInFlightRef.current = false;
@@ -705,6 +763,7 @@ export default function OutdoorSession() {
   }
 
   async function onResume() {
+    await recordScreenDebugEvent('Session resumed');
     clockRef.current = resumeRunWalkClock(clockRef.current);
     phaseRef.current = 'running';
     setPhase('running');
@@ -714,6 +773,7 @@ export default function OutdoorSession() {
     startTimer();
     const locationStarted = await startLocation();
     if (!locationStarted) {
+      await recordScreenDebugEvent('Foreground location watcher failed to restart');
       clockRef.current = pauseRunWalkClock(clockRef.current);
       phaseRef.current = 'paused';
       setPhase('paused');
@@ -723,7 +783,7 @@ export default function OutdoorSession() {
 
     await persistActiveSessionSnapshot('running');
 
-    if (await prepareOutdoorBackgroundTracking()) {
+    if (await runDuringPermissionFlow(prepareOutdoorBackgroundTracking)) {
       backgroundTrackingActiveRef.current = await startOutdoorBackgroundTracking();
       if (!backgroundTrackingActiveRef.current) {
         await logBackgroundTrackingIssue(
@@ -738,6 +798,7 @@ export default function OutdoorSession() {
   }
 
   async function onEndWorkout() {
+    await recordScreenDebugEvent('Workout finish requested');
     setFinishOpen(false);
     syncElapsedFromClock(
       Date.now(),
@@ -798,6 +859,7 @@ export default function OutdoorSession() {
   }
 
   async function confirmCancel() {
+    await recordScreenDebugEvent('Workout cancel confirmed');
     stopTimer();
     stopLocation();
     clearBackgroundStopTimeout();
@@ -916,20 +978,35 @@ export default function OutdoorSession() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.sessionWrap}>
-              <View style={styles.mapWrap}>
-                <OutdoorMapSlide coords={coords} />
-              </View>
+            <ScrollView
+              style={styles.sessionScroll}
+              contentContainerStyle={styles.sessionScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.sessionWrap}>
+                <View style={styles.mapWrap}>
+                  <OutdoorMapSlide coords={coords} isRunning={isRunning} />
+                </View>
 
-              <View style={styles.metricsBlock}>
-                <OutdoorMetrics
-                  elapsedSeconds={elapsedSeconds}
-                  distanceMeters={distanceMeters}
-                  currentPaceSecPerKm={currentPace}
-                  distanceUnit={distanceUnit}
-                />
+                <View style={styles.metricsBlock}>
+                  <OutdoorMetrics
+                    elapsedSeconds={elapsedSeconds}
+                    distanceMeters={distanceMeters}
+                    currentPaceSecPerKm={currentPace}
+                    distanceUnit={distanceUnit}
+                  />
+                </View>
+
+                <View style={styles.debugBlock}>
+                  <OutdoorTrackingDebugPanel
+                    appState={debugAppState}
+                    phase={phase}
+                    diagnostics={trackingDiagnostics}
+                    events={trackingDebugEvents}
+                  />
+                </View>
               </View>
-            </View>
+            </ScrollView>
           )}
         </View>
 
@@ -1169,14 +1246,22 @@ function createStyles(
       minWidth: 170,
     },
     sessionWrap: {
-      flex: 1,
       gap: 14,
     },
-    mapWrap: {
+    sessionScroll: {
       flex: 1,
-      minHeight: 260,
+    },
+    sessionScrollContent: {
+      paddingBottom: 10,
+    },
+    mapWrap: {
+      minHeight: 330,
+      height: 330,
     },
     metricsBlock: {
+      paddingBottom: 6,
+    },
+    debugBlock: {
       paddingBottom: 6,
     },
     bottom: {

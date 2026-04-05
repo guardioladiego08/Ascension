@@ -13,7 +13,17 @@ import { appendOutdoorLocations } from './locationTracking';
 export const OUTDOOR_LOCATION_TASK = 'tensr-outdoor-location-task';
 
 const OUTDOOR_TRACKING_READY_KEY = 'tensr:outdoor-background-permission-ready';
+const OUTDOOR_TRACKING_LAST_ERROR_KEY = 'tensr:outdoor-background-last-error';
+const OUTDOOR_TRACKING_DEBUG_EVENTS_KEY = 'tensr:outdoor-background-debug-events';
+const MAX_DEBUG_EVENTS = 24;
 type TaskManagerModule = typeof import('expo-task-manager');
+
+export type OutdoorBackgroundTrackingDebugEvent = {
+  timestampISO: string;
+  source: 'screen' | 'background';
+  message: string;
+  details: string | null;
+};
 
 export type OutdoorBackgroundTrackingDiagnostics = {
   taskManagerAvailable: boolean;
@@ -22,9 +32,71 @@ export type OutdoorBackgroundTrackingDiagnostics = {
   backgroundPermissionScope: 'whenInUse' | 'always' | 'none' | null;
   cachedPermissionReady: boolean;
   backgroundUpdatesStarted: boolean;
+  lastStartError: string | null;
 };
 
 let taskManagerModule: TaskManagerModule | null = null;
+let lastBackgroundLocationDebugAt = 0;
+
+function stringifyDebugDetails(details?: unknown) {
+  if (details == null) {
+    return null;
+  }
+
+  if (typeof details === 'string') {
+    return details;
+  }
+
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return String(details);
+  }
+}
+
+async function readDebugEvents(): Promise<OutdoorBackgroundTrackingDebugEvent[]> {
+  const raw = await AsyncStorage.getItem(OUTDOOR_TRACKING_DEBUG_EVENTS_KEY).catch(() => null);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as OutdoorBackgroundTrackingDebugEvent[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function recordOutdoorBackgroundTrackingDebugEvent(
+  message: string,
+  details?: unknown,
+  source: OutdoorBackgroundTrackingDebugEvent['source'] = 'background'
+) {
+  const nextEvent: OutdoorBackgroundTrackingDebugEvent = {
+    timestampISO: new Date().toISOString(),
+    source,
+    message,
+    details: stringifyDebugDetails(details),
+  };
+
+  const existing = await readDebugEvents();
+  const nextEvents = [nextEvent, ...existing].slice(0, MAX_DEBUG_EVENTS);
+  await AsyncStorage.setItem(
+    OUTDOOR_TRACKING_DEBUG_EVENTS_KEY,
+    JSON.stringify(nextEvents)
+  ).catch(() => null);
+}
+
+export async function getOutdoorBackgroundTrackingDebugEvents(): Promise<
+  OutdoorBackgroundTrackingDebugEvent[]
+> {
+  return await readDebugEvents();
+}
+
+export async function clearOutdoorBackgroundTrackingDebugEvents() {
+  await AsyncStorage.removeItem(OUTDOOR_TRACKING_DEBUG_EVENTS_KEY).catch(() => null);
+}
 
 try {
   taskManagerModule = require('expo-task-manager') as TaskManagerModule;
@@ -40,6 +112,7 @@ if (
 ) {
   taskManagerModule.defineTask(OUTDOOR_LOCATION_TASK, async ({ data, error }) => {
     if (error) {
+      await recordOutdoorBackgroundTrackingDebugEvent('Task error', error, 'background');
       console.warn('[OutdoorBackgroundTracking] task error', error);
       return;
     }
@@ -55,7 +128,25 @@ if (
 
       const updatedSession = appendOutdoorLocations(activeSession, locations);
       await setActiveRunWalkSession(updatedSession);
+      const now = Date.now();
+      if (now - lastBackgroundLocationDebugAt >= 15000) {
+        lastBackgroundLocationDebugAt = now;
+        await recordOutdoorBackgroundTrackingDebugEvent(
+          `Background task stored ${locations.length} location update(s)`,
+          {
+            totalSamples: updatedSession.samples.length,
+            totalCoords: updatedSession.coords.length,
+            distanceMeters: updatedSession.distanceMeters,
+          },
+          'background'
+        );
+      }
     } catch (taskError) {
+      await recordOutdoorBackgroundTrackingDebugEvent(
+        'Failed to persist background updates',
+        taskError,
+        'background'
+      );
       console.warn('[OutdoorBackgroundTracking] failed to persist background updates', taskError);
     }
   });
@@ -72,7 +163,18 @@ function hasGrantedBackgroundPermission(
     return true;
   }
 
-  return permission.ios?.scope === 'always';
+  const scope = permission.ios?.scope ?? null;
+  if (scope === 'always') {
+    return true;
+  }
+
+  if (scope === 'whenInUse' || scope === 'none') {
+    return false;
+  }
+
+  // Some iOS builds report granted background status but omit ios.scope.
+  // In that case, trust the status result to avoid false negatives.
+  return true;
 }
 
 export async function getOutdoorBackgroundTrackingDiagnostics(): Promise<OutdoorBackgroundTrackingDiagnostics> {
@@ -84,11 +186,13 @@ export async function getOutdoorBackgroundTrackingDiagnostics(): Promise<Outdoor
       backgroundPermissionScope: null,
       cachedPermissionReady: false,
       backgroundUpdatesStarted: false,
+      lastStartError: null,
     };
   }
 
-  const [cachedReady, backgroundLocationAvailable, backgroundUpdatesStarted] = await Promise.all([
+  const [cachedReady, lastStartError, backgroundLocationAvailable, backgroundUpdatesStarted] = await Promise.all([
     AsyncStorage.getItem(OUTDOOR_TRACKING_READY_KEY).catch(() => null),
+    AsyncStorage.getItem(OUTDOOR_TRACKING_LAST_ERROR_KEY).catch(() => null),
     Location.isBackgroundLocationAvailableAsync().catch(() => false),
     Location.hasStartedLocationUpdatesAsync(OUTDOOR_LOCATION_TASK).catch(() => false),
   ]);
@@ -102,11 +206,15 @@ export async function getOutdoorBackgroundTrackingDiagnostics(): Promise<Outdoor
     backgroundPermissionScope: backgroundPermission?.ios?.scope ?? null,
     cachedPermissionReady: cachedReady === 'true',
     backgroundUpdatesStarted,
+    lastStartError,
   };
 }
 
 export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
   if (!taskManagerModule) {
+    await recordOutdoorBackgroundTrackingDebugEvent(
+      'Skipped permission prep because task manager is unavailable'
+    );
     return false;
   }
 
@@ -133,8 +241,17 @@ export async function prepareOutdoorBackgroundTracking(): Promise<boolean> {
     } else {
       await AsyncStorage.removeItem(OUTDOOR_TRACKING_READY_KEY);
     }
+    const confirmedBackgroundPermission: Location.LocationPermissionResponse | null =
+      await Location.getBackgroundPermissionsAsync().catch(() => null);
+    await recordOutdoorBackgroundTrackingDebugEvent('Prepared background permission state', {
+      foregroundStatus,
+      backgroundStatus,
+      granted,
+      iosScope: confirmedBackgroundPermission?.ios?.scope ?? null,
+    });
     return granted;
   } catch (error) {
+    await recordOutdoorBackgroundTrackingDebugEvent('Permission request failed', error);
     console.warn('[OutdoorBackgroundTracking] permission request failed', error);
     return false;
   }
@@ -164,6 +281,13 @@ export async function hasPreparedOutdoorBackgroundTracking(): Promise<boolean> {
 
 export async function startOutdoorBackgroundTracking(): Promise<boolean> {
   if (!taskManagerModule) {
+    await AsyncStorage.setItem(
+      OUTDOOR_TRACKING_LAST_ERROR_KEY,
+      'expo-task-manager is unavailable in the current build'
+    ).catch(() => null);
+    await recordOutdoorBackgroundTrackingDebugEvent(
+      'Background tracking start skipped because task manager is unavailable'
+    );
     return false;
   }
 
@@ -171,14 +295,44 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
     const isBackgroundLocationAvailable =
       await Location.isBackgroundLocationAvailableAsync();
     if (!isBackgroundLocationAvailable) {
+      await AsyncStorage.setItem(
+        OUTDOOR_TRACKING_LAST_ERROR_KEY,
+        'background location is unavailable in the current runtime'
+      ).catch(() => null);
+      await recordOutdoorBackgroundTrackingDebugEvent(
+        'Background tracking start failed because location is unavailable'
+      );
       return false;
     }
 
     const ready = await hasPreparedOutdoorBackgroundTracking();
-    if (!ready) return false;
+    if (!ready) {
+      const foregroundPermission = await Location.getForegroundPermissionsAsync().catch(() => null);
+      const backgroundPermission: Location.LocationPermissionResponse | null =
+        await Location.getBackgroundPermissionsAsync().catch(() => null);
+      await AsyncStorage.setItem(
+        OUTDOOR_TRACKING_LAST_ERROR_KEY,
+        'background location permission is not ready'
+      ).catch(() => null);
+      await recordOutdoorBackgroundTrackingDebugEvent(
+        'Background tracking start blocked because permission is not ready',
+        {
+          platform: Platform.OS,
+          foregroundStatus: foregroundPermission?.status ?? null,
+          backgroundStatus: backgroundPermission?.status ?? null,
+          backgroundScope: backgroundPermission?.ios?.scope ?? null,
+          backgroundCanAskAgain: backgroundPermission?.canAskAgain ?? null,
+        }
+      );
+      return false;
+    }
 
     const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(OUTDOOR_LOCATION_TASK);
     if (alreadyStarted) {
+      await AsyncStorage.removeItem(OUTDOOR_TRACKING_LAST_ERROR_KEY).catch(() => null);
+      await recordOutdoorBackgroundTrackingDebugEvent(
+        'Background tracking was already started'
+      );
       return true;
     }
 
@@ -197,9 +351,21 @@ export async function startOutdoorBackgroundTracking(): Promise<boolean> {
       },
     });
 
+    await AsyncStorage.removeItem(OUTDOOR_TRACKING_LAST_ERROR_KEY).catch(() => null);
+    await recordOutdoorBackgroundTrackingDebugEvent('Background tracking started');
     return true;
   } catch (error) {
     console.warn('[OutdoorBackgroundTracking] failed to start', error);
+    const message =
+      error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
+    await AsyncStorage.setItem(
+      OUTDOOR_TRACKING_LAST_ERROR_KEY,
+      message || 'unknown background tracking start error'
+    ).catch(() => null);
+    await recordOutdoorBackgroundTrackingDebugEvent(
+      'Background tracking failed to start',
+      message
+    );
     return false;
   }
 }
@@ -213,8 +379,13 @@ export async function stopOutdoorBackgroundTracking(): Promise<void> {
     const started = await Location.hasStartedLocationUpdatesAsync(OUTDOOR_LOCATION_TASK);
     if (started) {
       await Location.stopLocationUpdatesAsync(OUTDOOR_LOCATION_TASK);
+      await recordOutdoorBackgroundTrackingDebugEvent('Background tracking stopped');
     }
   } catch (error) {
+    await recordOutdoorBackgroundTrackingDebugEvent(
+      'Background tracking failed to stop',
+      error
+    );
     console.warn('[OutdoorBackgroundTracking] failed to stop', error);
   }
 }
