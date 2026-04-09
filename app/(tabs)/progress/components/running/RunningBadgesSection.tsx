@@ -235,8 +235,7 @@ export default function RunningBadgesSection() {
           <Text style={styles.eyebrow}>Running badges</Text>
           <Text style={styles.title}>Track streaks, mileage blocks, and pace records</Text>
           <Text style={styles.subtitle}>
-            Running badges use the same shared badge schema as strength, with run-specific record,
-            distance, time, elevation, and streak progress layered into this section.
+
           </Text>
         </View>
       </View>

@@ -30,36 +30,36 @@ const SessionHeader: React.FC<Props> = ({
       <View style={styles.topRow}>
         <View style={styles.copy}>
           <Text style={styles.eyebrow}>Live session</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>
-            Log sets, track time, and finish with a cleaner session summary.
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.statusPill,
-            paused ? styles.statusPillPaused : styles.statusPillActive,
-          ]}
-        >
+        <View style={styles.metaRight}>
           <View
             style={[
-              styles.statusDot,
-              paused ? styles.statusDotPaused : styles.statusDotActive,
-            ]}
-          />
-          <Text
-            style={[
-              styles.statusText,
-              paused ? styles.statusTextPaused : styles.statusTextActive,
+              styles.statusPill,
+              paused ? styles.statusPillPaused : styles.statusPillActive,
             ]}
           >
-            {paused ? 'Paused' : 'In progress'}
-          </Text>
+            <View
+              style={[
+                styles.statusDot,
+                paused ? styles.statusDotPaused : styles.statusDotActive,
+              ]}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                paused ? styles.statusTextPaused : styles.statusTextActive,
+              ]}
+            >
+              {paused ? 'Paused' : 'In progress'}
+            </Text>
+          </View>
+          <Text style={styles.timer}>{mm}:{ss}</Text>
         </View>
       </View>
-
-      <Text style={styles.timer}>{mm}:{ss}</Text>
 
       <View style={styles.controls}>
         <TouchableOpacity
@@ -99,10 +99,12 @@ function createStyles(
   return StyleSheet.create({
     panel: {
       backgroundColor: HOME_TONES.surface1,
-      borderRadius: 28,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
-      padding: 22,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 14,
     },
     eyebrow: {
       color: HOME_TONES.textTertiary,
@@ -113,42 +115,38 @@ function createStyles(
       textTransform: 'uppercase',
     },
     wrap: {
-      marginTop: 10,
-      paddingBottom: 18,
+      marginTop: 8,
     },
     topRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 14,
+      gap: 10,
     },
     copy: {
       flex: 1,
     },
+    metaRight: {
+      alignItems: 'flex-end',
+      gap: 8,
+    },
     title: {
-      marginTop: 8,
+      marginTop: 6,
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
-      fontSize: 28,
-      lineHeight: 32,
-      letterSpacing: -0.8,
-    },
-    subtitle: {
-      marginTop: 8,
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 19,
-      maxWidth: 260,
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: -0.4,
+      maxWidth: 220,
     },
     statusPill: {
       borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
       borderWidth: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 6,
     },
     statusPillActive: {
       backgroundColor: colors.accentSoft,
@@ -171,9 +169,9 @@ function createStyles(
     },
     statusText: {
       fontFamily: fonts.label,
-      fontSize: 11,
-      lineHeight: 14,
-      letterSpacing: 0.6,
+      fontSize: 10.5,
+      lineHeight: 13,
+      letterSpacing: 0.5,
       textTransform: 'uppercase',
     },
     statusTextActive: {
@@ -183,22 +181,21 @@ function createStyles(
       color: colors.highlight3,
     },
     timer: {
-      marginTop: 20,
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.display,
-      fontSize: 52,
-      lineHeight: 56,
-      letterSpacing: -1.4,
+      fontSize: 34,
+      lineHeight: 36,
+      letterSpacing: -0.8,
     },
     controls: {
-      marginTop: 18,
+      marginTop: 10,
       flexDirection: 'row',
-      gap: 12,
+      gap: 10,
     },
     pauseBtn: {
       flex: 1,
-      minHeight: 48,
-      borderRadius: 16,
+      minHeight: 42,
+      borderRadius: 14,
       backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
@@ -210,13 +207,13 @@ function createStyles(
     pauseText: {
       color: HOME_TONES.textPrimary,
       fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
+      fontSize: 13,
+      lineHeight: 16,
     },
     resumeBtn: {
       flex: 1,
-      minHeight: 48,
-      borderRadius: 16,
+      minHeight: 42,
+      borderRadius: 14,
       backgroundColor: colors.highlight1,
       flexDirection: 'row',
       alignItems: 'center',
@@ -226,13 +223,13 @@ function createStyles(
     resumeText: {
       color: colors.blkText,
       fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
+      fontSize: 13,
+      lineHeight: 16,
     },
     cancelBtn: {
-      minWidth: 108,
-      minHeight: 48,
-      borderRadius: 16,
+      minWidth: 96,
+      minHeight: 42,
+      borderRadius: 14,
       backgroundColor: HOME_TONES.surface2,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
@@ -245,8 +242,8 @@ function createStyles(
     cancelText: {
       color: colors.danger,
       fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
+      fontSize: 13,
+      lineHeight: 16,
     },
   });
 }

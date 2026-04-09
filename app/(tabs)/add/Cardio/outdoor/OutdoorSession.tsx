@@ -66,13 +66,12 @@ import {
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 type Phase = 'idle' | 'running' | 'paused';
-type ActivityType = 'run' | 'walk' | 'bike' | 'hike' | 'other';
+type ActivityType = 'run' | 'walk' | 'hike' | 'other';
 
 function outdoorTitle(activityType?: string, fallback?: string) {
   const t = (activityType ?? '').toLowerCase();
   if (t === 'run') return 'OUTDOOR RUN';
   if (t === 'walk') return 'OUTDOOR WALK';
-  if (t === 'bike') return 'OUTDOOR BIKE';
   if (t === 'hike') return 'OUTDOOR HIKE';
   return (fallback ?? 'OUTDOOR SESSION').toUpperCase();
 }
@@ -81,7 +80,6 @@ function normalizeActivityType(activityType?: string): ActivityType {
   const t = (activityType ?? '').toLowerCase();
   if (t === 'walk') return 'walk';
   if (t === 'run') return 'run';
-  if (t === 'bike') return 'bike';
   if (t === 'hike') return 'hike';
   return 'other';
 }

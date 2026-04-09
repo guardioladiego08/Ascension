@@ -35,11 +35,9 @@ import {
 import type {
   ExerciseDraft,
   PreviousExerciseSetSuggestion,
-  SetType,
   StrengthSessionMode,
   SupersetBlockDraft,
   StrengthWorkoutBlockDraft,
-  UnitMass,
 } from '@/lib/strength/types';
 import {
   createExerciseBlock,
@@ -69,100 +67,29 @@ import { useSupabaseSession } from '@/providers/SupabaseProvider';
 import { HOME_TONES } from '../../home/tokens';
 
 import CancelConfirmModal from './components/CancelConfirmModal';
-import ExerciseCard from './components/ExerciseCard';
 import ExercisePickerModal from './components/ExercisePickerModal';
 import ExerciseRequiredModal from './components/ExerciseRequiredModal';
 import FinishConfirmModal from './components/FinishConfirmModal';
 import SessionHeader from './components/SessionHeader';
-import SupersetBlock from './components/SupersetBlock';
 import SupersetBuilderModal from './components/SupersetBuilderModal';
+import StrengthBlocksList from './components/StrengthBlocksList';
+import StrengthSessionActionsRow from './components/StrengthSessionActionsRow';
+import {
+  AUTH_TIMEOUT_MS,
+  STARTUP_TIMEOUT_MS,
+  createStrengthWorkoutRow,
+  ensureAuthedUserId,
+  getPreviousSessionStrengthSets,
+  getStrengthWorkoutRow,
+  makeStrengthSessionId,
+  toKgWeight,
+  withTimeout,
+} from './strengthSessionHelpers';
 
 const TITLE = 'Strength Training Session';
 const HOME_ROUTE = '/(tabs)/home';
-const AUTH_TIMEOUT_MS = 8000;
-const STARTUP_TIMEOUT_MS = 12000;
-
-function makeSessionId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-const toKg = (w: number | null | undefined, unit: UnitMass) =>
-  w == null ? 0 : unit === 'kg' ? w : w * 0.45359237;
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      reject(new Error(`${label} timed out. Please try again.`));
-    }, timeoutMs);
-
-    promise.then(
-      (value) => {
-        clearTimeout(timeoutId);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timeoutId);
-        reject(error);
-      }
-    );
-  });
-}
-
-async function ensureAuthedUserId(): Promise<string> {
-  const initialSession = await withTimeout(
-    supabase.auth.getSession(),
-    AUTH_TIMEOUT_MS,
-    'Loading your session'
-  );
-  if (initialSession.error) throw initialSession.error;
-
-  const initialUid = initialSession.data.session?.user?.id;
-  if (initialUid) {
-    return initialUid;
-  }
-
-  const { error: refreshErr } = await withTimeout(
-    supabase.auth.refreshSession(),
-    AUTH_TIMEOUT_MS,
-    'Refreshing your session'
-  );
-  if (refreshErr) {
-    console.warn('[StrengthTrain] refreshSession failed', refreshErr);
-  }
-
-  const { data, error: sessErr } = await withTimeout(
-    supabase.auth.getSession(),
-    AUTH_TIMEOUT_MS,
-    'Reloading your session'
-  );
-  if (sessErr) throw sessErr;
-
-  const uid = data.session?.user?.id;
-  if (!uid) {
-    throw new Error('Session expired. Please sign in again.');
-  }
-  return uid;
-}
-
-type StrengthWorkoutRow = {
-  id: string;
-  user_id: string | null;
-  started_at: string | null;
-  ended_at: string | null;
-};
-
-type ExerciseSummaryHistoryRow = {
-  strength_workout_id: string;
-};
-
-type StrengthSetHistoryRow = {
-  weight: number | null;
-  weight_unit_csv: UnitMass | null;
-  reps: number | null;
-  set_index: number;
-  set_type: SetType | null;
-};
-
+const STARTUP_STALL_TIMEOUT_MS = 18000;
+const MAX_STARTUP_RECOVERY_ATTEMPTS = 1;
 type WorkoutBlockRow = {
   id: string;
   block_kind: 'exercise' | 'superset';
@@ -178,120 +105,12 @@ type WorkoutBlockExerciseRow = {
   exercise_order: number;
 };
 
-async function getStrengthWorkoutRow(workoutId: string) {
-  const { data, error } = await supabase
-    .schema('strength')
-    .from('strength_workouts')
-    .select('id,user_id,started_at,ended_at')
-    .eq('id', workoutId)
-    .maybeSingle<StrengthWorkoutRow>();
-
-  if (error) throw error;
-  return data;
-}
-
-async function createStrengthWorkoutRow(params: {
-  userId: string;
-  startedAtISO?: string | null;
-}) {
-  const payload: { user_id: string; started_at?: string } = {
-    user_id: params.userId,
-  };
-
-  if (params.startedAtISO) {
-    payload.started_at = params.startedAtISO;
-  }
-
-  const { data, error } = await supabase
-    .schema('strength')
-    .from('strength_workouts')
-    .insert(payload)
-    .select('id, user_id, started_at, ended_at')
-    .single<StrengthWorkoutRow>();
-
-  if (error) throw error;
-  return data;
-}
-
-async function getPreviousSessionStrengthSets(params: {
-  userId: string;
-  exerciseId: string;
-}): Promise<PreviousExerciseSetSuggestion[]> {
-  const { data: summaryRows, error: summaryError } = await supabase
-    .schema('strength')
-    .from('exercise_summary')
-    .select('strength_workout_id')
-    .eq('user_id', params.userId)
-    .eq('exercise_id', params.exerciseId);
-
-  if (summaryError) throw summaryError;
-
-  const workoutIds = Array.from(
-    new Set(
-      ((summaryRows ?? []) as ExerciseSummaryHistoryRow[])
-        .map((row) => row.strength_workout_id)
-        .filter(Boolean)
-    )
-  );
-
-  if (workoutIds.length === 0) {
-    return [];
-  }
-
-  const { data: workouts, error: workoutsError } = await supabase
-    .schema('strength')
-    .from('strength_workouts')
-    .select('id, started_at, ended_at')
-    .eq('user_id', params.userId)
-    .in('id', workoutIds);
-
-  if (workoutsError) throw workoutsError;
-
-  const latestWorkout = [...(workouts ?? [])]
-    .filter((row: any) => !!row?.id)
-    .sort((a: any, b: any) => {
-      const aMs = new Date(a.ended_at ?? a.started_at ?? 0).getTime();
-      const bMs = new Date(b.ended_at ?? b.started_at ?? 0).getTime();
-      return bMs - aMs;
-    })[0];
-
-  if (!latestWorkout?.id) {
-    return [];
-  }
-
-  const { data: setRows, error: setError } = await supabase
-    .schema('strength')
-    .from('strength_sets')
-    .select('weight, weight_unit_csv, reps, set_index, set_type')
-    .eq('exercise_id', params.exerciseId)
-    .eq('strength_workout_id', latestWorkout.id)
-    .order('set_index', { ascending: true });
-
-  if (setError) throw setError;
-
-  return ((setRows ?? []) as StrengthSetHistoryRow[]).map((row, index) => ({
-    set_index: row.set_index ?? index + 1,
-    set_type:
-      row.set_type === 'warmup' ||
-      row.set_type === 'dropset' ||
-      row.set_type === 'failure'
-        ? row.set_type
-        : 'normal',
-    weight: row.weight ?? null,
-    weight_unit_csv:
-      row.weight_unit_csv === 'kg' || row.weight_unit_csv === 'lb'
-        ? row.weight_unit_csv
-        : null,
-    reps: row.reps ?? null,
-  }));
-}
-
 export default function StrengthTrain() {
   const params = useLocalSearchParams<{
     sessionMode?: string;
     templateId?: string;
   }>();
-  const { session: authSession, loading: authLoading } = useSupabaseSession();
+  const { session: authSession } = useSupabaseSession();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { colors, fonts, globalStyles } = useAppTheme();
@@ -334,7 +153,7 @@ export default function StrengthTrain() {
   const hydrationAppliedRef = useRef(false);
   const sessionExitRef = useRef(false);
   const sessionPersistEnabledRef = useRef(true);
-  const sessionIdRef = useRef(makeSessionId());
+  const sessionIdRef = useRef(makeStrengthSessionId());
   const secondsRef = useRef(0);
   const pausedRef = useRef(false);
   const clockRef = useRef(createPausedRunWalkClock(0));
@@ -346,6 +165,7 @@ export default function StrengthTrain() {
   const readyNotifiedAtRef = useRef<number | null>(null);
   const cancelPromptWasRunningRef = useRef(false);
   const wasFocusedRef = useRef(false);
+  const startupRecoveryAttemptsRef = useRef(0);
   const exercises = useMemo(() => flattenExercisesFromBlocks(blocks), [blocks]);
   const sessionReady = !loading && !!workoutId;
   const sessionTitle =
@@ -356,7 +176,7 @@ export default function StrengthTrain() {
   const resetStrengthComposerState = React.useCallback(() => {
     hydrationAppliedRef.current = false;
     sessionPersistEnabledRef.current = false;
-    sessionIdRef.current = makeSessionId();
+    sessionIdRef.current = makeStrengthSessionId();
     previousSessionSetsCacheRef.current = {};
     shouldScrollToNewExerciseRef.current = false;
     readyNotifiedAtRef.current = null;
@@ -568,7 +388,6 @@ export default function StrengthTrain() {
     if (
       !activeSessionHydrated ||
       hydrationAppliedRef.current ||
-      authLoading ||
       sessionExitRef.current
     ) {
       return;
@@ -579,19 +398,15 @@ export default function StrengthTrain() {
     (async () => {
       try {
         hydrationAppliedRef.current = true;
-        sessionPersistEnabledRef.current = !!authSession;
-
-        if (!authSession) {
-          clearActiveSession();
-          try {
-            await clearActiveRunWalkSession();
-          } catch (error) {
-            console.warn('[StrengthTrain] failed to clear persisted session while signed out', error);
-          }
-          if (!mounted || sessionExitRef.current) return;
-          resetStrengthComposerState();
-          return;
-        }
+        const uid = authSession?.user?.id
+          ? authSession.user.id
+          : await withTimeout(
+              ensureAuthedUserId(),
+              AUTH_TIMEOUT_MS,
+              'Authenticating your account'
+            );
+        if (!mounted || sessionExitRef.current) return;
+        sessionPersistEnabledRef.current = true;
 
         if (activeSession && activeSession.kind !== 'strength') {
           const sessionLabel =
@@ -607,12 +422,16 @@ export default function StrengthTrain() {
             'Session in progress',
             `You already have an active ${sessionLabel} session. Finish or cancel it before starting a strength workout.`
           );
-          router.back();
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace(HOME_ROUTE);
+          }
           return;
         }
 
         if (activeSession?.kind === 'strength') {
-          sessionIdRef.current = activeSession.sessionId ?? makeSessionId();
+          sessionIdRef.current = activeSession.sessionId ?? makeStrengthSessionId();
           const resumedWorkout = await withTimeout(
             getStrengthWorkoutRow(activeSession.workoutId),
             STARTUP_TIMEOUT_MS,
@@ -622,7 +441,7 @@ export default function StrengthTrain() {
 
           if (
             resumedWorkout &&
-            resumedWorkout.user_id === activeSession.userId &&
+            resumedWorkout.user_id === uid &&
             resumedWorkout.ended_at == null
           ) {
             console.log('[HealthDebug] resuming existing strength session', {
@@ -636,7 +455,7 @@ export default function StrengthTrain() {
                 : activeSession.exercises.map((exercise) => createExerciseBlock(exercise));
 
             setWorkoutId(activeSession.workoutId);
-            setUserId(activeSession.userId);
+            setUserId(uid);
             setStartedAtISO(activeSession.startedAtISO ?? resumedWorkout.started_at ?? null);
             setSessionMode(activeSession.sessionMode ?? 'freestyle');
             setSourceTemplateId(activeSession.templateId ?? null);
@@ -675,13 +494,6 @@ export default function StrengthTrain() {
           });
           clearActiveSession();
         }
-
-        const uid = await withTimeout(
-          ensureAuthedUserId(),
-          AUTH_TIMEOUT_MS,
-          'Authenticating your account'
-        );
-        if (!mounted || sessionExitRef.current) return;
         setUserId(uid);
 
         let nextSessionMode: StrengthSessionMode = requestedSessionMode;
@@ -734,12 +546,18 @@ export default function StrengthTrain() {
         setRestTimer(createIdleStrengthRestTimer(restTimerPreferenceSeconds));
         setLoading(false);
       } catch (err: any) {
+        hydrationAppliedRef.current = false;
+        setLoading(false);
         console.error('[StrengthTrain] start workout failed', err);
         Alert.alert(
           'Error starting workout',
           err?.message ?? 'Failed to start workout. Please sign in again.'
         );
-        router.replace(HOME_ROUTE);
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(HOME_ROUTE);
+        }
       }
     })();
 
@@ -749,19 +567,17 @@ export default function StrengthTrain() {
   }, [
     activeSession,
     activeSessionHydrated,
-    authLoading,
     authSession,
     clearActiveSession,
     requestedSessionMode,
     requestedTemplateId,
-    resetStrengthComposerState,
     restTimerPreferenceSeconds,
     sessionBootstrapNonce,
   ]);
 
   useFocusEffect(
     React.useCallback(() => {
-      if (!activeSessionHydrated || authLoading || !authSession || sessionExitRef.current) {
+      if (!activeSessionHydrated || sessionExitRef.current) {
         return undefined;
       }
 
@@ -772,7 +588,7 @@ export default function StrengthTrain() {
       setLoading(true);
       setSessionBootstrapNonce((current) => current + 1);
       return undefined;
-    }, [activeSessionHydrated, authLoading, authSession, loading, workoutId])
+    }, [activeSessionHydrated, loading, workoutId])
   );
 
   useEffect(() => {
@@ -784,26 +600,55 @@ export default function StrengthTrain() {
     }
 
     sessionExitRef.current = false;
-
-    if (
-      activeSessionHydrated &&
-      !authLoading &&
-      !!authSession &&
-      !hydrationAppliedRef.current &&
-      !workoutId &&
-      !loading
-    ) {
-      setLoading(true);
-      setSessionBootstrapNonce((current) => current + 1);
-    }
+    hydrationAppliedRef.current = false;
+    setLoading(true);
+    setSessionBootstrapNonce((current) => current + 1);
   }, [
-    activeSessionHydrated,
-    authLoading,
-    authSession,
     isFocused,
-    loading,
-    workoutId,
   ]);
+
+  useEffect(() => {
+    if (!loading || workoutId) {
+      startupRecoveryAttemptsRef.current = 0;
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (!loading || workoutId) return;
+
+      startupRecoveryAttemptsRef.current += 1;
+      const attempt = startupRecoveryAttemptsRef.current;
+
+      if (attempt <= MAX_STARTUP_RECOVERY_ATTEMPTS) {
+        console.warn('[StrengthTrain] startup appears stalled, retrying bootstrap', {
+          attempt,
+          activeSessionHydrated,
+          hasAuthSession: Boolean(authSession),
+          sessionExit: sessionExitRef.current,
+        });
+
+        sessionExitRef.current = false;
+        hydrationAppliedRef.current = false;
+        setSessionBootstrapNonce((current) => current + 1);
+        return;
+      }
+
+      console.error('[StrengthTrain] startup remained stalled after retry');
+      hydrationAppliedRef.current = false;
+      setLoading(false);
+      Alert.alert(
+        'Could not start workout',
+        'Session setup took too long. Please try again.'
+      );
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace(HOME_ROUTE);
+      }
+    }, STARTUP_STALL_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [activeSessionHydrated, authSession, loading, workoutId]);
 
   useEffect(() => {
     if (
@@ -1044,7 +889,7 @@ export default function StrengthTrain() {
     let volume = 0;
     for (const exercise of exercises) {
       for (const setDraft of exercise.sets) {
-        volume += toKg(setDraft.weight, setDraft.weight_unit_csv) * (setDraft.reps ?? 0);
+        volume += toKgWeight(setDraft.weight, setDraft.weight_unit_csv) * (setDraft.reps ?? 0);
       }
     }
     return volume;
@@ -1252,7 +1097,7 @@ export default function StrengthTrain() {
 
       const summaries: SummaryRow[] = exercises.map((exercise) => {
         const weightsKg = exercise.sets.map((setDraft) =>
-          toKg(setDraft.weight, setDraft.weight_unit_csv)
+          toKgWeight(setDraft.weight, setDraft.weight_unit_csv)
         );
         const reps = exercise.sets.map((setDraft) => setDraft.reps ?? 0);
         const vols = exercise.sets.map((_, i) => weightsKg[i] * reps[i]);
@@ -1366,31 +1211,10 @@ export default function StrengthTrain() {
             }}
             onCancel={handleCancel}
           />
-
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.eyebrow}>Exercises</Text>
-            </View>
-
-            <View style={styles.addActions}>
-              <TouchableOpacity
-                activeOpacity={0.92}
-                style={styles.supersetBtn}
-                onPress={() => setSupersetBuilderOpen(true)}
-              >
-                <Ionicons name="git-compare-outline" size={16} color={colors.text} />
-                <Text style={styles.supersetBtnText}>Superset</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.92}
-                style={styles.addBtn}
-                onPress={() => setPickerOpen(true)}
-              >
-                <Ionicons name="add" size={18} color={colors.blkText} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          <StrengthSessionActionsRow
+            onOpenSuperset={() => setSupersetBuilderOpen(true)}
+            onOpenExercisePicker={() => setPickerOpen(true)}
+          />
         </View>
 
         <ScrollView
@@ -1407,63 +1231,26 @@ export default function StrengthTrain() {
             });
           }}
         >
-          {blocks.length === 0 ? (
-            <View style={[styles.panelSoft, styles.empty]}>
-              <View style={styles.emptyIconWrap}>
-                <Ionicons name="barbell-outline" size={20} color={colors.highlight1} />
-              </View>
-              <Text style={styles.emptyTitle}>No exercises added yet</Text>
-              <Text style={styles.emptyText}>
-                Add an exercise or build a superset to start logging this session.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.exerciseList}>
-              {(() => {
-                let supersetIndex = 0;
-
-                return blocks.map((block) => {
-                  if (block.kind === 'superset') {
-                    const label = getSupersetLabel(supersetIndex);
-                    supersetIndex += 1;
-
-                    return (
-                      <SupersetBlock
-                        key={block.id}
-                        block={block}
-                        label={label}
-                        restTimer={restTimer}
-                        onDelete={() => removeSupersetBlock(block.id)}
-                        onChange={(updated) => updateSupersetBlock(block.id, () => updated)}
-                        onStartRest={startRestTimerForSuperset}
-                        onPauseRest={pauseCurrentRestTimer}
-                        onResumeRest={resumeCurrentRestTimer}
-                        onResetRest={resetSupersetRestTimer}
-                        onClearRest={(supersetId) =>
-                          clearRestTimerForOwner('superset', supersetId)
-                        }
-                      />
-                    );
-                  }
-
-                  return (
-                    <ExerciseCard
-                      key={block.id}
-                      exercise={block.exercise}
-                      restTimer={restTimer}
-                      onDelete={() =>
-                        removeExerciseBlock(block.id, block.exercise.instanceId)
-                      }
-                      onChange={(updated) =>
-                        updateExerciseBlock(block.id, () => updated)
-                      }
-                      onSetCompleted={startRestTimerForExercise}
-                    />
-                  );
-                });
-              })()}
-            </View>
-          )}
+          <StrengthBlocksList
+            blocks={blocks}
+            restTimer={restTimer}
+            onRemoveSuperset={removeSupersetBlock}
+            onUpdateSuperset={(blockId, updated) =>
+              updateSupersetBlock(blockId, () => updated)
+            }
+            onStartSupersetRest={startRestTimerForSuperset}
+            onPauseRest={pauseCurrentRestTimer}
+            onResumeRest={resumeCurrentRestTimer}
+            onResetSupersetRest={resetSupersetRestTimer}
+            onClearSupersetRest={(supersetId) =>
+              clearRestTimerForOwner('superset', supersetId)
+            }
+            onRemoveExercise={removeExerciseBlock}
+            onUpdateExercise={(blockId, updated) =>
+              updateExerciseBlock(blockId, () => updated)
+            }
+            onSetCompleted={startRestTimerForExercise}
+          />
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -1552,24 +1339,6 @@ function createStyles(
     exerciseListContent: {
       paddingBottom: 12,
     },
-    exerciseList: {
-      gap: 14,
-    },
-    panelSoft: {
-      backgroundColor: HOME_TONES.surface2,
-      borderRadius: 22,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      padding: 18,
-    },
-    eyebrow: {
-      color: HOME_TONES.textTertiary,
-      fontFamily: fonts.label,
-      fontSize: 11,
-      lineHeight: 14,
-      letterSpacing: 0.9,
-      textTransform: 'uppercase',
-    },
     buttonPrimary: {
       height: 48,
       borderRadius: 16,
@@ -1599,81 +1368,6 @@ function createStyles(
       fontFamily: fonts.body,
       fontSize: 14,
       lineHeight: 20,
-    },
-    sectionHeaderRow: {
-      marginTop: 16,
-      marginBottom: 10,
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      justifyContent: 'space-between',
-      gap: 12,
-    },
-    sectionSubtitle: {
-      marginTop: 6,
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    addActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
-    supersetBtn: {
-      minHeight: 44,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface2,
-      paddingHorizontal: 14,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-    },
-    supersetBtnText: {
-      color: HOME_TONES.textPrimary,
-      fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
-    },
-    addBtn: {
-      width: 44,
-      height: 44,
-      borderRadius: 16,
-      backgroundColor: colors.highlight1,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    empty: {
-      alignItems: 'center',
-      paddingVertical: 28,
-      paddingHorizontal: 18,
-    },
-    emptyIconWrap: {
-      width: 48,
-      height: 48,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.accentSoft,
-      marginBottom: 14,
-    },
-    emptyTitle: {
-      color: HOME_TONES.textPrimary,
-      fontFamily: fonts.heading,
-      fontSize: 18,
-      lineHeight: 22,
-    },
-    emptyText: {
-      marginTop: 8,
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.body,
-      fontSize: 14,
-      lineHeight: 20,
-      textAlign: 'center',
-      maxWidth: 260,
     },
     footer: {
       paddingTop: 10,

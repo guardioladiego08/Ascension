@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  InputAccessoryView,
+  Keyboard,
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -76,6 +79,7 @@ type Props = {
   onChange: (s: SetDraft) => void;
   onToggleComplete: (nextDone: boolean) => void;
   completionDisabled?: boolean;
+  layout?: 'default' | 'superset';
 };
 
 const SetRow: React.FC<Props> = ({
@@ -85,9 +89,14 @@ const SetRow: React.FC<Props> = ({
   onChange,
   onToggleComplete,
   completionDisabled = false,
+  layout = 'default',
 }) => {
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
+  const doneAccessoryId = useMemo(
+    () => `strength-set-row-number-accessory-${setDraft.tempId}`,
+    [setDraft.tempId]
+  );
   const [modeVisible, setModeVisible] = useState(false);
   const [weightText, setWeightText] = useState('');
   const [repsText, setRepsText] = useState('');
@@ -208,13 +217,15 @@ const SetRow: React.FC<Props> = ({
         : setDraft.set_type === 'failure'
           ? styles.idxBtnFailure
           : null;
+  const compact = layout === 'superset';
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, compact ? styles.rowCompact : null]}>
       <TouchableOpacity
         activeOpacity={0.92}
         style={[
           styles.idxBtn,
+          compact ? styles.idxBtnCompact : null,
           setDraft.set_type !== 'normal' && styles.idxBtnActive,
           typeBadgeStyle,
         ]}
@@ -229,8 +240,17 @@ const SetRow: React.FC<Props> = ({
 
       <View style={styles.weightWrap}>
         <TextInput
-          style={[styles.weightInput, setDraft.done ? styles.inputDone : null]}
+          style={[
+            styles.weightInput,
+            compact ? styles.weightInputCompact : null,
+            setDraft.done ? styles.inputDone : null,
+          ]}
           inputMode="decimal"
+          keyboardType={Platform.OS === 'ios' ? 'decimal-pad' : 'numeric'}
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={Keyboard.dismiss}
+          inputAccessoryViewID={Platform.OS === 'ios' ? doneAccessoryId : undefined}
           placeholder={suggestedWeightPlaceholder}
           placeholderTextColor={HOME_TONES.textTertiary}
           value={weightText}
@@ -238,14 +258,23 @@ const SetRow: React.FC<Props> = ({
           onBlur={() => setWeightFocused(false)}
           onChangeText={handleWeightChange}
         />
-        <View style={styles.unitBadge}>
+        <View style={[styles.unitBadge, compact ? styles.unitBadgeCompact : null]}>
           <Text style={styles.unitText}>{viewerUnit}</Text>
         </View>
       </View>
 
       <TextInput
-        style={[styles.reps, setDraft.done ? styles.repsDone : null]}
+        style={[
+          styles.reps,
+          compact ? styles.repsCompact : null,
+          setDraft.done ? styles.repsDone : null,
+        ]}
         inputMode="numeric"
+        keyboardType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+        returnKeyType="done"
+        blurOnSubmit
+        onSubmitEditing={Keyboard.dismiss}
+        inputAccessoryViewID={Platform.OS === 'ios' ? doneAccessoryId : undefined}
         placeholder={suggestedRepsPlaceholder}
         placeholderTextColor={HOME_TONES.textTertiary}
         value={repsText}
@@ -301,6 +330,22 @@ const SetRow: React.FC<Props> = ({
           );
         })}
       </AppPopup>
+
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={doneAccessoryId}>
+          <View style={styles.keyboardAccessory}>
+            <TouchableOpacity
+              style={styles.keyboardDoneButton}
+              activeOpacity={0.92}
+              onPress={() => {
+                Keyboard.dismiss();
+              }}
+            >
+              <Text style={styles.keyboardDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </View>
   );
 };
@@ -318,6 +363,10 @@ function createStyles(
       gap: 12,
       paddingVertical: 6,
     },
+    rowCompact: {
+      gap: 8,
+      paddingVertical: 4,
+    },
     idxBtn: {
       width: 38,
       height: 42,
@@ -327,6 +376,11 @@ function createStyles(
       borderColor: HOME_TONES.borderSoft,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    idxBtnCompact: {
+      width: 34,
+      height: 40,
+      borderRadius: 13,
     },
     idxBtnActive: {
       backgroundColor: HOME_TONES.surface3,
@@ -388,6 +442,12 @@ function createStyles(
       paddingHorizontal: 12,
       height: 42,
     },
+    weightInputCompact: {
+      fontSize: 14,
+      lineHeight: 18,
+      paddingHorizontal: 10,
+      height: 40,
+    },
     inputDone: {
       color: HOME_TONES.textSecondary,
     },
@@ -399,6 +459,10 @@ function createStyles(
       backgroundColor: HOME_TONES.surface2,
       borderLeftWidth: 1,
       borderLeftColor: HOME_TONES.borderSoft,
+    },
+    unitBadgeCompact: {
+      width: 46,
+      height: 40,
     },
     unitText: {
       color: HOME_TONES.textPrimary,
@@ -420,6 +484,14 @@ function createStyles(
       fontFamily: fonts.body,
       fontSize: 15,
       lineHeight: 20,
+    },
+    repsCompact: {
+      width: 68,
+      height: 40,
+      borderRadius: 13,
+      fontSize: 14,
+      lineHeight: 18,
+      paddingHorizontal: 10,
     },
     repsDone: {
       color: HOME_TONES.textSecondary,
@@ -459,6 +531,30 @@ function createStyles(
     modeTextActive: {
       color: colors.highlight1,
       fontFamily: fonts.heading,
+    },
+    keyboardAccessory: {
+      backgroundColor: HOME_TONES.surface1,
+      borderTopWidth: 1,
+      borderTopColor: HOME_TONES.borderSoft,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      alignItems: 'flex-end',
+    },
+    keyboardDoneButton: {
+      minHeight: 34,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: HOME_TONES.borderSoft,
+      backgroundColor: HOME_TONES.surface2,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    keyboardDoneText: {
+      color: HOME_TONES.textPrimary,
+      fontFamily: fonts.heading,
+      fontSize: 13,
+      lineHeight: 16,
     },
   });
 }

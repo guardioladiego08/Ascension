@@ -24,7 +24,6 @@ import { type HomeGoalLaneItem } from './home/types';
 import { useHomeDashboard } from './home/useHomeDashboard';
 import {
   cardioTargetMeters,
-  clamp01,
   combineProgress,
   formatDistanceValue,
   formatMinutes,
@@ -61,13 +60,6 @@ export default function HomeScreen() {
     () => (goalResult ? computeRings(goalResult) : null),
     [goalResult]
   );
-
-  const displayName = useMemo(() => {
-    const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
-    if (name) return name;
-    if (profile?.username) return `@${profile.username}`;
-    return 'Athlete';
-  }, [profile]);
 
   const firstName = useMemo(() => {
     if (profile?.first_name) return profile.first_name;
@@ -255,16 +247,6 @@ export default function HomeScreen() {
     return `${closedGoalCount} of ${activeGoalCount} rings closed so far today.`;
   }, [activeGoalCount, closedGoalCount, completedSessionCount, loading]);
 
-  const calorieStatus = useMemo(() => {
-    if (loading) return 'Syncing today’s nutrition.';
-    if (!caloriesGoal) return 'Add a calorie goal in Settings to unlock the calorie dial.';
-
-    const delta = caloriesGoal - caloriesActual;
-    if (delta > 0) return `${Math.round(delta).toLocaleString()} kcal remaining to hit your goal.`;
-    if (delta < 0) return `${Math.round(Math.abs(delta)).toLocaleString()} kcal over goal.`;
-    return 'Calorie goal matched exactly.';
-  }, [caloriesActual, caloriesGoal, loading]);
-
   const macroRows = useMemo(
     () => [
       {
@@ -357,53 +339,16 @@ export default function HomeScreen() {
           <View style={styles.heroBody}>
             <HomeGoalLanesCard
               items={goalLaneItems}
-              activeGoalCount={activeGoalCount}
               closedGoalCount={closedGoalCount}
               styles={styles}
               fonts={fonts}
             />
-
-            <View style={styles.heroSide}>
-              <View style={[styles.panelSoft, styles.heroMetricCard]}>
-                <Text style={styles.heroMetricLabel}>Completed today</Text>
-                <Text style={styles.heroMetricValue}>{completedSessionCount}</Text>
-                <Text style={styles.heroMetricHint}>
-                  {strengthSummary.count} strength • {cardioSummary.count} cardio
-                </Text>
-              </View>
-
-              <View style={[styles.panelSoft, styles.heroMetricCard]}>
-                <Text style={styles.heroMetricLabel}>Nutrition pace</Text>
-                <Text style={styles.heroMetricValue}>
-                  {caloriesGoal ? `${Math.round(clamp01(caloriesActual / caloriesGoal) * 100)}%` : '--'}
-                </Text>
-                <Text style={styles.heroMetricHint}>{calorieStatus}</Text>
-              </View>
-
-              <View style={styles.heroFooterRow}>
-                <View style={[styles.chip, styles.heroChip]}>
-                  <Ionicons name="person-outline" size={14} color={colors.highlight1} />
-                  <Text style={[styles.chipText, styles.heroChipText]}>{displayName}</Text>
-                </View>
-
-                <View style={[styles.chip, styles.heroChip]}>
-                  <Ionicons
-                    name={ringState?.allClosed ? 'sparkles-outline' : 'flash-outline'}
-                    size={14}
-                    color={colors.highlight3}
-                  />
-                  <Text style={[styles.chipText, styles.heroChipText]}>
-                    {activeGoalCount ? `${closedGoalCount}/${activeGoalCount} closed` : 'Rings idle'}
-                  </Text>
-                </View>
-              </View>
-            </View>
           </View>
         </View>
 
         <HomeSectionHeader
           eyebrow="Quick Actions"
-          title="Start from the home tab"
+          title="Log an Activity"
           subtitle="Strength, cardio, and nutrition logging are all one tap away."
           styles={styles}
         />
@@ -491,7 +436,6 @@ export default function HomeScreen() {
         <HomeSectionHeader
           eyebrow="Nutrition"
           title="Calories and macros"
-          subtitle="Daily calorie pace on the left, actual-vs-goal macro bars on the right."
           styles={styles}
         />
 

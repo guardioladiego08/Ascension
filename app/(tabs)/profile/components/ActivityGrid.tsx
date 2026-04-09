@@ -25,7 +25,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
 
-type ActivityKind = 'strength' | 'run' | 'walk' | 'cycle';
+type ActivityKind = 'strength' | 'run' | 'walk';
 type ActivityFilter = 'all' | ActivityKind;
 
 type ActivitySource = 'strength' | 'session' | 'outdoor';
@@ -103,13 +103,6 @@ function formatPace(unit: 'mi' | 'km', km?: number | null, mi?: number | null) {
   return `${mm}:${ss < 10 ? '0' : ''}${ss} /${unit}`;
 }
 
-function formatSpeed(unit: 'mi' | 'km', mps?: number | null) {
-  const v0 = mps == null ? null : Number(mps);
-  if (!v0 || v0 <= 0) return '-';
-  const v = unit === 'mi' ? v0 * 2.236936 : v0 * 3.6;
-  return unit === 'mi' ? `${v.toFixed(1)} mph` : `${v.toFixed(1)} kph`;
-}
-
 function formatVolume(valueKg: number | null | undefined, unit: 'kg' | 'lb') {
   const v = valueKg == null ? 0 : Number(valueKg);
   if (!Number.isFinite(v) || v <= 0) return '0';
@@ -131,22 +124,20 @@ function formatCardDate(iso: string) {
 
 function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
   if (kind === 'strength') return 'barbell-outline';
-  if (kind === 'cycle') return 'bicycle-outline';
   return 'walk-outline';
 }
 
 function labelFor(kind: ActivityKind, source: ActivitySource) {
   if (kind === 'strength') return 'Strength';
-  if (kind === 'cycle') return source === 'outdoor' ? 'Outdoor ride' : 'Ride';
   if (kind === 'walk') return source === 'outdoor' ? 'Outdoor walk' : 'Walk';
   return source === 'outdoor' ? 'Outdoor run' : 'Run';
 }
 
-function kindFromText(t: string): ActivityKind {
+function kindFromText(t: string): ActivityKind | null {
   const v = (t ?? '').toLowerCase();
   if (v.includes('walk')) return 'walk';
-  if (v.includes('bike') || v.includes('cycle') || v.includes('ride')) return 'cycle';
-  return 'run';
+  if (v.includes('run')) return 'run';
+  return null;
 }
 
 /**
@@ -369,29 +360,32 @@ export default function ActivityGrid({
       const res = await q;
       if (res.error) throw res.error;
 
-      const page = (res.data ?? []).map((r: any) => {
-        const kind = kindFromText(String(r.exercise_type ?? ''));
+      const page = (res.data ?? [])
+        .map((r: any) => {
+          const kind = kindFromText(String(r.exercise_type ?? ''));
+          if (!kind) return null;
 
-        const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
-        const paceMi =
-          r.avg_pace_s_per_mi != null
-            ? Number(r.avg_pace_s_per_mi)
-            : paceKm == null
-              ? null
-              : paceKm * 1.609344;
+          const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
+          const paceMi =
+            r.avg_pace_s_per_mi != null
+              ? Number(r.avg_pace_s_per_mi)
+              : paceKm == null
+                ? null
+                : paceKm * 1.609344;
 
-        return {
-          id: String(r.id),
-          source: 'session',
-          kind,
-          startedAt: r.started_at,
-          durationS: r.total_time_s == null ? null : Number(r.total_time_s),
-          distanceM: r.total_distance_m == null ? null : Number(r.total_distance_m),
-          paceKm,
-          paceMi,
-          speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
-        } as UnifiedActivity;
-      });
+          return {
+            id: String(r.id),
+            source: 'session',
+            kind,
+            startedAt: r.started_at,
+            durationS: r.total_time_s == null ? null : Number(r.total_time_s),
+            distanceM: r.total_distance_m == null ? null : Number(r.total_distance_m),
+            paceKm,
+            paceMi,
+            speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
+          } as UnifiedActivity;
+        })
+        .filter((item): item is UnifiedActivity => item != null);
 
       if (activeFilter === 'all') return page;
       return page.filter((item) => {
@@ -425,25 +419,28 @@ export default function ActivityGrid({
       const rows = (res.data ?? []) as any[];
       const previewMap = await fetchOutdoorRoutePreviewMap(rows.map((row) => String(row.id)));
 
-      const page = rows.map((r: any) => {
-        const kind = kindFromText(String(r.activity_type ?? ''));
+      const page = rows
+        .map((r: any) => {
+          const kind = kindFromText(String(r.activity_type ?? ''));
+          if (!kind) return null;
 
-        const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
-        const paceMi = paceKm == null ? null : paceKm * 1.609344;
+          const paceKm = r.avg_pace_s_per_km == null ? null : Number(r.avg_pace_s_per_km);
+          const paceMi = paceKm == null ? null : paceKm * 1.609344;
 
-        return {
-          id: String(r.id),
-          source: 'outdoor',
-          kind,
-          startedAt: r.started_at,
-          durationS: r.duration_s == null ? null : Number(r.duration_s),
-          distanceM: r.distance_m == null ? null : Number(r.distance_m),
-          paceKm,
-          paceMi,
-          speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
-          routePreview: previewMap.get(String(r.id)) ?? null,
-        } as UnifiedActivity;
-      });
+          return {
+            id: String(r.id),
+            source: 'outdoor',
+            kind,
+            startedAt: r.started_at,
+            durationS: r.duration_s == null ? null : Number(r.duration_s),
+            distanceM: r.distance_m == null ? null : Number(r.distance_m),
+            paceKm,
+            paceMi,
+            speedMps: r.avg_speed_mps == null ? null : Number(r.avg_speed_mps),
+            routePreview: previewMap.get(String(r.id)) ?? null,
+          } as UnifiedActivity;
+        })
+        .filter((item): item is UnifiedActivity => item != null);
 
       if (activeFilter === 'all') return page;
       return page.filter((item) => {
@@ -484,7 +481,7 @@ export default function ActivityGrid({
       }
 
       const wantsStrength = filter === 'all' || filter === 'strength';
-      const wantsCardio = filter === 'all' || filter === 'run' || filter === 'walk' || filter === 'cycle';
+      const wantsCardio = filter === 'all' || filter === 'run' || filter === 'walk';
 
       // If not reset and everything requested is already done, do nothing.
       if (!reset) {
@@ -612,12 +609,6 @@ export default function ActivityGrid({
             onPress={() => setFilter('walk')}
             styles={styles}
           />
-          <FilterPill
-            label="Bike"
-            active={filter === 'cycle'}
-            onPress={() => setFilter('cycle')}
-            styles={styles}
-          />
         </View>
       </View>
     );
@@ -716,10 +707,6 @@ export default function ActivityGrid({
                 <Text style={styles.unitChipText}>{weightUnit}</Text>
               </View>
             </View>
-          ) : item.kind === 'cycle' ? (
-            <Text style={styles.overlayText}>
-              {formatDistance(distanceUnit, item.distanceM)} • {formatSpeed(distanceUnit, item.speedMps)}
-            </Text>
           ) : (
             <Text style={styles.overlayText}>
               {formatDistance(distanceUnit, item.distanceM)} • {formatPace(distanceUnit, item.paceKm, item.paceMi)}

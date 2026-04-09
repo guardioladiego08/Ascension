@@ -124,11 +124,8 @@ export default function StrengthProgressPanel() {
       <View style={styles.headerRow}>
         <View style={styles.headerTextWrap}>
           <Text style={styles.eyebrow}>Strength analytics</Text>
-          <Text style={styles.heading}>See how each lifting block compounds over time</Text>
-          <Text style={styles.subtitle}>
-            Switch between total weight, session time, workout count, and average
-            volume per session, then compare the same metrics across matching time ranges.
-          </Text>
+          <Text style={styles.heading}>See how strength compounds over time</Text>
+
         </View>
 
         <View style={styles.rangeBadge}>

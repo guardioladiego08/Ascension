@@ -10,7 +10,7 @@ import {
   type StrengthMuscleProfile,
 } from '@/lib/strength/muscleProfile';
 
-export type SocialActivityType = 'run' | 'walk' | 'ride' | 'strength' | 'nutrition' | 'other';
+export type SocialActivityType = 'run' | 'walk' | 'strength' | 'nutrition' | 'other';
 export type PostVisibility = 'public' | 'followers' | 'private';
 
 export type SocialCounts = {
@@ -337,14 +337,14 @@ async function persistPostDirect(args: {
   return String((insertRes.data as any).id);
 }
 
-function coerceActivityType(value: unknown): SocialActivityType {
+function parseSupportedActivityType(value: unknown): SocialActivityType | null {
   const v = String(value ?? '').toLowerCase();
   if (v === 'run') return 'run';
   if (v === 'walk') return 'walk';
-  if (v === 'ride' || v === 'bike' || v === 'cycle') return 'ride';
   if (v === 'strength') return 'strength';
   if (v === 'nutrition') return 'nutrition';
-  return 'other';
+  if (v === 'other') return 'other';
+  return null;
 }
 
 function coerceVisibility(value: unknown): PostVisibility {
@@ -544,44 +544,48 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
     }
   }
 
-  const posts = postRows.map((row) => {
-    const ownerId = String(row.user_id);
-    const userSummary = userSummaryMap.get(ownerId);
-    const username = userSummary?.username ?? fallbackUsername(ownerId);
-    const displayName = userSummary?.displayName ?? username;
-    const profileImageUrl = userSummary?.profileImageUrl ?? null;
-    const activityType = coerceActivityType(row.activity_type);
-    const rawMetrics = row.metrics;
-    const isOutdoorSession =
-      inferOutdoorRunWalkPost(row) &&
-      (activityType === 'run' || activityType === 'walk' || activityType === 'ride');
+  const posts = postRows
+    .map((row): SocialFeedPost | null => {
+      const activityType = parseSupportedActivityType(row.activity_type);
+      if (!activityType) return null;
 
-    return {
-      id: String(row.id),
-      userId: ownerId,
-      username,
-      displayName,
-      profileImageUrl,
-      activityType,
-      sourceType: row.source_type == null ? null : String(row.source_type),
-      sourceId: row.source_id == null ? null : String(row.source_id),
-      sessionId: row.session_id == null ? null : String(row.session_id),
-      title: row.title == null ? null : String(row.title),
-      subtitle: row.subtitle == null ? null : String(row.subtitle),
-      caption: row.caption == null ? null : String(row.caption),
-      visibility: coerceVisibility(row.visibility),
-      createdAt: String(row.created_at),
-      metrics: normalizeMetrics(rawMetrics),
-      mediaUrls: normalizeMediaUrls(row.media_urls),
-      likeCount: asInt(row.like_count),
-      commentCount: asInt(row.comment_count),
-      isLikedByMe: likedSet.has(String(row.id)),
-      isOutdoorSession,
-      routePreview: null,
-      strengthMuscleProfile:
-        activityType === 'strength' ? extractStrengthMuscleProfile(rawMetrics) : null,
-    } satisfies SocialFeedPost;
-  });
+      const ownerId = String(row.user_id);
+      const userSummary = userSummaryMap.get(ownerId);
+      const username = userSummary?.username ?? fallbackUsername(ownerId);
+      const displayName = userSummary?.displayName ?? username;
+      const profileImageUrl = userSummary?.profileImageUrl ?? null;
+      const rawMetrics = row.metrics;
+      const isOutdoorSession =
+        inferOutdoorRunWalkPost(row) &&
+        (activityType === 'run' || activityType === 'walk');
+
+      return {
+        id: String(row.id),
+        userId: ownerId,
+        username,
+        displayName,
+        profileImageUrl,
+        activityType,
+        sourceType: row.source_type == null ? null : String(row.source_type),
+        sourceId: row.source_id == null ? null : String(row.source_id),
+        sessionId: row.session_id == null ? null : String(row.session_id),
+        title: row.title == null ? null : String(row.title),
+        subtitle: row.subtitle == null ? null : String(row.subtitle),
+        caption: row.caption == null ? null : String(row.caption),
+        visibility: coerceVisibility(row.visibility),
+        createdAt: String(row.created_at),
+        metrics: normalizeMetrics(rawMetrics),
+        mediaUrls: normalizeMediaUrls(row.media_urls),
+        likeCount: asInt(row.like_count),
+        commentCount: asInt(row.comment_count),
+        isLikedByMe: likedSet.has(String(row.id)),
+        isOutdoorSession,
+        routePreview: null,
+        strengthMuscleProfile:
+          activityType === 'strength' ? extractStrengthMuscleProfile(rawMetrics) : null,
+      };
+    })
+    .filter((post): post is SocialFeedPost => post != null);
 
   const previewSessionIds = posts
     .filter(
@@ -899,8 +903,8 @@ export async function togglePostLike(postId: string, currentlyLiked: boolean): P
 function mapRunWalkExerciseTypeToActivityType(exerciseType: string): SocialActivityType {
   const v = String(exerciseType ?? '').toLowerCase();
   if (v.includes('walk')) return 'walk';
-  if (v.includes('bike') || v.includes('cycle') || v.includes('ride')) return 'ride';
-  return 'run';
+  if (v.includes('run')) return 'run';
+  return 'other';
 }
 
 function buildRunWalkTitle(exerciseType: string, activityType: SocialActivityType): string {
@@ -908,8 +912,8 @@ function buildRunWalkTitle(exerciseType: string, activityType: SocialActivityTyp
   const environment = source.includes('outdoor') ? 'Outdoor' : 'Indoor';
 
   if (activityType === 'walk') return `${environment} Walk`;
-  if (activityType === 'ride') return `${environment} Ride`;
-  return `${environment} Run`;
+  if (activityType === 'run') return `${environment} Run`;
+  return `${environment} Session`;
 }
 
 function buildRunWalkSubtitle(exerciseType: string): string {

@@ -205,8 +205,18 @@ export default function StrengthSummaryPage() {
 
   const { weightUnit } = useUnits(); // viewer’s preference: 'kg' | 'lb'
   const shouldAutoHeartRateSync = autoHeartRateSync === '1';
+  const openedFromSocial = Boolean(postId);
   const sessionMode: StrengthSessionMode =
     sessionModeParam === 'template' ? 'template' : 'freestyle';
+
+  const handleBackNavigation = React.useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace(openedFromSocial ? '/social' : HOME_ROUTE);
+  }, [openedFromSocial]);
 
   React.useEffect(() => {
     if (!id) {
@@ -871,7 +881,7 @@ export default function StrengthSummaryPage() {
   return (
     <View style={globalStyles.page}>
       <View style={[globalStyles.container, styles.container]}>
-        <LogoHeader />
+        <LogoHeader showBackButton onBackPress={handleBackNavigation} />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}

@@ -1,4 +1,3 @@
-import React from 'react';
 import Svg, { Circle } from 'react-native-svg';
 import { Text, View } from 'react-native';
 
@@ -8,13 +7,11 @@ import { HOME_TONES } from './tokens';
 
 export function HomeGoalLanesCard({
   items,
-  activeGoalCount,
   closedGoalCount,
   styles,
   fonts,
 }: {
   items: HomeGoalLaneItem[];
-  activeGoalCount: number;
   closedGoalCount: number;
   styles: HomeStyles;
   fonts: { label: string };
@@ -23,76 +20,44 @@ export function HomeGoalLanesCard({
   const strokeWidth = 18;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const segmentLength = circumference / items.length;
+  const totalGoals = items.length || 3;
+  const completionRatio = Math.max(0, Math.min(1, closedGoalCount / totalGoals));
+  const progressLength = circumference * completionRatio;
 
   return (
     <View style={styles.lanesCard}>
-      <View style={styles.lanesHeader}>
-        <View style={styles.lanesHeaderCopy}>
-          <Text style={styles.lanesEyebrow}>Daily Goals</Text>
-          <Text style={styles.lanesTitle}>One ring, split into three goals</Text>
-          <Text style={styles.lanesSubtitle}>
-            Strength, cardio, and nutrition each own one segment and close when that goal is complete.
-          </Text>
-        </View>
-
-        <View style={styles.lanesScore}>
-          <Text style={styles.lanesScoreLabel}>Complete</Text>
-          <Text style={styles.lanesScoreValue}>
-            {activeGoalCount ? `${closedGoalCount}/${activeGoalCount}` : '0'}
-          </Text>
-        </View>
-      </View>
+      <Text style={styles.lanesEyebrow}>Daily Goals</Text>
 
       <View style={styles.ringsLayout}>
         <View style={styles.ringsVisualWrap}>
           <Svg width={size} height={size}>
-            {items.map((item, index) => {
-              const consumed = index * segmentLength;
-              const dashOffset = circumference * 0.25 - consumed;
-              const progressLength = item.active ? segmentLength * item.progress : 0;
-
-              return (
-                <React.Fragment key={item.key}>
-                  <Circle
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    stroke={HOME_TONES.surface3}
-                    strokeWidth={strokeWidth}
-                    strokeLinecap="butt"
-                    fill="none"
-                    strokeDasharray={`${segmentLength} ${circumference}`}
-                    strokeDashoffset={dashOffset}
-                    rotation={-90}
-                    originX={size / 2}
-                    originY={size / 2}
-                  />
-                  <Circle
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    stroke={item.color}
-                    strokeWidth={strokeWidth}
-                    strokeLinecap="butt"
-                    fill="none"
-                    strokeDasharray={`${progressLength} ${circumference}`}
-                    strokeDashoffset={dashOffset}
-                    rotation={-90}
-                    originX={size / 2}
-                    originY={size / 2}
-                    opacity={item.active ? 1 : 0.18}
-                  />
-                </React.Fragment>
-              );
-            })}
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={HOME_TONES.surface3}
+              strokeWidth={strokeWidth}
+              fill="none"
+            />
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={HOME_TONES.textPrimary}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={`${progressLength} ${circumference}`}
+              strokeDashoffset={0}
+              rotation={-90}
+              originX={size / 2}
+              originY={size / 2}
+            />
           </Svg>
 
           <View style={styles.ringCenter}>
-            <Text style={styles.ringCenterValue}>
-              {activeGoalCount ? `${closedGoalCount}/${activeGoalCount}` : '0'}
-            </Text>
-            <Text style={styles.ringCenterLabel}>rings closed</Text>
+            <Text style={styles.ringCenterValue}>{`${closedGoalCount}/${totalGoals}`}</Text>
+            <Text style={styles.ringCenterLabel}>goals closed</Text>
           </View>
         </View>
 

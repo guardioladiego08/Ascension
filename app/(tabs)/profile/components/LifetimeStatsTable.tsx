@@ -20,7 +20,6 @@ type LifetimeStatsRow = {
   total_kcal_consumed: number;
   total_elev_gain_m: number;
   total_distance_ran_m: number;
-  total_distance_biked_m: number;
   total_distance_walked_m: number;
   total_distance_run_walk_m: number;
   updated_at?: string;
@@ -263,7 +262,6 @@ export default function LifetimeStatsTable({
   const accent = colors.highlight1;
   const runTint = colors.highlight2;
   const walkTint = colors.highlight1;
-  const bikeTint = colors.highlight3;
   const calTint = colors.danger;
   const elevTint = colors.success;
   const warning = colors.danger;
@@ -305,7 +303,7 @@ export default function LifetimeStatsTable({
           .schema('user')
           .from('lifetime_stats')
           .select(
-            'user_id,workouts_count,total_hours,total_weight_lifted_kg,total_kcal_consumed,total_elev_gain_m,total_distance_ran_m,total_distance_biked_m,total_distance_walked_m,total_distance_run_walk_m,updated_at'
+            'user_id,workouts_count,total_hours,total_weight_lifted_kg,total_kcal_consumed,total_elev_gain_m,total_distance_ran_m,total_distance_walked_m,total_distance_run_walk_m,updated_at'
           )
           .eq('user_id', userId)
           .maybeSingle();
@@ -325,7 +323,6 @@ export default function LifetimeStatsTable({
           total_kcal_consumed: 0,
           total_elev_gain_m: 0,
           total_distance_ran_m: 0,
-          total_distance_biked_m: 0,
           total_distance_walked_m: 0,
           total_distance_run_walk_m: 0,
         });
@@ -340,7 +337,6 @@ export default function LifetimeStatsTable({
         total_kcal_consumed: safeNum((data as any).total_kcal_consumed),
         total_elev_gain_m: safeNum((data as any).total_elev_gain_m),
         total_distance_ran_m: safeNum((data as any).total_distance_ran_m),
-        total_distance_biked_m: safeNum((data as any).total_distance_biked_m),
         total_distance_walked_m: safeNum((data as any).total_distance_walked_m),
         total_distance_run_walk_m: safeNum((data as any).total_distance_run_walk_m),
         updated_at: (data as any).updated_at ?? undefined,
@@ -361,9 +357,8 @@ export default function LifetimeStatsTable({
   const runWalkMeters = safeNum(row?.total_distance_run_walk_m);
   const runMeters = safeNum(row?.total_distance_ran_m);
   const walkMeters = safeNum(row?.total_distance_walked_m);
-  const bikeMeters = safeNum(row?.total_distance_biked_m);
   const mergedRunWalkMeters = runWalkMeters > 0 ? runWalkMeters : runMeters + walkMeters;
-  const totalDistanceMeters = mergedRunWalkMeters + bikeMeters;
+  const totalDistanceMeters = mergedRunWalkMeters;
 
   const totalDistanceText = useMemo(
     () => formatDistance(totalDistanceMeters, distanceUnit),
@@ -385,7 +380,6 @@ export default function LifetimeStatsTable({
   );
   const runText = useMemo(() => formatDistance(runMeters, distanceUnit), [runMeters, distanceUnit]);
   const walkText = useMemo(() => formatDistance(walkMeters, distanceUnit), [walkMeters, distanceUnit]);
-  const bikeText = useMemo(() => formatDistance(bikeMeters, distanceUnit), [bikeMeters, distanceUnit]);
   const runWalkText = useMemo(
     () => formatDistance(mergedRunWalkMeters, distanceUnit),
     [mergedRunWalkMeters, distanceUnit]
@@ -402,9 +396,8 @@ export default function LifetimeStatsTable({
     () => [
       { key: 'run', label: 'Run', value: runMeters, color: runTint, displayValue: runText },
       { key: 'walk', label: 'Walk', value: walkMeters, color: walkTint, displayValue: walkText },
-      { key: 'bike', label: 'Bike', value: bikeMeters, color: bikeTint, displayValue: bikeText },
     ],
-    [bikeMeters, bikeText, bikeTint, runMeters, runText, runTint, walkMeters, walkText, walkTint]
+    [runMeters, runText, runTint, walkMeters, walkText, walkTint]
   );
 
   const movementTotal = useMemo(
@@ -431,7 +424,7 @@ export default function LifetimeStatsTable({
           <View>
             <Text style={styles.heroEyebrow}>Lifetime</Text>
             <Text style={styles.heroTitle}>Training snapshot</Text>
-      {updatedText ? <Text style={styles.heroMeta}>{updatedText}</Text> : null}
+            {updatedText ? <Text style={styles.heroMeta}>{updatedText}</Text> : null}
           </View>
 
           <TouchableOpacity onPress={load} style={styles.refreshBtn} disabled={loading}>
@@ -444,7 +437,7 @@ export default function LifetimeStatsTable({
         </View>
 
         <Text style={styles.heroValue}>{totalDistanceText}</Text>
-        <Text style={styles.heroSubtext}>Total lifetime movement across run, walk, and bike sessions.</Text>
+        <Text style={styles.heroSubtext}>Total lifetime movement across run and walk sessions.</Text>
 
         <View style={styles.summaryStatsRow}>
           <SummaryStat label="Workouts" value={workoutsText} styles={styles} />
@@ -526,10 +519,10 @@ export default function LifetimeStatsTable({
           styles={styles}
         />
         <MetricCard
-          label="Bike distance"
-          value={bikeText}
-          tint={bikeTint}
-          icon="bicycle-outline"
+          label="Run distance"
+          value={runText}
+          tint={runTint}
+          icon="walk-outline"
           styles={styles}
         />
       </View>

@@ -1,7 +1,7 @@
 {
-  "name": "ascension",
+  "name": "TENSR",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "0.8.1",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -24,6 +24,7 @@
       "<rootDir>/jest.setup.js"
     ]
   },
+  
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.0",
     "@expo-google-fonts/roboto-flex": "^0.4.0",

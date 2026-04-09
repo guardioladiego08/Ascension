@@ -37,7 +37,6 @@ type Metric = {
 const TYPE_LABEL: Record<SocialActivityType, string> = {
   run: 'Run',
   walk: 'Walk',
-  ride: 'Ride',
   strength: 'Strength',
   nutrition: 'Nutrition',
   other: 'Post',
@@ -46,7 +45,6 @@ const TYPE_LABEL: Record<SocialActivityType, string> = {
 const TYPE_ICON: Record<SocialActivityType, keyof typeof Ionicons.glyphMap> = {
   run: 'walk-outline',
   walk: 'walk-outline',
-  ride: 'bicycle-outline',
   strength: 'barbell-outline',
   nutrition: 'nutrition-outline',
   other: 'sparkles-outline',
@@ -56,7 +54,6 @@ function buildTypeGradients(colors: ReturnType<typeof useAppTheme>['colors']) {
   return {
     run: [colors.accentSecondarySoft, colors.cardDark] as [string, string],
     walk: [colors.accentSoft, colors.cardDark] as [string, string],
-    ride: [colors.accentTertiarySoft, colors.cardDark] as [string, string],
     strength: [colors.accentSoft, colors.cardDark] as [string, string],
     nutrition: [colors.accentTertiarySoft, colors.cardDark] as [string, string],
     other: [colors.card3, colors.cardDark] as [string, string],
@@ -149,7 +146,7 @@ function buildMetricList(
   const m = post.metrics as Record<string, unknown>;
   const out: Metric[] = [];
 
-  if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+  if (post.activityType === 'run' || post.activityType === 'walk') {
     const distanceM = pickNumber(m, ['distance_m', 'total_distance_m']);
     if (distanceM != null && distanceM > 0) {
       out.push({ label: 'Distance', value: formatDistance(distanceM, distanceUnit) });
@@ -231,7 +228,7 @@ function buildHeroMetric(post: SocialFeedPost, metrics: Metric[]): Metric | null
 
   if (post.activityType === 'strength') return { label: 'Activity', value: 'Strength' };
   if (post.activityType === 'nutrition') return { label: 'Activity', value: 'Nutrition' };
-  if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+  if (post.activityType === 'run' || post.activityType === 'walk') {
     return { label: 'Activity', value: TYPE_LABEL[post.activityType] };
   }
   return null;
@@ -411,7 +408,6 @@ export default function SocialPostCard({
     !!post.sessionId &&
     (post.activityType === 'run' ||
       post.activityType === 'walk' ||
-      post.activityType === 'ride' ||
       post.activityType === 'strength');
   const badgeSourceId = post.sourceId ?? post.sessionId;
   const badgeDomain: BadgeDomain | null =

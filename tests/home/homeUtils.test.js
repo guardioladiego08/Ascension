@@ -72,7 +72,7 @@ describe('home utils', () => {
   it('recognizes run and walk activity types and formats friendly dates', () => {
     expect(isRunWalkType('outdoor_run')).toBe(true);
     expect(isRunWalkType('Walk')).toBe(true);
-    expect(isRunWalkType('bike')).toBe(false);
+    expect(isRunWalkType('elliptical')).toBe(false);
 
     expect(friendlyDateLabel('not-a-date')).toBe('not-a-date');
     expect(friendlyDateLabel('2025-04-02')).toContain('Apr');

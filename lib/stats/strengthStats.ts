@@ -51,7 +51,7 @@ export async function updateWeeklyAndLifetimeFromStrengthWorkout(opts: {
 
   if (
     error?.code === '42703' &&
-    (msg.includes('total_miles_biked') || msg.includes('lifetime_stats'))
+    (msg.includes('total_miles_') || msg.includes('lifetime_stats'))
   ) {
     console.warn(
       '[strengthStats] Skipping stats RPC due to legacy DB function. Apply migration to refresh increment/decrement_strength_workout_stats.',

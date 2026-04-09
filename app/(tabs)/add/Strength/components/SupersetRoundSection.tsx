@@ -162,6 +162,7 @@ const SupersetRoundSection: React.FC<Props> = ({
                 setDraft={setDraft}
                 displayIndex={setDraft.set_type === 'normal' ? setDraft.set_index : null}
                 suggestedSet={exercise.previousSessionSets?.[roundIndex]}
+                layout="superset"
                 completionDisabled={completionDisabled}
                 onChange={(next) => updateSet(exercise, setDraft, () => next)}
                 onToggleComplete={(nextDone) =>
@@ -259,7 +260,7 @@ function createStyles(
     tableHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
       paddingHorizontal: 2,
     },
     th: {
@@ -271,7 +272,7 @@ function createStyles(
       textTransform: 'uppercase',
     },
     thSet: {
-      width: 40,
+      width: 34,
       textAlign: 'center',
     },
     thWeight: {
@@ -279,7 +280,7 @@ function createStyles(
       textAlign: 'center',
     },
     thReps: {
-      width: 76,
+      width: 68,
       textAlign: 'center',
     },
     thDone: {

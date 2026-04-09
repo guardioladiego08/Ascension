@@ -55,15 +55,6 @@ const ProgressScreen: React.FC = () => {
       >
         <LogoHeader />
 
-        <View style={[globalStyles.panel, styles.heroCard]}>
-          <Text style={globalStyles.eyebrow}>Training archive</Text>
-          <Text style={styles.title}>Progress</Text>
-          <Text style={styles.subtitle}>
-            Move between your four core progress areas from one top-tab entry point.
-            The old weekly dashboard widgets are no longer active on this screen.
-          </Text>
-        </View>
-
         <View
           onLayout={(event: LayoutChangeEvent) => {
             const width = Math.floor(event.nativeEvent.layout.width);
@@ -122,7 +113,7 @@ function createStyles(
       maxWidth: 320,
     },
     tabsSection: {
-      marginTop: 18,
+      marginTop: 0,
     },
     bottomSpacer: {
       height: 24,

@@ -76,13 +76,22 @@ export default function PeopleSearchScreen() {
     return loading ? 'Searching…' : `${rows.length} result(s)`;
   }, [query, rows.length, loading]);
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/social');
+  }, [router]);
+
   return (
     <View style={styles.safe}>
       <View style={globalStyles.page}>
         <LogoHeader />
 
         <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.title}>Search People</Text>

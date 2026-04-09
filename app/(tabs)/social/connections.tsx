@@ -98,13 +98,30 @@ export default function ConnectionsScreen() {
     await loadRows();
   }, [loadRows]);
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    if (userId) {
+      router.replace({
+        pathname: '/social/[userId]',
+        params: { userId },
+      });
+      return;
+    }
+
+    router.replace('/social');
+  }, [router, userId]);
+
   return (
     <View style={styles.safe}>
       <View style={globalStyles.page}>
         <LogoHeader />
 
         <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.iconBtn}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>

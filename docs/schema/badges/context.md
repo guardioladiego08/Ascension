@@ -23,7 +23,7 @@
 
 - Running badge unlocks use `source_type = 'run_walk_session'` for both indoor `run_walk.sessions` runs and outdoor `run_walk.outdoor_sessions` runs.
 - `source_id` should point at the saved run session id that triggered the unlock, regardless of whether the run was indoor or outdoor.
-- Walk and ride sessions reuse the broader run/walk schema but must not award running badges.
+- Walk and other non-running sessions reuse the broader run/walk schema but must not award running badges.
 
 ## 2026-04-02 - Running pace and race-time records are computed from available session-level data
 

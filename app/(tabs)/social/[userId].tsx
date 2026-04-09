@@ -62,7 +62,6 @@ const POST_FILTERS: Array<{ key: ActivityFilter; label: string; icon?: keyof typ
   { key: 'all', label: 'All' },
   { key: 'run', label: 'Run', icon: 'walk-outline' },
   { key: 'walk', label: 'Walk', icon: 'walk-outline' },
-  { key: 'ride', label: 'Ride', icon: 'bicycle-outline' },
   { key: 'strength', label: 'Strength', icon: 'barbell-outline' },
   { key: 'nutrition', label: 'Nutrition', icon: 'nutrition-outline' },
 ];
@@ -133,7 +132,14 @@ export default function ViewProfileScreen() {
     return profile.display_name || profile.username || '';
   }, [profile]);
 
-  const goBack = () => router.back();
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace('/social');
+  }, [router]);
   const goToConnections = useCallback(
     (tab: 'followers' | 'following') => {
       if (!profile?.id) return;
@@ -484,7 +490,7 @@ export default function ViewProfileScreen() {
         return;
       }
 
-      if (post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride') {
+      if (post.activityType === 'run' || post.activityType === 'walk') {
         if (post.isOutdoorSession) {
           router.push({
             pathname: '/progress/outdoor/[id]',

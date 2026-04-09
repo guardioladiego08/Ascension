@@ -181,7 +181,7 @@ function createStyles(
 ) {
   return StyleSheet.create({
     popupCard: {
-      maxHeight: '88%',
+      maxHeight: '94%',
       gap: 0,
       overflow: 'hidden',
     },
@@ -190,7 +190,7 @@ function createStyles(
     },
     body: {
       position: 'relative',
-      minHeight: 360,
+      minHeight: 460,
       gap: 20,
     },
     section: {
@@ -251,7 +251,7 @@ function createStyles(
     overlay: {
       ...StyleSheet.absoluteFillObject,
       justifyContent: 'flex-start',
-      paddingTop: 8,
+      paddingTop: 0,
     },
     overlayBackdrop: {
       ...StyleSheet.absoluteFillObject,
@@ -264,7 +264,9 @@ function createStyles(
       borderWidth: 1,
       borderColor: HOME_TONES.border,
       backgroundColor: HOME_TONES.surface1,
-      padding: 18,
+      paddingHorizontal: 18,
+      paddingTop: 14,
+      paddingBottom: 10,
       gap: 0,
       overflow: 'hidden',
       shadowColor: '#000',

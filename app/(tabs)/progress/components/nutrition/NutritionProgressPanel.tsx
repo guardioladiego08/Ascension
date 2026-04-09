@@ -45,11 +45,8 @@ export default function NutritionProgressPanel() {
       <View style={styles.headerRow}>
         <View style={styles.headerTextWrap}>
           <Text style={styles.eyebrow}>Nutrition analytics</Text>
-          <Text style={styles.heading}>See intake, timing, and training support in one place</Text>
+          <Text style={styles.heading}>Track macros and caloric intake</Text>
           <Text style={styles.subtitle}>
-            Track calories, macros, adherence, meal timing, repeat behavior, and how
-            your nutrition lines up with cardio and strength days without leaving the
-            progress tab.
           </Text>
         </View>
 

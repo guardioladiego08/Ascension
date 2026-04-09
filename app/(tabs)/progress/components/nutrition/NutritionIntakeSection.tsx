@@ -78,30 +78,6 @@ export default function NutritionIntakeSection({
       tone: 'warning' as const,
     },
     {
-      key: 'fiber',
-      label: 'Avg Fiber',
-      value: formatGrams(summary.avgFiberG, 0),
-      detail: 'Digestion and satiety support',
-      icon: 'leaf-outline' as const,
-      tone: 'success' as const,
-    },
-    {
-      key: 'sodium',
-      label: 'Avg Sodium',
-      value: formatSodium(summary.avgSodiumMg),
-      detail: 'Average sodium intake',
-      icon: 'water-outline' as const,
-      tone: 'secondary' as const,
-    },
-    {
-      key: 'sugar',
-      label: 'Avg Sugar',
-      value: formatGrams(summary.avgSugarG, 0),
-      detail: 'Average sugar per logged day',
-      icon: 'ice-cream-outline' as const,
-      tone: 'warning' as const,
-    },
-    {
       key: 'goal-hit-days',
       label: 'Goal Hit Days',
       value: String(summary.goalHitDays),
@@ -183,7 +159,6 @@ export default function NutritionIntakeSection({
       <NutritionSectionHeader
         eyebrow="Intake"
         title="Daily intake and adherence"
-        subtitle="Use the top metric toggle to move between calories, macros, fiber, sodium, sugar, meals, and goal completion. The same time horizon drives the range-based nutrition sections below."
       />
 
       <View style={styles.chartShell}>
@@ -278,7 +253,7 @@ function createStyles(
 ) {
   return StyleSheet.create({
     section: {
-      gap: 16,
+      gap: 1,
     },
     chartShell: {
       borderRadius: 26,
@@ -286,7 +261,7 @@ function createStyles(
       borderColor: colors.border,
       backgroundColor: colors.card,
       paddingHorizontal: 16,
-      paddingVertical: 16,
+      paddingVertical: 0,
       gap: 14,
     },
     chartMetaRow: {

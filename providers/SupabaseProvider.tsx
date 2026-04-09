@@ -24,18 +24,36 @@ export const SupabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let mounted = true;
 
     // Get initial session from storage (if any)
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session ?? null);
-      if (!data.session) {
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!mounted) return;
+
+        if (error) {
+          console.warn('[SupabaseProvider] getSession failed', error);
+        }
+
+        const nextSession = data.session ?? null;
+        setSession(nextSession);
+        if (!nextSession) {
+          clearAllRunWalkLocalState().catch(() => null);
+        }
+      } catch (error) {
+        if (!mounted) return;
+        console.warn('[SupabaseProvider] getSession threw', error);
+        setSession(null);
         clearAllRunWalkLocalState().catch(() => null);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-    });
+    })();
 
     // Listen for auth state changes
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      setLoading(false);
       if (event === 'SIGNED_OUT' || !newSession) {
         clearAllRunWalkLocalState().catch(() => null);
       }

@@ -144,7 +144,7 @@ describe('useHomeDashboard', () => {
           },
           {
             ended_at: '2025-04-02T13:00:00.000Z',
-            exercise_type: 'bike',
+            exercise_type: 'elliptical',
             total_time_s: 2400,
             total_distance_m: 15000,
           },

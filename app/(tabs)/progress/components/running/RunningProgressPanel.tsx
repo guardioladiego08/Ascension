@@ -135,10 +135,9 @@ export default function RunningProgressPanel() {
       <View style={styles.headerRow}>
         <View style={styles.headerTextWrap}>
           <Text style={styles.eyebrow}>Running analytics</Text>
-          <Text style={styles.heading}>Track how each block of training moves</Text>
+          <Text style={styles.heading}>Track how you move</Text>
           <Text style={styles.subtitle}>
-            Switch the chart metric up top, then change the timeline below to compare
-            pace, distance, time, and elevation on the same surface.
+
           </Text>
         </View>
 
