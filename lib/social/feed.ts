@@ -19,6 +19,8 @@ export type SocialCounts = {
   following: number;
 };
 
+const DEBUG_SOCIAL_FEED = __DEV__;
+
 export type SocialFeedPost = {
   id: string;
   userId: string;
@@ -129,6 +131,23 @@ function isMissingDbObject(error: any): boolean {
     msg.includes('undefined column') ||
     msg.includes('schema must be one of the following')
   );
+}
+
+function isMissingColumnError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === '42703' ||
+    code === 'PGRST204' ||
+    msg.includes('undefined column') ||
+    (msg.includes('column') && msg.includes('schema cache'))
+  );
+}
+
+function logSocialFeedDebug(event: string, payload?: Record<string, unknown>) {
+  if (!DEBUG_SOCIAL_FEED) return;
+  console.log('[SocialFeedDebug]', event, payload ?? {});
 }
 
 function isRpcUnavailableError(error: any): boolean {
@@ -356,6 +375,42 @@ function coerceVisibility(value: unknown): PostVisibility {
 
 function fallbackUsername(userId: string): string {
   return `user_${String(userId).slice(0, 8)}`;
+}
+
+async function resolveDefaultPostVisibility(): Promise<PostVisibility> {
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user?.id) return 'followers';
+
+    const [{ data: userRow }, { data: profileRow }] = await Promise.all([
+      supabase
+        .schema('user')
+        .from('users')
+        .select('is_private')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .schema('public')
+        .from('profiles')
+        .select('is_private')
+        .eq('id', user.id)
+        .maybeSingle(),
+    ]);
+
+    const isPrivate =
+      typeof (userRow as any)?.is_private === 'boolean'
+        ? Boolean((userRow as any).is_private)
+        : typeof (profileRow as any)?.is_private === 'boolean'
+          ? Boolean((profileRow as any).is_private)
+          : true;
+
+    return isPrivate ? 'followers' : 'public';
+  } catch {
+    return 'followers';
+  }
 }
 
 function cleanIdentityText(value: unknown): string | null {
@@ -794,8 +849,30 @@ export async function getSocialCounts(userId: string): Promise<SocialCounts> {
   const rpcRes = await supabase.rpc('get_profile_stats_user', { p_user_id: userId });
   if (!rpcRes.error) {
     const row = Array.isArray(rpcRes.data) ? rpcRes.data[0] : rpcRes.data;
+    let posts = asInt((row as any)?.posts);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || user.id !== userId) {
+        const visibleRes = await supabase
+          .schema('social')
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+
+        if (!visibleRes.error && typeof visibleRes.count === 'number') {
+          posts = asInt(visibleRes.count);
+        }
+      }
+    } catch {
+      // Keep RPC count as fallback.
+    }
+
     return {
-      posts: asInt((row as any)?.posts),
+      posts,
       followers: asInt((row as any)?.followers),
       following: asInt((row as any)?.following),
     };
@@ -838,44 +915,150 @@ export async function getSocialFeedForUser(args: {
   const offset = Math.max(0, Math.trunc(args.offset ?? 0));
   const limit = Math.max(1, Math.min(50, Math.trunc(args.limit ?? 20)));
 
-  let query = supabase
-    .schema('social')
-    .from('posts')
-    .select(
-      'id, user_id, activity_type, source_type, source_id, session_id, title, subtitle, caption, metrics, media_urls, visibility, created_at, like_count, comment_count'
-    )
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+  const selectAttempts: { label: string; select: string }[] = [
+    {
+      label: 'full',
+      select:
+        'id, user_id, activity_type, source_type, source_id, session_id, title, subtitle, caption, metrics, media_urls, visibility, created_at, like_count, comment_count',
+    },
+    {
+      label: 'legacy_no_source_columns',
+      select:
+        'id, user_id, activity_type, title, subtitle, caption, metrics, media_urls, visibility, created_at, like_count, comment_count',
+    },
+    {
+      label: 'legacy_minimal',
+      select:
+        'id, user_id, activity_type, title, subtitle, caption, metrics, visibility, created_at, like_count, comment_count',
+    },
+  ];
 
-  if (args.activityType) {
-    query = query.eq('activity_type', args.activityType);
-  }
+  let shouldFallbackToFeedRpc = false;
+  let lastColumnError: any = null;
 
-  const postsRes = await query;
-  if (!postsRes.error) {
-    const postRows = (postsRes.data ?? []) as any[];
-    return hydrateFeedPosts(postRows);
-  }
+  for (const attempt of selectAttempts) {
+    let query = supabase
+      .schema('social')
+      .from('posts')
+      .select(attempt.select)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-  if (!isMissingDbObject(postsRes.error)) {
+    if (args.activityType) {
+      query = query.eq('activity_type', args.activityType);
+    }
+
+    const postsRes = await query;
+    if (!postsRes.error) {
+      const postRows = (postsRes.data ?? []) as any[];
+      const rawActivityTypeCounts: Record<string, number> = {};
+      for (const row of postRows) {
+        const key = String((row as any).activity_type ?? 'unknown');
+        rawActivityTypeCounts[key] = (rawActivityTypeCounts[key] ?? 0) + 1;
+      }
+      logSocialFeedDebug('user_posts_direct_success', {
+        userId,
+        offset,
+        limit,
+        attempt: attempt.label,
+        rawCount: postRows.length,
+        rawActivityTypeCounts,
+      });
+      return hydrateFeedPosts(postRows);
+    }
+
+    if (isMissingColumnError(postsRes.error)) {
+      lastColumnError = postsRes.error;
+      logSocialFeedDebug('user_posts_direct_missing_column', {
+        userId,
+        attempt: attempt.label,
+        code: postsRes.error?.code ?? null,
+        message: postsRes.error?.message ?? null,
+      });
+      continue;
+    }
+
+    if (isMissingDbObject(postsRes.error)) {
+      shouldFallbackToFeedRpc = true;
+      logSocialFeedDebug('user_posts_direct_missing_db_object', {
+        userId,
+        attempt: attempt.label,
+        code: postsRes.error?.code ?? null,
+        message: postsRes.error?.message ?? null,
+      });
+      break;
+    }
+
     throw postsRes.error;
   }
 
-  // Fallback when `social` schema is not exposed: derive from feed RPC and filter by user.
+  if (!shouldFallbackToFeedRpc && lastColumnError) {
+    throw lastColumnError;
+  }
+
+  const profileRpcRes = await supabase.rpc('get_profile_feed_user', {
+    p_user_id: userId,
+    p_limit: limit,
+    p_offset: offset,
+    p_activity_type: args.activityType ?? null,
+  });
+  if (!profileRpcRes.error) {
+    const postRows = (profileRpcRes.data ?? []) as any[];
+    logSocialFeedDebug('user_posts_profile_rpc_success', {
+      userId,
+      offset,
+      limit,
+      rawCount: postRows.length,
+      activityType: args.activityType ?? null,
+    });
+    const withMeta = await mergePostSourceMetadata(postRows);
+    return hydrateFeedPosts(withMeta);
+  }
+  if (!isMissingDbObject(profileRpcRes.error) && !isRpcUnavailableError(profileRpcRes.error)) {
+    logSocialFeedDebug('user_posts_profile_rpc_failed', {
+      userId,
+      code: profileRpcRes.error?.code ?? null,
+      message: profileRpcRes.error?.message ?? null,
+    });
+  } else {
+    logSocialFeedDebug('user_posts_profile_rpc_unavailable', {
+      userId,
+      code: profileRpcRes.error?.code ?? null,
+      message: profileRpcRes.error?.message ?? null,
+    });
+  }
+
+  // Final fallback when neither direct profile query nor profile feed RPC is available:
+  // derive from follow-feed RPC and filter by user.
   const fetchLimit = Math.max(50, Math.min(500, (offset + limit) * 3));
   const rpcRes = await supabase.rpc('get_feed_user', {
     p_limit: fetchLimit,
     p_offset: 0,
     p_activity_type: args.activityType ?? null,
   });
-  if (rpcRes.error) return [];
+  if (rpcRes.error) {
+    logSocialFeedDebug('user_posts_rpc_fallback_failed', {
+      userId,
+      code: rpcRes.error?.code ?? null,
+      message: rpcRes.error?.message ?? null,
+    });
+    return [];
+  }
 
-  const filtered = ((rpcRes.data ?? []) as any[])
+  const fallbackRows = (rpcRes.data ?? []) as any[];
+  const fallbackFiltered = fallbackRows
     .filter((row) => String(row.user_id) === userId)
     .slice(offset, offset + limit);
+  logSocialFeedDebug('user_posts_rpc_fallback_success', {
+    userId,
+    fetchLimit,
+    fallbackRows: fallbackRows.length,
+    filteredRows: fallbackFiltered.length,
+    activityType: args.activityType ?? null,
+  });
 
-  const withMeta = await mergePostSourceMetadata(filtered);
+  const withMeta = await mergePostSourceMetadata(fallbackFiltered);
   return hydrateFeedPosts(withMeta);
 }
 
@@ -933,7 +1116,7 @@ export async function shareRunWalkSessionToFeed(args: {
   visibility?: PostVisibility;
 }): Promise<string> {
   const activityType = mapRunWalkExerciseTypeToActivityType(args.exerciseType);
-  const visibility = args.visibility ?? 'followers';
+  const visibility = args.visibility ?? (await resolveDefaultPostVisibility());
   const sessionUuid = asUuidOrNull(args.sessionId);
   const rpcSessionId = sessionUuid ?? stableUuidFromRef(String(args.sessionId ?? ''));
 
@@ -979,7 +1162,7 @@ export async function shareStrengthWorkoutToFeed(args: {
   caption?: string | null;
   visibility?: PostVisibility;
 }): Promise<string> {
-  const visibility = args.visibility ?? 'followers';
+  const visibility = args.visibility ?? (await resolveDefaultPostVisibility());
   const workoutUuid = asUuidOrNull(args.workoutId);
   const fallbackRpcId = workoutUuid ?? stableUuidFromRef(String(args.workoutId ?? ''));
   const muscleProfile = workoutUuid

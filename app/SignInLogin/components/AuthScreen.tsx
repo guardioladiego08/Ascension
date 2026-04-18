@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useAuthDesignSystem } from '../designSystem';
 
 type AuthScreenProps = {
@@ -54,6 +55,7 @@ export default function AuthScreen({
   backgroundImage,
 }: AuthScreenProps) {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts } = useAppTheme();
   const ui = useAuthDesignSystem();
   const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
@@ -76,7 +78,10 @@ export default function AuthScreen({
       return;
     }
 
-    router.back();
+    goBackSmart({
+      fallbackHref: '/SignInLogin/FirstPage',
+      fallbackReplace: backReplace,
+    });
   };
 
   const header = (

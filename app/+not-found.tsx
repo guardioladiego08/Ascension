@@ -9,10 +9,12 @@ import * as React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 export default function NotFoundScreen() {
   const router = useRouter();
   const segments = useSegments(); // purely informational
+  const { goBackSmart } = useSmartBack();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -25,7 +27,10 @@ export default function NotFoundScreen() {
           <Text style={styles.infoText}>Segments: {Array.isArray(segments) ? segments.join(' / ') : 'n/a'}</Text>
         </View>
 
-        <TouchableOpacity style={styles.btn} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() => goBackSmart({ fallbackHref: '/(tabs)/home' })}
+        >
           <Text style={styles.btnText}>Go Back</Text>
         </TouchableOpacity>
 

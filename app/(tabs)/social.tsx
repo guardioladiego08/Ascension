@@ -220,7 +220,7 @@ export default function Social() {
         if (post.isOutdoorSession) {
           router.push({
             pathname: '/progress/outdoor/[id]',
-            params: { id: post.sessionId },
+            params: { id: post.sessionId, postId: post.id },
           });
           return;
         }

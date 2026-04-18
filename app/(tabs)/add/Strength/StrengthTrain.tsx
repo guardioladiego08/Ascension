@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LogoHeader from '@/components/my components/logoHeader';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useUnits } from '@/contexts/UnitsContext';
 import {
   applyStrengthRestTimerPreference,
@@ -106,6 +107,7 @@ type WorkoutBlockExerciseRow = {
 };
 
 export default function StrengthTrain() {
+  const { goBackSmart } = useSmartBack();
   const params = useLocalSearchParams<{
     sessionMode?: string;
     templateId?: string;
@@ -422,11 +424,7 @@ export default function StrengthTrain() {
             'Session in progress',
             `You already have an active ${sessionLabel} session. Finish or cancel it before starting a strength workout.`
           );
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace(HOME_ROUTE);
-          }
+          goBackSmart({ fallbackHref: HOME_ROUTE });
           return;
         }
 
@@ -553,11 +551,7 @@ export default function StrengthTrain() {
           'Error starting workout',
           err?.message ?? 'Failed to start workout. Please sign in again.'
         );
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace(HOME_ROUTE);
-        }
+        goBackSmart({ fallbackHref: HOME_ROUTE });
       }
     })();
 
@@ -640,11 +634,7 @@ export default function StrengthTrain() {
         'Could not start workout',
         'Session setup took too long. Please try again.'
       );
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace(HOME_ROUTE);
-      }
+      goBackSmart({ fallbackHref: HOME_ROUTE });
     }, STARTUP_STALL_TIMEOUT_MS);
 
     return () => clearTimeout(timer);

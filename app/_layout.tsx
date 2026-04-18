@@ -13,6 +13,7 @@ import { UnitsProvider } from '@/contexts/UnitsContext';
 import { SupabaseProvider } from '@/providers/SupabaseProvider';
 import { ActiveRunWalkProvider } from '@/providers/ActiveRunWalkProvider';
 import { AppThemeProvider } from '@/providers/AppThemeProvider';
+import { NavigationHistoryProvider } from '@/providers/NavigationHistoryProvider';
 import { FontAssets } from '@/constants/Fonts';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
@@ -36,7 +37,9 @@ export default function RootLayout() {
             <BottomSheetModalProvider>
               <SupabaseProvider>
                 <ActiveRunWalkProvider>
-                  <Stack screenOptions={{ headerShown: false }} />
+                  <NavigationHistoryProvider>
+                    <Stack screenOptions={{ headerShown: false }} />
+                  </NavigationHistoryProvider>
                 </ActiveRunWalkProvider>
                 <StatusBar style="light" />
               </SupabaseProvider>

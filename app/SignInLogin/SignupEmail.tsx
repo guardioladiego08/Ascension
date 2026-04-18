@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   StyleSheet,
   Text,
@@ -15,8 +14,6 @@ import AuthScreen from './components/AuthScreen';
 import AuthButton from './components/AuthButton';
 import AuthField from './components/AuthField';
 import AppAlert from './components/AppAlert';
-import { sanitizeUsername } from '@/lib/auth/bootstrapIdentity';
-import { checkSignupUsernameAvailability } from '@/lib/auth/usernameAvailability';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useAuthDesignSystem } from './designSystem';
@@ -28,11 +25,8 @@ export default function SignupEmail() {
   const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
   const [email, setEmail] = useState('');
-  const [usernameInput, setUsernameInput] = useState('');
   const [password, setPassword] = useState('');
   const [loadingEmail, setLoadingEmail] = useState(false);
-  const [checkingUsername, setCheckingUsername] = useState(false);
-  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
 
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
@@ -55,115 +49,22 @@ export default function SignupEmail() {
     }
   };
 
-  const usernameSanitized = useMemo(() => sanitizeUsername(usernameInput), [usernameInput]);
-
-  const checkUsernameAvailability = useCallback(async () => {
-    Keyboard.dismiss();
-
-    const desired = usernameSanitized;
-    if (!desired) return;
-
-    if (desired.length < 3) {
-      setUsernameAvailable(false);
-      showAlert('Invalid username', 'Username must be at least 3 characters.');
-      return;
-    }
-
-    setCheckingUsername(true);
-    setUsernameAvailable(null);
-
-    const { available, error: availabilityError } =
-      await checkSignupUsernameAvailability(desired);
-    setCheckingUsername(false);
-
-    if (available !== null) {
-      setUsernameAvailable(available);
-      return;
-    }
-
-    if (availabilityError) {
-      console.log('username check error', availabilityError);
-      const code = (availabilityError as any)?.code;
-      if (code === '42501') {
-        showAlert(
-          'Username check blocked',
-          'Your database RLS is preventing username checks. Create or apply the SECURITY DEFINER username-availability RPC before testing signup.'
-        );
-        return;
-      }
-
-      if (
-        code === '42P01' ||
-        code === 'PGRST106' ||
-        code === 'PGRST200' ||
-        code === 'PGRST205'
-      ) {
-        showAlert(
-          'Username check unavailable',
-          'The connected Supabase project is missing the canonical username-availability RPC or legacy lookup tables.'
-        );
-        return;
-      }
-
-      showAlert('Error', 'Could not check username right now.');
-      return;
-    }
-  }, [usernameSanitized]);
-
   const handleEmailSignup = useCallback(async () => {
     Keyboard.dismiss();
 
     const emailTrim = email.trim();
     const passwordTrim = password.trim();
-    const usernameTrim = usernameSanitized;
 
-    if (!emailTrim || !passwordTrim || !usernameTrim) {
-      showAlert('Missing info', 'Please enter email, username, and password.');
+    if (!emailTrim || !passwordTrim) {
+      showAlert('Missing info', 'Please enter email and password.');
       return;
-    }
-
-    if (usernameTrim.length < 3) {
-      showAlert('Invalid username', 'Username must be at least 3 characters.');
-      return;
-    }
-
-    setCheckingUsername(true);
-    try {
-      const { available, error: availabilityError } =
-        await checkSignupUsernameAvailability(usernameTrim);
-
-      if (available !== true) {
-        setUsernameAvailable(available);
-
-        if (available === false) {
-          showAlert('Username taken', 'Please choose a different username.');
-          return;
-        }
-
-        console.log('username check error (during signup)', availabilityError);
-        showAlert(
-          'Could not verify username',
-          'Please verify the username before creating the account.'
-        );
-        return;
-      }
-
-      setUsernameAvailable(true);
-    } finally {
-      setCheckingUsername(false);
     }
 
     setLoadingEmail(true);
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: emailTrim,
       password: passwordTrim,
-      options: {
-        data: {
-          username: usernameTrim,
-          display_name: usernameTrim,
-        },
-      },
     });
 
     setLoadingEmail(false);
@@ -171,34 +72,10 @@ export default function SignupEmail() {
     if (error) {
       console.log('[SignupEmail] sign up failed', {
         message: error.message,
-        username: usernameTrim,
+        email: emailTrim,
       });
 
-      if (error.message === 'Database error saving new user') {
-        const { available } = await checkSignupUsernameAvailability(usernameTrim);
-        if (available === false) {
-          setUsernameAvailable(false);
-          showAlert('Username taken', 'Please choose a different username.');
-          return;
-        }
-
-        showAlert(
-          'Sign up failed',
-          'We could not finish creating your account. Try a different username, and if the problem continues, apply the latest Supabase signup auth-trigger hardening migration on the connected project.'
-        );
-        return;
-      }
-
       showAlert('Sign up failed', error.message);
-      return;
-    }
-
-    const userId = data.user?.id;
-    if (!userId) {
-      showAlert(
-        'Error',
-        'Account was created, but we did not receive an ID. Please try again.'
-      );
       return;
     }
 
@@ -209,7 +86,7 @@ export default function SignupEmail() {
         router.replace({ pathname: '/SignInLogin/Login', params: { email: emailTrim } });
       }
     );
-  }, [email, password, usernameSanitized, router]);
+  }, [email, password, router]);
 
   const handleOpenTerms = useCallback(() => {
     WebBrowser.openBrowserAsync('https://tensrfitness.com/terms-of-service/');
@@ -236,53 +113,6 @@ export default function SignupEmail() {
           />
         </AuthField>
 
-        <AuthField label="Username">
-          <View style={styles.usernameRow}>
-            <TextInput
-              value={usernameInput}
-              onChangeText={(value) => {
-                setUsernameInput(value);
-                setUsernameAvailable(null);
-              }}
-              autoCapitalize="none"
-              placeholder="my_username"
-              placeholderTextColor={colors.textMuted}
-              style={[styles.input, styles.usernameInput]}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.inlineButton,
-                (checkingUsername || !usernameInput.trim()) && styles.inlineButtonDisabled,
-              ]}
-              onPress={checkUsernameAvailability}
-              disabled={checkingUsername || !usernameInput.trim()}
-              activeOpacity={0.92}
-            >
-              {checkingUsername ? (
-                <ActivityIndicator color={colors.blkText} />
-              ) : (
-                <Text style={styles.inlineButtonText}>Check</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </AuthField>
-
-        {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() ? (
-          <Text style={styles.helperText}>
-            Saved as <Text style={styles.helperValue}>{usernameSanitized}</Text>
-          </Text>
-        ) : null}
-
-        {usernameAvailable === true ? (
-          <Text style={[styles.helperText, styles.helperSuccess]}>Username is available.</Text>
-        ) : null}
-        {usernameAvailable === false ? (
-          <Text style={[styles.helperText, styles.helperDanger]}>
-            Username is already taken.
-          </Text>
-        ) : null}
-
         <AuthField label="Password">
           <TextInput
             value={password}
@@ -297,7 +127,6 @@ export default function SignupEmail() {
         <AuthButton
           label="Create account"
           onPress={handleEmailSignup}
-          disabled={checkingUsername}
           loading={loadingEmail}
         />
 
@@ -336,50 +165,8 @@ function createStyles(
     card: {
       ...ui.fragments.card,
     },
-    usernameRow: {
-      flexDirection: 'row',
-      gap: 10,
-      alignItems: 'center',
-    },
     input: {
       ...ui.fragments.input,
-    },
-    usernameInput: {
-      flex: 1,
-    },
-    inlineButton: {
-      minWidth: 96,
-      minHeight: 56,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: ui.tones.accentStrong,
-      paddingHorizontal: 16,
-    },
-    inlineButtonDisabled: {
-      opacity: 0.62,
-    },
-    inlineButtonText: {
-      color: colors.blkText,
-      fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
-    },
-    helperText: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    helperValue: {
-      color: colors.text,
-      fontFamily: fonts.heading,
-    },
-    helperSuccess: {
-      color: colors.success,
-    },
-    helperDanger: {
-      color: colors.danger,
     },
     termsNote: {
       color: colors.textMuted,

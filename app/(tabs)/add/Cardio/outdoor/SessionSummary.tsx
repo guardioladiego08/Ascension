@@ -454,7 +454,6 @@ export default function SessionSummary() {
           totalTimeS: elapsedSeconds,
           avgPaceSPerMi: avgPacePerMi,
           avgPaceSPerKm: avgPace,
-          visibility: 'followers',
         });
 
         setSharedToFeed(true);

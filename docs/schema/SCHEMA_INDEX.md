@@ -23,6 +23,8 @@ Use it to find:
 - Current strength template compatibility note: hosted projects also need `20260401_strength_template_schema_cache_refresh.sql` after the template-table rollout so PostgREST reloads the `strength.workout_templates*` relations into its schema cache and the app stops hitting `PGRST205`.
 - Current exercise catalog note: `public.exercises.core_movement` stores canonical snake_case movement families, while `body_part_weights` is the source-of-truth muscle activation JSON and `body_parts` remains a derived compatibility column.
 - Current strength social note: strength social/profile previews now derive an 8-axis normalized `muscle_profile` from `public.exercises.body_part_weights`, and other-user profile activity cards should page through `public.list_visible_strength_activity_cards_user(...)` instead of direct `strength.strength_workouts` reads.
+- Current profile feed visibility note: hosted projects that do not expose the `social` schema need `public.get_profile_feed_user(...)` so non-followed public profiles can still return visible posts; `get_feed_user(...)` remains follow-feed scoped.
+- Current run/walk summary note: indoor and outdoor detail screens should prefer visibility-safe RPCs (`get_run_walk_session_summary_user`, `get_outdoor_session_summary_user`) so own and shared session views use aligned summary sources even when direct `run_walk` table reads are owner-only.
 - Current account-deletion note: hosted projects need the 2026-03-29 delete-safety trigger migration plus the deferred `workout_block_exercises.exercise_id` FK migration so account deletion can remove user-owned exercises and workout structures in one transaction.
 - Current signup note: username availability must be checked against the canonical bootstrap stores (`"user".users` and `public.profiles`) rather than only legacy lookup tables, otherwise Auth signup can fail with a generic database-save error.
 - Current signup bootstrap note: hosted projects also need `public.profiles` onboarding/privacy compatibility columns plus safe defaults on `"user".users` for auth-trigger bootstrap rows, otherwise signup can fail before the app ever gets a session.
@@ -48,6 +50,8 @@ Use it to find:
   - `supabase/migrations/20260401_strength_template_schema_cache_refresh.sql`
   - `supabase/migrations/20260402_strength_muscle_profile_radar_support.sql`
   - `supabase/migrations/20260402_user_preferences_account_synced_settings.sql`
+  - `supabase/migrations/20260410_profile_feed_visibility_rpc.sql`
+  - `supabase/migrations/20260410_run_walk_summary_source_parity.sql`
 
 ### Badges
 

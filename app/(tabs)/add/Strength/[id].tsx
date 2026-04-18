@@ -44,6 +44,7 @@ import {
   coerceStrengthMuscleProfile,
   type StrengthMuscleProfile,
 } from '@/lib/strength/muscleProfile';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { saveStrengthWorkoutTemplateFromWorkout } from '@/lib/strength/templates';
 import type { StrengthSessionMode } from '@/lib/strength/types';
 import { useAppTheme } from '@/providers/AppThemeProvider';
@@ -164,6 +165,7 @@ function formatTimelineLabel(totalSeconds: number): string {
 
 export default function StrengthSummaryPage() {
   const { colors, fonts, globalStyles } = useAppTheme();
+  const { goBackSmart } = useSmartBack();
   const styles = React.useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { activeSession, clearSession } = useActiveRunWalk();
   const {
@@ -210,13 +212,8 @@ export default function StrengthSummaryPage() {
     sessionModeParam === 'template' ? 'template' : 'freestyle';
 
   const handleBackNavigation = React.useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace(openedFromSocial ? '/social' : HOME_ROUTE);
-  }, [openedFromSocial]);
+    goBackSmart({ fallbackHref: openedFromSocial ? '/social' : HOME_ROUTE });
+  }, [goBackSmart, openedFromSocial]);
 
   React.useEffect(() => {
     if (!id) {
@@ -827,7 +824,6 @@ export default function StrengthSummaryPage() {
         totalSets,
         exerciseCount: exercises.length,
         durationS: durationSeconds,
-        visibility: 'followers',
       });
       Alert.alert('Shared', 'Workout saved and posted to your social feed.');
       router.replace(HOME_ROUTE);

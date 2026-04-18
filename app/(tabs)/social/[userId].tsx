@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ScrollView,
-  FlatList,
   View,
   Text,
   StyleSheet,
@@ -15,9 +14,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import BadgeUnlockStrip from '@/components/badges/BadgeUnlockStrip';
 import LogoHeader from '@/components/my components/logoHeader';
-import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import ProfileHeaderSection, {
@@ -27,9 +24,8 @@ import ProfileHeaderSection, {
 import LifetimeStatsTable from '../profile/components/LifetimeStatsTable';
 import ActivityGrid from '../profile/components/ActivityGrid';
 
-import { getRecentBadgeUnlocks } from '@/lib/badges/api';
-import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { supabase } from '@/lib/supabase';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   getMyUserId,
   getPublicProfileByUserId,
@@ -39,32 +35,16 @@ import {
   type PublicProfile,
   type FollowStatus,
 } from '@/lib/social/api';
-import {
-  getSocialCounts,
-  getSocialFeedForUser,
-  togglePostLike,
-  type SocialActivityType,
-  type SocialFeedPost,
-} from '@/lib/social/feed';
+import { getSocialCounts } from '@/lib/social/feed';
 import {
   computeRings,
   type DailyGoalResults,
   type Rings,
 } from '@/lib/goals/goalLogic';
-import SocialPostCard from './components/SocialPostCard';
 
-const POSTS_PAGE_SIZE = 12;
+type DetailTab = 'stats' | 'lifetime' | 'calendar';
 
-type DetailTab = 'posts' | 'stats' | 'lifetime' | 'calendar';
-type ActivityFilter = 'all' | SocialActivityType;
-
-const POST_FILTERS: Array<{ key: ActivityFilter; label: string; icon?: keyof typeof Ionicons.glyphMap }> = [
-  { key: 'all', label: 'All' },
-  { key: 'run', label: 'Run', icon: 'walk-outline' },
-  { key: 'walk', label: 'Walk', icon: 'walk-outline' },
-  { key: 'strength', label: 'Strength', icon: 'barbell-outline' },
-  { key: 'nutrition', label: 'Nutrition', icon: 'nutrition-outline' },
-];
+const DEBUG_VISITOR_PROFILE = __DEV__;
 
 function formatSupabaseErr(err: any) {
   if (!err) return 'Unknown error';
@@ -78,25 +58,27 @@ function formatSupabaseErr(err: any) {
 
 export default function ViewProfileScreen() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
-  const { distanceUnit, weightUnit } = useUnits();
   const params = useLocalSearchParams();
 
   const userIdParam =
     typeof params.userId === 'string'
       ? params.userId
       : Array.isArray(params.userId)
-      ? params.userId[0]
-      : '';
+        ? params.userId[0]
+        : '';
 
-  const [detailTab, setDetailTab] = useState<DetailTab>('posts');
+  const logDebug = useCallback((event: string, payload?: Record<string, unknown>) => {
+    if (!DEBUG_VISITOR_PROFILE) return;
+    console.log('[ViewProfileDebug]', event, payload ?? {});
+  }, []);
 
+  const [detailTab, setDetailTab] = useState<DetailTab>('stats');
   const [meId, setMeId] = useState<string | null>(null);
 
-  // This comes from your RPC (get_profile_card) via getPublicProfileByUserId()
   const [profile, setProfile] = useState<PublicProfile | null>(null);
-
   const [stats, setStats] = useState<ProfileStats>({ posts: 0, followers: 0, following: 0 });
 
   const [loading, setLoading] = useState(true);
@@ -105,118 +87,129 @@ export default function ViewProfileScreen() {
   const [followStatus, setFollowStatus] = useState<FollowStatus>('none');
   const [followBusy, setFollowBusy] = useState(false);
 
-  // Calendar state (in case RLS blocks goal reads, we show a gentle message)
   const [goalsBlocked, setGoalsBlocked] = useState(false);
 
-  // Posts tab state
-  const [postFilter, setPostFilter] = useState<ActivityFilter>('all');
-  const [posts, setPosts] = useState<SocialFeedPost[]>([]);
-  const [postExpandedIds, setPostExpandedIds] = useState<Record<string, boolean>>({});
-  const [postsLoading, setPostsLoading] = useState(false);
-  const [postsRefreshing, setPostsRefreshing] = useState(false);
-  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
-  const [postsHasMore, setPostsHasMore] = useState(true);
-  const [postsError, setPostsError] = useState<string | null>(null);
-  const [strengthBadges, setStrengthBadges] = useState<BadgeUnlockItem[]>([]);
-  const [strengthBadgesLoading, setStrengthBadgesLoading] = useState(false);
-  const [strengthBadgesError, setStrengthBadgesError] = useState<string | null>(null);
-  const [runningBadges, setRunningBadges] = useState<BadgeUnlockItem[]>([]);
-  const [runningBadgesLoading, setRunningBadgesLoading] = useState(false);
-  const [runningBadgesError, setRunningBadgesError] = useState<string | null>(null);
-  const [nutritionBadges, setNutritionBadges] = useState<BadgeUnlockItem[]>([]);
-  const [nutritionBadgesLoading, setNutritionBadgesLoading] = useState(false);
-  const [nutritionBadgesError, setNutritionBadgesError] = useState<string | null>(null);
+  const usernameText = useMemo(() => {
+    if (!profile) return '';
+    if (profile.username && profile.username.trim().length > 0) return profile.username;
+    return `user_${profile.id.slice(0, 8)}`;
+  }, [profile]);
 
   const fullName = useMemo(() => {
     if (!profile) return '';
-    return profile.display_name || profile.username || '';
-  }, [profile]);
+    return profile.display_name || usernameText;
+  }, [profile, usernameText]);
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
+    goBackSmart({ fallbackHref: '/social' });
+  }, [goBackSmart]);
 
-    router.replace('/social');
-  }, [router]);
   const goToConnections = useCallback(
     (tab: 'followers' | 'following') => {
       if (!profile?.id) return;
       router.push({
         pathname: '/social/connections',
-        params: { userId: profile.id, tab, username: profile.username },
+        params: { userId: profile.id, tab, username: usernameText },
       });
     },
-    [profile?.id, profile?.username, router]
+    [profile?.id, router, usernameText]
   );
 
-  // 1) Load viewer id
   useEffect(() => {
+    logDebug('route_params', { userIdParam });
     getMyUserId()
-      .then((id) => setMeId(id))
-      .catch(() => setMeId(null));
-  }, []);
+      .then((id) => {
+        setMeId(id);
+        logDebug('viewer_loaded', { meId: id });
+      })
+      .catch((err) => {
+        setMeId(null);
+        logDebug('viewer_load_failed', { message: err?.message ?? String(err ?? '') });
+      });
+  }, [logDebug, userIdParam]);
 
-  // 2) Load profile card via RPC-friendly API (avoids RLS headaches on public.profiles)
   const loadProfile = useCallback(async () => {
     if (!userIdParam) return;
+
     try {
       setLoading(true);
       setErrorText(null);
+      logDebug('profile_load_start', { userIdParam });
 
       const p = await getPublicProfileByUserId(userIdParam);
       if (!p) {
         setProfile(null);
         setErrorText('User not found');
+        logDebug('profile_load_empty', { userIdParam });
         return;
       }
 
       setProfile(p);
+      logDebug('profile_loaded', {
+        profileId: p.id,
+        username: p.username,
+        isPrivate: p.is_private,
+      });
 
       try {
         const socialCounts = await getSocialCounts(p.id);
         setStats(socialCounts);
+        logDebug('profile_counts_loaded', {
+          profileId: p.id,
+          posts: socialCounts.posts,
+          followers: socialCounts.followers,
+          following: socialCounts.following,
+        });
       } catch (countErr) {
         console.warn('[ViewProfile] social counts unavailable', countErr);
         setStats({ posts: 0, followers: 0, following: 0 });
+        logDebug('profile_counts_failed', {
+          profileId: p.id,
+          message: (countErr as any)?.message ?? String(countErr ?? ''),
+        });
       }
     } catch (err: any) {
       console.error('[ViewProfile] loadProfile failed', err);
       setProfile(null);
       setErrorText(formatSupabaseErr(err));
+      logDebug('profile_load_failed', {
+        userIdParam,
+        code: err?.code ?? null,
+        message: err?.message ?? String(err ?? ''),
+      });
     } finally {
       setLoading(false);
+      logDebug('profile_load_done', { userIdParam });
     }
-  }, [userIdParam]);
+  }, [logDebug, userIdParam]);
 
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
 
-  // 3) Load follow status once we know meId + profile.id
   const refreshFollowStatus = useCallback(async () => {
     if (!meId || !profile?.id) return;
     if (meId === profile.id) {
       setFollowStatus('none');
+      logDebug('follow_status_self_profile', { meId, profileId: profile.id });
       return;
     }
+
     try {
+      logDebug('follow_status_load_start', { meId, profileId: profile.id });
       const s = await getFollowStatus(meId, profile.id);
       setFollowStatus(s);
+      logDebug('follow_status_loaded', { meId, profileId: profile.id, followStatus: s });
     } catch {
       setFollowStatus('none');
+      logDebug('follow_status_failed', { meId, profileId: profile.id });
     }
-  }, [meId, profile?.id]);
+  }, [logDebug, meId, profile?.id]);
 
   useEffect(() => {
     refreshFollowStatus();
   }, [refreshFollowStatus]);
 
-  // Can we show the “full” profile content?
-  // - Public profiles: yes
-  // - Private profiles: only if followStatus === 'accepted'
-  // - If viewing own profile through this route: yes (rare, but safe)
   const canViewContent = useMemo(() => {
     if (!profile) return false;
     if (meId && profile.id === meId) return true;
@@ -224,295 +217,38 @@ export default function ViewProfileScreen() {
     return followStatus === 'accepted';
   }, [profile, meId, followStatus]);
 
-  const loadPostsFirstPage = useCallback(async () => {
-    if (!profile?.id || !canViewContent) {
-      setPosts([]);
-      setPostsHasMore(false);
-      setPostsLoading(false);
-      setPostsRefreshing(false);
-      setPostsLoadingMore(false);
-      return;
-    }
-
-    setPostsLoading(true);
-    setPostsError(null);
-
-    try {
-      const rows = await getSocialFeedForUser({
-        userId: profile.id,
-        offset: 0,
-        limit: POSTS_PAGE_SIZE,
-        activityType: postFilter === 'all' ? null : postFilter,
-      });
-      setPosts(rows);
-      setPostsHasMore(rows.length === POSTS_PAGE_SIZE);
-      setPostExpandedIds({});
-    } catch (err: any) {
-      console.error('[ViewProfile] load posts failed', err);
-      setPosts([]);
-      setPostsHasMore(false);
-      setPostsError(formatSupabaseErr(err));
-    } finally {
-      setPostsLoading(false);
-      setPostsRefreshing(false);
-    }
-  }, [canViewContent, postFilter, profile?.id]);
+  const profileVisibilityRefreshToken = useMemo(() => {
+    const followToken =
+      followStatus === 'accepted' ? 2 : followStatus === 'requested' ? 1 : 0;
+    const privateToken = profile?.is_private ? 100 : 0;
+    return followToken + privateToken;
+  }, [followStatus, profile?.is_private]);
 
   useEffect(() => {
-    if (detailTab !== 'posts') return;
-    loadPostsFirstPage();
-  }, [detailTab, loadPostsFirstPage]);
+    logDebug('visibility_eval', {
+      profileId: profile?.id ?? null,
+      meId: meId ?? null,
+      isPrivate: profile?.is_private ?? null,
+      followStatus,
+      canViewContent,
+      detailTab,
+      loading,
+      hasError: !!errorText,
+    });
+  }, [
+    canViewContent,
+    detailTab,
+    errorText,
+    followStatus,
+    loading,
+    logDebug,
+    meId,
+    profile?.id,
+    profile?.is_private,
+  ]);
 
-  useEffect(() => {
-    if (!profile?.id || !canViewContent) {
-      setStrengthBadges([]);
-      setStrengthBadgesLoading(false);
-      setStrengthBadgesError(null);
-      return;
-    }
-
-    let isActive = true;
-
-    (async () => {
-      try {
-        setStrengthBadgesLoading(true);
-        setStrengthBadgesError(null);
-
-        const rows = await getRecentBadgeUnlocks({
-          domain: 'strength',
-          userId: profile.id,
-          limit: 8,
-        });
-
-        if (!isActive) return;
-        setStrengthBadges(rows);
-      } catch (error: any) {
-        console.warn('[ViewProfile] recent badge load failed', error);
-        if (!isActive) return;
-        setStrengthBadges([]);
-        setStrengthBadgesError(error?.message ?? 'Could not load recent strength badges.');
-      } finally {
-        if (isActive) {
-          setStrengthBadgesLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      isActive = false;
-    };
-  }, [canViewContent, profile?.id]);
-
-  useEffect(() => {
-    if (!profile?.id || !canViewContent) {
-      setRunningBadges([]);
-      setRunningBadgesLoading(false);
-      setRunningBadgesError(null);
-      return;
-    }
-
-    let isActive = true;
-
-    (async () => {
-      try {
-        setRunningBadgesLoading(true);
-        setRunningBadgesError(null);
-
-        const rows = await getRecentBadgeUnlocks({
-          domain: 'running',
-          userId: profile.id,
-          limit: 8,
-        });
-
-        if (!isActive) return;
-        setRunningBadges(rows);
-      } catch (error: any) {
-        console.warn('[ViewProfile] recent running badge load failed', error);
-        if (!isActive) return;
-        setRunningBadges([]);
-        setRunningBadgesError(error?.message ?? 'Could not load recent running badges.');
-      } finally {
-        if (isActive) {
-          setRunningBadgesLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      isActive = false;
-    };
-  }, [canViewContent, profile?.id]);
-
-  useEffect(() => {
-    if (!profile?.id || !canViewContent) {
-      setNutritionBadges([]);
-      setNutritionBadgesLoading(false);
-      setNutritionBadgesError(null);
-      return;
-    }
-
-    let isActive = true;
-
-    (async () => {
-      try {
-        setNutritionBadgesLoading(true);
-        setNutritionBadgesError(null);
-
-        const rows = await getRecentBadgeUnlocks({
-          domain: 'nutrition',
-          userId: profile.id,
-          limit: 8,
-        });
-
-        if (!isActive) return;
-        setNutritionBadges(rows);
-      } catch (error: any) {
-        console.warn('[ViewProfile] recent nutrition badge load failed', error);
-        if (!isActive) return;
-        setNutritionBadges([]);
-        setNutritionBadgesError(error?.message ?? 'Could not load recent nutrition badges.');
-      } finally {
-        if (isActive) {
-          setNutritionBadgesLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      isActive = false;
-    };
-  }, [canViewContent, profile?.id]);
-
-  const onRefreshPosts = useCallback(async () => {
-    setPostsRefreshing(true);
-    await loadPostsFirstPage();
-  }, [loadPostsFirstPage]);
-
-  const onLoadMorePosts = useCallback(async () => {
-    if (!profile?.id || postsLoading || postsLoadingMore || postsRefreshing || !postsHasMore) return;
-
-    setPostsLoadingMore(true);
-    try {
-      const rows = await getSocialFeedForUser({
-        userId: profile.id,
-        offset: posts.length,
-        limit: POSTS_PAGE_SIZE,
-        activityType: postFilter === 'all' ? null : postFilter,
-      });
-
-      setPosts((prev) => {
-        const seen = new Set(prev.map((p) => p.id));
-        const merged = [...prev];
-        for (const row of rows) {
-          if (!seen.has(row.id)) {
-            seen.add(row.id);
-            merged.push(row);
-          }
-        }
-        return merged;
-      });
-
-      setPostsHasMore(rows.length === POSTS_PAGE_SIZE);
-    } catch (err: any) {
-      console.error('[ViewProfile] load more posts failed', err);
-      setPostsError(formatSupabaseErr(err));
-    } finally {
-      setPostsLoadingMore(false);
-    }
-  }, [postFilter, posts.length, postsHasMore, postsLoading, postsLoadingMore, postsRefreshing, profile?.id]);
-
-  const onTogglePostLike = useCallback(async (post: SocialFeedPost) => {
-    const nextLiked = !post.isLikedByMe;
-
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === post.id
-          ? {
-              ...p,
-              isLikedByMe: nextLiked,
-              likeCount: Math.max(0, p.likeCount + (nextLiked ? 1 : -1)),
-            }
-          : p
-      )
-    );
-
-    try {
-      await togglePostLike(post.id, post.isLikedByMe);
-    } catch (err) {
-      console.error('[ViewProfile] toggle like failed', err);
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id
-            ? {
-                ...p,
-                isLikedByMe: post.isLikedByMe,
-                likeCount: Math.max(0, post.likeCount),
-              }
-            : p
-        )
-      );
-    }
-  }, []);
-
-  const onTogglePostExpand = useCallback((postId: string) => {
-    setPostExpandedIds((prev) => ({ ...prev, [postId]: !prev[postId] }));
-  }, []);
-
-  const onAdjustPostCommentCount = useCallback((postId: string, delta: number) => {
-    if (!delta) return;
-
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              commentCount: Math.max(0, p.commentCount + delta),
-            }
-          : p
-      )
-    );
-  }, []);
-
-  const onOpenProfile = useCallback(
-    (userId: string) => {
-      if (!userId) return;
-      router.push({ pathname: '/social/[userId]', params: { userId } });
-    },
-    [router]
-  );
-
-  const onOpenSession = useCallback(
-    (post: SocialFeedPost) => {
-      if (!post.sessionId) return;
-
-      if (post.activityType === 'strength') {
-        router.push({ pathname: '/add/Strength/[id]', params: { id: post.sessionId, postId: post.id } });
-        return;
-      }
-
-      if (post.activityType === 'run' || post.activityType === 'walk') {
-        if (post.isOutdoorSession) {
-          router.push({
-            pathname: '/progress/outdoor/[id]',
-            params: { id: post.sessionId },
-          });
-          return;
-        }
-
-        router.push({
-          pathname: '/progress/run_walk/[sessionId]',
-          params: { sessionId: post.sessionId, postId: post.id },
-        });
-      }
-    },
-    [router]
-  );
-
-  // Build header actions (Follow / Requested / Following) using your existing social/api helpers
   const primaryAction: ProfilePrimaryAction = useMemo(() => {
-    if (!profile) return null;
-    if (!meId) return null;
-    if (profile.id === meId) return null;
+    if (!profile || !meId || profile.id === meId) return null;
 
     if (followStatus === 'none') {
       return {
@@ -522,11 +258,29 @@ export default function ViewProfileScreen() {
         onPress: async () => {
           try {
             setFollowBusy(true);
+            logDebug('follow_action_start', {
+              action: profile.is_private ? 'request' : 'follow',
+              meId,
+              profileId: profile.id,
+            });
             await followOrRequest(meId, profile.id, profile.is_private);
             setFollowStatus(profile.is_private ? 'requested' : 'accepted');
             setErrorText(null);
+            logDebug('follow_action_success', {
+              action: profile.is_private ? 'request' : 'follow',
+              meId,
+              profileId: profile.id,
+              nextStatus: profile.is_private ? 'requested' : 'accepted',
+            });
           } catch (err: any) {
             setErrorText(formatSupabaseErr(err));
+            logDebug('follow_action_failed', {
+              action: profile.is_private ? 'request' : 'follow',
+              meId,
+              profileId: profile.id,
+              code: err?.code ?? null,
+              message: err?.message ?? String(err ?? ''),
+            });
           } finally {
             setFollowBusy(false);
           }
@@ -543,7 +297,6 @@ export default function ViewProfileScreen() {
       };
     }
 
-    // accepted
     return {
       label: 'Following',
       variant: 'outline',
@@ -553,9 +306,7 @@ export default function ViewProfileScreen() {
   }, [profile, meId, followStatus, followBusy]);
 
   const secondaryAction: ProfilePrimaryAction = useMemo(() => {
-    if (!profile) return null;
-    if (!meId) return null;
-    if (profile.id === meId) return null;
+    if (!profile || !meId || profile.id === meId) return null;
 
     if (followStatus === 'requested') {
       return {
@@ -565,11 +316,29 @@ export default function ViewProfileScreen() {
         onPress: async () => {
           try {
             setFollowBusy(true);
+            logDebug('follow_action_start', {
+              action: 'cancel_request',
+              meId,
+              profileId: profile.id,
+            });
             await unfollowOrCancel(meId, profile.id);
             setFollowStatus('none');
             setErrorText(null);
+            logDebug('follow_action_success', {
+              action: 'cancel_request',
+              meId,
+              profileId: profile.id,
+              nextStatus: 'none',
+            });
           } catch (err: any) {
             setErrorText(formatSupabaseErr(err));
+            logDebug('follow_action_failed', {
+              action: 'cancel_request',
+              meId,
+              profileId: profile.id,
+              code: err?.code ?? null,
+              message: err?.message ?? String(err ?? ''),
+            });
           } finally {
             setFollowBusy(false);
           }
@@ -585,11 +354,29 @@ export default function ViewProfileScreen() {
         onPress: async () => {
           try {
             setFollowBusy(true);
+            logDebug('follow_action_start', {
+              action: 'unfollow',
+              meId,
+              profileId: profile.id,
+            });
             await unfollowOrCancel(meId, profile.id);
             setFollowStatus('none');
             setErrorText(null);
+            logDebug('follow_action_success', {
+              action: 'unfollow',
+              meId,
+              profileId: profile.id,
+              nextStatus: 'none',
+            });
           } catch (err: any) {
             setErrorText(formatSupabaseErr(err));
+            logDebug('follow_action_failed', {
+              action: 'unfollow',
+              meId,
+              profileId: profile.id,
+              code: err?.code ?? null,
+              message: err?.message ?? String(err ?? ''),
+            });
           } finally {
             setFollowBusy(false);
           }
@@ -603,28 +390,31 @@ export default function ViewProfileScreen() {
   const renderDetailTabs = () => (
     <View style={styles.detailTabs}>
       <TabButton
-        label="Posts"
-        icon="albums-outline"
-        active={detailTab === 'posts'}
-        onPress={() => setDetailTab('posts')}
-      />
-      <TabButton
         label="Activity"
         icon="bar-chart-outline"
         active={detailTab === 'stats'}
         onPress={() => setDetailTab('stats')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
       <TabButton
         label="Lifetime"
         icon="trophy-outline"
         active={detailTab === 'lifetime'}
         onPress={() => setDetailTab('lifetime')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
       <TabButton
         label="Calendar"
         icon="calendar-outline"
         active={detailTab === 'calendar'}
         onPress={() => setDetailTab('calendar')}
+        styles={styles}
+        activeIconColor={colors.blkText}
+        inactiveIconColor={colors.textMuted}
       />
     </View>
   );
@@ -634,11 +424,11 @@ export default function ViewProfileScreen() {
       {profile ? (
         <ProfileHeaderSection
           fullName={fullName}
-          username={profile.username}
+          username={usernameText}
           bio={profile.bio}
           profileImageUrl={profile.profile_image_url}
           stats={stats}
-          isOwnProfile={false} // NEVER allow edit/settings on other users from this screen
+          isOwnProfile={false}
           primaryAction={primaryAction}
           secondaryAction={secondaryAction}
           onPressFollowers={() => goToConnections('followers')}
@@ -646,52 +436,14 @@ export default function ViewProfileScreen() {
         />
       ) : null}
 
-      {/* Tabs only if you can view the content */}
       {profile && canViewContent ? renderDetailTabs() : null}
-
-      {profile && canViewContent ? (
-        <View style={styles.badgeSection}>
-          {nutritionBadgesLoading ? (
-            <Text style={styles.badgeStateText}>Loading recent nutrition badges...</Text>
-          ) : nutritionBadgesError ? (
-            <Text style={styles.badgeErrorText}>{nutritionBadgesError}</Text>
-          ) : nutritionBadges.length > 0 ? (
-            <BadgeUnlockStrip
-              title="Recent nutrition badges"
-              badges={nutritionBadges}
-            />
-          ) : null}
-
-          {runningBadgesLoading ? (
-            <Text style={styles.badgeStateText}>Loading recent running badges...</Text>
-          ) : runningBadgesError ? (
-            <Text style={styles.badgeErrorText}>{runningBadgesError}</Text>
-          ) : runningBadges.length > 0 ? (
-            <BadgeUnlockStrip
-              title="Recent running badges"
-              badges={runningBadges}
-            />
-          ) : null}
-
-          {strengthBadgesLoading ? (
-            <Text style={styles.badgeStateText}>Loading recent strength badges...</Text>
-          ) : strengthBadgesError ? (
-            <Text style={styles.badgeErrorText}>{strengthBadgesError}</Text>
-          ) : strengthBadges.length > 0 ? (
-            <BadgeUnlockStrip
-              title="Recent strength badges"
-              badges={strengthBadges}
-            />
-          ) : null}
-        </View>
-      ) : null}
-
       <View style={styles.headerDivider} />
     </>
   );
 
   const renderPrivatePlaceholder = () => {
     if (!profile) return null;
+
     return (
       <ScrollView
         style={styles.flex}
@@ -703,7 +455,7 @@ export default function ViewProfileScreen() {
           <Ionicons name="lock-closed-outline" size={60} color={colors.textMuted} />
           <Text style={styles.privateTitle}>This account is private</Text>
           <Text style={styles.privateDesc}>
-            Follow @{profile.username} to see their activity.
+            Follow @{usernameText} to see their activity.
           </Text>
         </View>
       </ScrollView>
@@ -736,91 +488,18 @@ export default function ViewProfileScreen() {
       );
     }
 
-    // Private + not accepted => show private view
     if (!canViewContent) {
       return renderPrivatePlaceholder();
     }
 
-    // Public (or accepted private)
-    if (detailTab === 'posts') {
+    if (detailTab === 'stats') {
       return (
-        <FlatList
-          style={styles.flex}
-          data={posts}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          onRefresh={onRefreshPosts}
-          refreshing={postsRefreshing}
-          onEndReachedThreshold={0.4}
-          onEndReached={onLoadMorePosts}
-          contentContainerStyle={styles.postsListContent}
-          ListHeaderComponent={
-            <View style={styles.postsHeader}>
-              {renderHeaderBlock()}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.postFiltersRow}
-              >
-                {POST_FILTERS.map((filter) => (
-                  <PostFilterChip
-                    key={filter.key}
-                    label={filter.label}
-                    icon={filter.icon}
-                    active={postFilter === filter.key}
-                    onPress={() => setPostFilter(filter.key)}
-                  />
-                ))}
-              </ScrollView>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <SocialPostCard
-              post={item}
-              distanceUnit={distanceUnit}
-              weightUnit={weightUnit}
-              expanded={!!postExpandedIds[item.id]}
-              onToggleExpand={() => onTogglePostExpand(item.id)}
-              onToggleLike={() => onTogglePostLike(item)}
-              onAdjustCommentCount={(delta) => onAdjustPostCommentCount(item.id, delta)}
-              onPressUser={() => onOpenProfile(item.userId)}
-              onPressProfile={onOpenProfile}
-              onPressSession={onOpenSession}
-              showRoutePreview={!!meId && item.userId !== meId}
-            />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: 14 }} />}
-          ListFooterComponent={
-            postsLoadingMore ? (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              </View>
-            ) : (
-              <View style={{ height: 24 }} />
-            )
-          }
-          ListEmptyComponent={
-            <View style={styles.stateWrap}>
-              {postsLoading ? (
-                <>
-                  <ActivityIndicator size="small" color={colors.highlight1} />
-                  <Text style={styles.stateText}>Loading posts…</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="albums-outline" size={24} color={colors.textMuted} />
-                  <Text style={styles.stateText}>No posts for this filter yet.</Text>
-                  {postsError ? <Text style={styles.errorText}>{postsError}</Text> : null}
-                </>
-              )}
-            </View>
-          }
+        <ActivityGrid
+          userId={profile.id}
+          header={renderHeaderBlock()}
+          refreshToken={profileVisibilityRefreshToken}
         />
       );
-    }
-
-    if (detailTab === 'stats') {
-      return <ActivityGrid userId={profile.id} header={renderHeaderBlock()} />;
     }
 
     if (detailTab === 'lifetime') {
@@ -831,12 +510,14 @@ export default function ViewProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           {renderHeaderBlock()}
-          <LifetimeStatsTable userId={profile.id} />
+          <LifetimeStatsTable
+            userId={profile.id}
+            refreshToken={profileVisibilityRefreshToken}
+          />
         </ScrollView>
       );
     }
 
-    // Calendar tab
     return (
       <ScrollView
         style={styles.flex}
@@ -870,12 +551,7 @@ export default function ViewProfileScreen() {
     <View style={[globalStyles.page, styles.container]}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.headerTop}>
-          <LogoHeader />
-          <View style={styles.topBarIcons} pointerEvents="box-none">
-            <TouchableOpacity onPress={goBack} style={styles.iconButton}>
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+          <LogoHeader showBackButton onBackPress={goBack} />
         </View>
 
         <View style={styles.body}>{renderContent()}</View>
@@ -889,55 +565,30 @@ function TabButton({
   icon,
   active,
   onPress,
+  styles,
+  activeIconColor,
+  inactiveIconColor,
 }: {
   label: string;
-  icon: any;
+  icon: keyof typeof Ionicons.glyphMap;
   active: boolean;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  activeIconColor: string;
+  inactiveIconColor: string;
 }) {
-  const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
-
   return (
-    <TouchableOpacity style={[styles.tabButton, active && styles.tabButtonActive]} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.tabButton, active && styles.tabButtonActive]}
+      onPress={onPress}
+      activeOpacity={0.9}
+    >
       <Ionicons
         name={icon}
         size={18}
-        color={active ? colors.blkText : colors.textMuted}
+        color={active ? activeIconColor : inactiveIconColor}
       />
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function PostFilterChip({
-  label,
-  icon,
-  active,
-  onPress,
-}: {
-  label: string;
-  icon?: keyof typeof Ionicons.glyphMap;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const { colors, fonts } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
-
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
-      style={[styles.filterChip, active && styles.filterChipActive]}
-    >
-      {icon ? (
-        <Ionicons
-          name={icon}
-          size={14}
-          color={active ? colors.blkText : colors.textMuted}
-        />
-      ) : null}
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -974,6 +625,12 @@ function UserGoalCalendar({
   const fetchMonthGoals = useCallback(async () => {
     if (!userId) return;
     setLoadingGoals(true);
+    if (DEBUG_VISITOR_PROFILE) {
+      console.log('[ViewProfileDebug] calendar_load_start', {
+        userId,
+        month: currentMonth.format('YYYY-MM'),
+      });
+    }
 
     try {
       const start = currentMonth.startOf('month').format('YYYY-MM-DD');
@@ -996,11 +653,25 @@ function UserGoalCalendar({
       });
 
       setGoalData(map);
+      if (DEBUG_VISITOR_PROFILE) {
+        console.log('[ViewProfileDebug] calendar_load_success', {
+          userId,
+          month: currentMonth.format('YYYY-MM'),
+          daysWithData: Object.keys(map).length,
+        });
+      }
     } catch (err: any) {
-      // Most likely RLS blocks viewing other users’ goals.
       console.warn('[UserGoalCalendar] fetchMonthGoals failed', err);
       setGoalData({});
       onBlocked?.();
+      if (DEBUG_VISITOR_PROFILE) {
+        console.log('[ViewProfileDebug] calendar_load_failed', {
+          userId,
+          month: currentMonth.format('YYYY-MM'),
+          code: err?.code ?? null,
+          message: err?.message ?? String(err ?? ''),
+        });
+      }
     } finally {
       setLoadingGoals(false);
     }
@@ -1232,7 +903,9 @@ function createStyles(
       flex: 1,
     },
     headerTop: {
-      paddingBottom: 4,
+      alignItems: 'center',
+      paddingHorizontal: 18,
+      paddingBottom: 8,
     },
     topBarIcons: {
       flexDirection: 'row',
@@ -1251,21 +924,6 @@ function createStyles(
     scrollContent: {
       paddingHorizontal: 16,
       paddingBottom: 32,
-    },
-    postsListContent: {
-      paddingHorizontal: 16,
-      paddingBottom: 26,
-    },
-    postsHeader: {
-      marginBottom: 12,
-    },
-    postFiltersRow: {
-      paddingTop: 10,
-      gap: 10,
-    },
-    footerLoading: {
-      paddingVertical: 14,
-      alignItems: 'center',
     },
     stateWrap: {
       flex: 1,
@@ -1292,7 +950,7 @@ function createStyles(
       flexDirection: 'row',
       marginTop: 16,
       backgroundColor: colors.card,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 4,
       borderWidth: 1,
       borderColor: colors.border,
@@ -1303,8 +961,8 @@ function createStyles(
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 8,
-      borderRadius: 10,
+      paddingVertical: 10,
+      borderRadius: 12,
       gap: 6,
     },
     tabButtonActive: {
@@ -1315,50 +973,10 @@ function createStyles(
       color: colors.textMuted,
       fontFamily: fonts.label,
       fontSize: 12,
-      lineHeight: 15,
+      lineHeight: 16,
     },
     tabLabelActive: {
       color: colors.blkText,
-    },
-    filterChip: {
-      height: 34,
-      paddingHorizontal: 12,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card2,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    filterChipActive: {
-      backgroundColor: colors.highlight1,
-      borderColor: colors.highlight1,
-    },
-    filterChipText: {
-      color: colors.textMuted,
-      fontFamily: fonts.label,
-      fontSize: 12.5,
-      lineHeight: 16,
-    },
-    filterChipTextActive: {
-      color: colors.blkText,
-    },
-    badgeSection: {
-      marginTop: 16,
-      gap: 12,
-    },
-    badgeStateText: {
-      color: colors.textMuted,
-      fontFamily: fonts.body,
-      fontSize: 12,
-      lineHeight: 17,
-    },
-    badgeErrorText: {
-      color: colors.danger,
-      fontFamily: fonts.body,
-      fontSize: 12,
-      lineHeight: 17,
     },
     headerDivider: {
       height: 1,

@@ -8,12 +8,12 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   getCurrentHeartRateSamplesForRange,
   getCurrentHealthProviderLabel,
@@ -47,7 +47,7 @@ function formatWindowDate(value: string) {
 }
 
 export default function HeartRateTestScreen() {
-  const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const [loading, setLoading] = useState(false);
   const [samples, setSamples] = useState<HealthHeartRateSample[]>([]);
   const [windowStart, setWindowStart] = useState<string | null>(null);
@@ -208,7 +208,10 @@ export default function HeartRateTestScreen() {
             )}
           </View>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => goBackSmart({ fallbackHref: '/(tabs)/home' })}
+          >
             <Text style={styles.secondaryButtonText}>Back to Home</Text>
           </TouchableOpacity>
         </ScrollView>

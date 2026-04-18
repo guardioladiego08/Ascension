@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
 
 import { useUnits } from '@/contexts/UnitsContext';
 import { getExerciseBodyParts } from '@/lib/strength/exercises';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 import ExerciseDetailTabs from './ExerciseDetailTabs';
@@ -27,6 +28,7 @@ import { useStrengthExerciseDetail } from './useStrengthExerciseDetail';
 
 export default function StrengthExerciseDetailScreen() {
   const { id, name } = useLocalSearchParams<{ id?: string; name?: string }>();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const { weightUnit } = useUnits();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
@@ -66,7 +68,10 @@ export default function StrengthExerciseDetailScreen() {
             <Text style={styles.errorText}>{error}</Text>
 
             <View style={styles.errorButtons}>
-              <Pressable onPress={() => router.back()} style={styles.errorButton}>
+              <Pressable
+                onPress={() => goBackSmart({ fallbackHref: '/(tabs)/progress' })}
+                style={styles.errorButton}
+              >
                 <Text style={styles.errorButtonText}>Go Back</Text>
               </Pressable>
 
@@ -88,7 +93,10 @@ export default function StrengthExerciseDetailScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.headerRow}>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Pressable
+              onPress={() => goBackSmart({ fallbackHref: '/(tabs)/progress' })}
+              style={styles.backButton}
+            >
               <Ionicons name="close-outline" size={22} color={colors.text} />
             </Pressable>
 

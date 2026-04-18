@@ -1,13 +1,16 @@
 // components/LogoHeader.tsx
 import React from 'react';
-import { Image, StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { Image, StyleSheet, View, TouchableOpacity, Text, useWindowDimensions } from 'react-native';
 import { Href, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 interface LogoHeaderProps {
   showBackButton?: boolean;
+  usePreviousRoute?: boolean;
 
   /**
-   * If provided, the back button will navigate to this explicit route instead of router.back().
+   * If provided, the back button will navigate to this explicit route instead of history-based back.
    * Examples:
    *   backTo="/SignInLogin/Login"
    *   backTo="../UserInfo1"
@@ -26,6 +29,8 @@ interface LogoHeaderProps {
    * If false, uses router.push(...).
    */
   backReplace?: boolean;
+  fallbackBackTo?: string;
+  fallbackBackHref?: Href;
 
   /**
    * Optional override if you want custom behavior.
@@ -35,17 +40,23 @@ interface LogoHeaderProps {
 
 const LogoHeader: React.FC<LogoHeaderProps> = ({
   showBackButton = false,
+  usePreviousRoute = true,
   backTo,
   backHref,
   backReplace = true,
+  fallbackBackTo,
+  fallbackBackHref,
   onBackPress,
 }) => {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const handleBack = () => {
     if (onBackPress) return onBackPress();
 
-    // Prefer explicit targets over router.back()
+    // Prefer explicit targets over history-based back
     if (backHref) {
       if (backReplace) router.replace(backHref);
       else router.push(backHref);
@@ -58,13 +69,34 @@ const LogoHeader: React.FC<LogoHeaderProps> = ({
       return;
     }
 
-    router.back();
+    const fallbackHref = fallbackBackHref ?? fallbackBackTo ?? '/(tabs)/home';
+    if (usePreviousRoute) {
+      if (goBackSmart({ fallbackHref, fallbackReplace: backReplace })) return;
+    }
+
+    goBackSmart({ fallbackHref, fallbackReplace: backReplace });
   };
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        {
+          width,
+          paddingTop: insets.top + 8,
+        },
+      ]}
+    >
       {showBackButton && (
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <TouchableOpacity
+          style={[
+            styles.backButton,
+            {
+              top: insets.top + 2,
+            },
+          ]}
+          onPress={handleBack}
+        >
           <Text style={styles.backText}>{'‹'}</Text>
         </TouchableOpacity>
       )}
@@ -80,16 +112,15 @@ const LogoHeader: React.FC<LogoHeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 50, // notch / status bar padding
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
   backButton: {
     position: 'absolute',
     left: 16,
-    top: 55,
+    zIndex: 20,
     padding: 4,
-    zIndex: 1,
   },
   backText: {
     color: 'white',

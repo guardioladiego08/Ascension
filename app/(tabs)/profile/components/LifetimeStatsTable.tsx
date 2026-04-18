@@ -5,12 +5,14 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
+import { getSocialFeedForUser } from '@/lib/social/feed';
 import { useUnits } from '@/contexts/UnitsContext';
 
 const M_PER_MI = 1609.344;
 const M_PER_KM = 1000;
 const FT_PER_M = 3.280839895;
 const KG_PER_LB = 0.45359237;
+const DEBUG_LIFETIME_STATS = __DEV__;
 
 type LifetimeStatsRow = {
   user_id: string;
@@ -38,6 +40,20 @@ function safeNum(n: unknown): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function metricFromMap(
+  metrics: Record<string, number | string | null> | null | undefined,
+  keys: string[]
+): number {
+  if (!metrics) return 0;
+  for (const key of keys) {
+    const raw = metrics[key];
+    if (raw == null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
 function isMissingDbObject(error: any): boolean {
   if (!error) return false;
   const code = String(error?.code ?? '');
@@ -52,6 +68,18 @@ function isMissingDbObject(error: any): boolean {
     msg.includes('undefined column') ||
     msg.includes('function') ||
     msg.includes('schema must be one of the following')
+  );
+}
+
+function isAccessDeniedError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === '42501' ||
+    code === 'PGRST301' ||
+    msg.includes('permission denied') ||
+    msg.includes('row-level security')
   );
 }
 
@@ -248,9 +276,11 @@ function MovementRing({
 export default function LifetimeStatsTable({
   userId,
   animateKey,
+  refreshToken = 0,
 }: {
   userId: string;
   animateKey?: number;
+  refreshToken?: number;
 }) {
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
@@ -267,6 +297,17 @@ export default function LifetimeStatsTable({
   const warning = colors.danger;
   const track = colors.border;
 
+  const logDebug = useCallback(
+    (event: string, payload?: Record<string, unknown>) => {
+      if (!DEBUG_LIFETIME_STATS) return;
+      console.log('[LifetimeStatsDebug]', event, {
+        userId,
+        ...(payload ?? {}),
+      });
+    },
+    [userId]
+  );
+
   const runIntro = useCallback(() => {
     anim.setValue(0);
     Animated.timing(anim, {
@@ -281,24 +322,144 @@ export default function LifetimeStatsTable({
     runIntro();
   }, [runIntro, animateKey, distanceUnit]);
 
+  const deriveFromSocialPosts = useCallback(async (): Promise<LifetimeStatsRow | null> => {
+    const PAGE_LIMIT = 100;
+    const MAX_PAGES = 5;
+
+    let offset = 0;
+    const allPosts: Awaited<ReturnType<typeof getSocialFeedForUser>> = [];
+
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const rows = await getSocialFeedForUser({
+        userId,
+        offset,
+        limit: PAGE_LIMIT,
+      });
+      logDebug('social_page_loaded', { page, offset, count: rows.length });
+
+      if (rows.length === 0) break;
+      allPosts.push(...rows);
+
+      if (rows.length < PAGE_LIMIT) break;
+      offset += rows.length;
+    }
+
+    if (allPosts.length === 0) return null;
+
+    const activityTypeCounts: Record<string, number> = {};
+    const visibilityCounts: Record<string, number> = {};
+    for (const post of allPosts) {
+      const typeKey = String(post.activityType ?? 'unknown');
+      const visibilityKey = String(post.visibility ?? 'unknown');
+      activityTypeCounts[typeKey] = (activityTypeCounts[typeKey] ?? 0) + 1;
+      visibilityCounts[visibilityKey] = (visibilityCounts[visibilityKey] ?? 0) + 1;
+    }
+    logDebug('social_posts_loaded', {
+      total: allPosts.length,
+      activityTypeCounts,
+      visibilityCounts,
+    });
+
+    let totalHours = 0;
+    let totalWeightLiftedKg = 0;
+    let totalKcalConsumed = 0;
+    let totalElevGainM = 0;
+    let totalDistanceRanM = 0;
+    let totalDistanceWalkedM = 0;
+    let totalDistanceRunWalkM = 0;
+    let updatedAt: string | undefined;
+    const countedWorkouts = new Set<string>();
+
+    for (const post of allPosts) {
+      if (!updatedAt || new Date(post.createdAt).getTime() > new Date(updatedAt).getTime()) {
+        updatedAt = post.createdAt;
+      }
+
+      if (post.activityType === 'nutrition') {
+        totalKcalConsumed += metricFromMap(post.metrics, ['calories', 'kcal', 'total_kcal']);
+        continue;
+      }
+
+      if (post.activityType !== 'run' && post.activityType !== 'walk' && post.activityType !== 'strength') {
+        continue;
+      }
+
+      const workoutKey = String(post.sessionId ?? post.sourceId ?? post.id);
+      if (!countedWorkouts.has(workoutKey)) {
+        countedWorkouts.add(workoutKey);
+        totalHours += metricFromMap(post.metrics, ['total_time_s', 'duration_s', 'duration']) / 3600;
+      }
+
+      if (post.activityType === 'strength') {
+        totalWeightLiftedKg += metricFromMap(post.metrics, ['total_volume_kg', 'volume_kg']);
+        continue;
+      }
+
+      const distanceM = metricFromMap(post.metrics, ['distance_m', 'total_distance_m']);
+      totalDistanceRunWalkM += distanceM;
+      totalElevGainM += metricFromMap(post.metrics, ['elevation_gain_m', 'total_elev_gain_m']);
+
+      if (post.activityType === 'run') {
+        totalDistanceRanM += distanceM;
+      } else {
+        totalDistanceWalkedM += distanceM;
+      }
+    }
+
+    if (
+      countedWorkouts.size === 0 &&
+      totalWeightLiftedKg <= 0 &&
+      totalDistanceRunWalkM <= 0 &&
+      totalKcalConsumed <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      user_id: userId,
+      workouts_count: countedWorkouts.size,
+      total_hours: totalHours,
+      total_weight_lifted_kg: totalWeightLiftedKg,
+      total_kcal_consumed: totalKcalConsumed,
+      total_elev_gain_m: totalElevGainM,
+      total_distance_ran_m: totalDistanceRanM,
+      total_distance_walked_m: totalDistanceWalkedM,
+      total_distance_run_walk_m: totalDistanceRunWalkM,
+      updated_at: updatedAt,
+    };
+  }, [userId]);
+
   const load = useCallback(async () => {
     if (!userId) return;
 
     try {
       setLoading(true);
       setErrorText(null);
+      logDebug('load_start');
 
       let data: any = null;
       let error: any = null;
+      let rpcFallbackAllowed = false;
 
       const rpcRes = await supabase.rpc('get_lifetime_stats_user', { p_user_id: userId });
       if (!rpcRes.error) {
         data = Array.isArray(rpcRes.data) ? rpcRes.data[0] ?? null : rpcRes.data;
+        logDebug('rpc_success', { hasRow: !!data });
       } else if (!isMissingDbObject(rpcRes.error)) {
         error = rpcRes.error;
+        logDebug('rpc_failed', {
+          code: rpcRes.error?.code ?? null,
+          message: rpcRes.error?.message ?? null,
+        });
+      } else {
+        rpcFallbackAllowed = true;
+        logDebug('rpc_unavailable_using_fallback', {
+          code: rpcRes.error?.code ?? null,
+          message: rpcRes.error?.message ?? null,
+        });
       }
 
-      if (!data && !error) {
+      if (!data && !error && rpcFallbackAllowed) {
         const directRes = await supabase
           .schema('user')
           .from('lifetime_stats')
@@ -309,12 +470,37 @@ export default function LifetimeStatsTable({
           .maybeSingle();
 
         data = directRes.data;
-        error = directRes.error;
+        if (directRes.error && !isAccessDeniedError(directRes.error)) {
+          error = directRes.error;
+          logDebug('fallback_failed', {
+            code: directRes.error?.code ?? null,
+            message: directRes.error?.message ?? null,
+          });
+        } else {
+          logDebug('fallback_complete', {
+            hasRow: !!directRes.data,
+            accessDenied: !!(directRes.error && isAccessDeniedError(directRes.error)),
+          });
+        }
+      }
+
+      if (!data && !error) {
+        const derived = await deriveFromSocialPosts();
+        if (derived) {
+          data = derived;
+          logDebug('social_fallback_success', {
+            workouts_count: derived.workouts_count,
+            total_distance_run_walk_m: Math.round(derived.total_distance_run_walk_m),
+          });
+        } else {
+          logDebug('social_fallback_empty');
+        }
       }
 
       if (error) throw error;
 
       if (!data) {
+        logDebug('load_empty_defaulting_zero');
         setRow({
           user_id: userId,
           workouts_count: 0,
@@ -329,6 +515,10 @@ export default function LifetimeStatsTable({
         return;
       }
 
+      logDebug('load_success', {
+        workouts_count: safeNum((data as any).workouts_count),
+        total_distance_run_walk_m: safeNum((data as any).total_distance_run_walk_m),
+      });
       setRow({
         user_id: String((data as any).user_id ?? userId),
         workouts_count: safeNum((data as any).workouts_count),
@@ -345,14 +535,19 @@ export default function LifetimeStatsTable({
       console.error('[LifetimeStatsTable] load failed', e);
       setRow(null);
       setErrorText(e?.message?.trim?.() ? e.message : 'Failed to load lifetime stats');
+      logDebug('load_failed', {
+        code: e?.code ?? null,
+        message: e?.message ?? String(e ?? ''),
+      });
     } finally {
       setLoading(false);
+      logDebug('load_done');
     }
-  }, [userId]);
+  }, [deriveFromSocialPosts, logDebug, userId]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshToken]);
 
   const runWalkMeters = safeNum(row?.total_distance_run_walk_m);
   const runMeters = safeNum(row?.total_distance_ran_m);

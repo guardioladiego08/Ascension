@@ -1,5 +1,17 @@
 # Supabase Schema Changes
 
+## 2026-04-10 - Indoor and outdoor run/walk summaries now have parity-safe RPC sources
+
+- What changed: Added migration `20260410_run_walk_summary_source_parity.sql` to replace `public.get_run_walk_session_summary_user(...)` with a return shape that includes `started_at` / `ended_at`, and added `public.get_outdoor_session_summary_user(...)` with visibility checks mirroring social post/privacy rules plus ordered sample payloads.
+- Why: Shared profile/social session detail views should use the same source semantics as own-session summaries instead of diverging between direct table reads and incompatible fallback payloads.
+- Follow-up: Apply this migration and reload PostgREST schema cache on hosted projects; app summary loaders now prefer these RPCs first and only fall back to direct table reads when the RPCs are unavailable.
+
+## 2026-04-10 - Added a visibility-safe profile feed RPC for non-followed public profiles
+
+- What changed: Added migration `20260410_profile_feed_visibility_rpc.sql` introducing `public.get_profile_feed_user(p_user_id, p_limit, p_offset, p_activity_type)` with `security definer` visibility gating via `social.can_view_post(...)`, plus execute grants for authenticated clients.
+- Why: In hosted environments where `social` schema is not exposed to clients (`PGRST106`), the existing app fallback to `get_feed_user(...)` can return empty for non-followed public profiles because that RPC is follow-feed scoped.
+- Follow-up: Apply this migration and reload PostgREST schema cache on hosted projects; client fallback in `lib/social/feed.ts` now prefers `get_profile_feed_user(...)` before using `get_feed_user(...)`.
+
 ## 2026-04-04 - Hosted nutrition smoke seeds now treat workout-phase detail as meal-slot data
 
 - What changed: Updated `supabase/seeds/nutrition_progress_dashboard_ui_smoke_demo.sql` so training-day recovery entries now use a core `meal_type` fallback (`snack`) while keeping `post-workout` in `meal_slot`.

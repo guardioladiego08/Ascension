@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Keyboard,
   StyleSheet,
@@ -16,7 +17,12 @@ import AuthScreen from '../components/AuthScreen';
 import AuthButton from '../components/AuthButton';
 import AuthField from '../components/AuthField';
 import AppAlert from '../components/AppAlert';
-import { useOnboardingDraftStore } from '@/lib/onboarding/onboardingDraftStore';
+import {
+  sanitizeUsername,
+  useOnboardingDraftStore,
+} from '@/lib/onboarding/onboardingDraftStore';
+import { checkSignupUsernameAvailability } from '@/lib/auth/usernameAvailability';
+import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAuthDesignSystem } from '../designSystem';
@@ -56,11 +62,15 @@ export default function UserInfo1() {
   const ui = useAuthDesignSystem();
   const styles = useMemo(() => createStyles(colors, fonts, ui), [colors, fonts, ui]);
 
+  const [usernameInput, setUsernameInput] = useState(draft.username ?? '');
   const [firstName, setFirstName] = useState(draft.first_name ?? '');
   const [lastName, setLastName] = useState(draft.last_name ?? '');
   const [country, setCountry] = useState(draft.country ?? '');
   const [stateRegion, setStateRegion] = useState(draft.state ?? '');
   const [city, setCity] = useState(draft.city ?? '');
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [ownedUsernames, setOwnedUsernames] = useState<string[]>([]);
 
   const [locationModalVisible, setLocationModalVisible] = useState(false);
   const [locationQuery, setLocationQuery] = useState('');
@@ -93,6 +103,60 @@ export default function UserInfo1() {
     const parts = [safeString(city), safeString(stateRegion), safeString(country)].filter(Boolean);
     return parts.length ? parts.join(', ') : 'Select location';
   }, [city, country, stateRegion]);
+  const usernameSanitized = useMemo(() => sanitizeUsername(usernameInput), [usernameInput]);
+  const ownedUsernameSet = useMemo(() => new Set(ownedUsernames), [ownedUsernames]);
+
+  const loadOwnedUsernames = useCallback(async () => {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return [] as string[];
+    }
+
+    const [userRowRes, profileRowRes, legacyRowRes] = await Promise.all([
+      supabase
+        .schema('user')
+        .from('users')
+        .select('username')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .schema('public')
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .maybeSingle(),
+      supabase.from('profiles_stub').select('username').eq('user_id', user.id).maybeSingle(),
+    ]);
+
+    const normalized = [
+      sanitizeUsername(String(userRowRes.data?.username ?? '')),
+      sanitizeUsername(String(profileRowRes.data?.username ?? '')),
+      sanitizeUsername(String(legacyRowRes.data?.username ?? '')),
+    ].filter((value) => value.length >= 3);
+
+    return Array.from(new Set(normalized));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrate = async () => {
+      const own = await loadOwnedUsernames();
+      if (cancelled) return;
+
+      setOwnedUsernames(own);
+    };
+
+    void hydrate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadOwnedUsernames]);
 
   useEffect(() => {
     if (!locationModalVisible || !MAPBOX_TOKEN) return;
@@ -157,9 +221,89 @@ export default function UserInfo1() {
     setLocationResults([]);
   };
 
-  const handleNext = () => {
+  const checkUsernameAvailability = useCallback(async () => {
+    Keyboard.dismiss();
+
+    const desired = usernameSanitized;
+    if (!desired) {
+      showAlert('Missing info', 'Please enter a username.');
+      return false;
+    }
+
+    if (desired.length < 3) {
+      setUsernameAvailable(false);
+      showAlert('Invalid username', 'Username must be at least 3 characters.');
+      return false;
+    }
+
+    let owned = ownedUsernames;
+    if (!ownedUsernameSet.has(desired) && owned.length === 0) {
+      owned = await loadOwnedUsernames();
+      setOwnedUsernames(owned);
+    }
+
+    if (owned.includes(desired)) {
+      setUsernameAvailable(true);
+      return true;
+    }
+
+    setCheckingUsername(true);
+    setUsernameAvailable(null);
+
+    const { available, error: availabilityError } =
+      await checkSignupUsernameAvailability(desired);
+    setCheckingUsername(false);
+
+    if (available !== null) {
+      setUsernameAvailable(available);
+      if (available === false) {
+        showAlert('Username taken', 'Please choose a different username.');
+      }
+      return available;
+    }
+
+    if (availabilityError) {
+      const code = (availabilityError as any)?.code;
+      if (code === '42501') {
+        showAlert(
+          'Username check blocked',
+          'Your database RLS is preventing username checks. Create or apply the SECURITY DEFINER username-availability RPC before continuing.'
+        );
+        return false;
+      }
+
+      if (
+        code === '42P01' ||
+        code === 'PGRST106' ||
+        code === 'PGRST200' ||
+        code === 'PGRST205'
+      ) {
+        showAlert(
+          'Username check unavailable',
+          'The connected Supabase project is missing the canonical username-availability RPC or legacy lookup tables.'
+        );
+        return false;
+      }
+    }
+
+    showAlert('Error', 'Could not check username right now.');
+    return false;
+  }, [usernameSanitized, ownedUsernames, ownedUsernameSet, loadOwnedUsernames]);
+
+  const handleNext = async () => {
     if (!firstName.trim() || !lastName.trim()) {
       showAlert('Missing info', 'Please enter first name and last name.');
+      return;
+    }
+
+    const usernameTrimmed = usernameSanitized;
+    if (!usernameTrimmed) {
+      showAlert('Missing info', 'Please enter a username.');
+      return;
+    }
+
+    const available = await checkUsernameAvailability();
+    if (!available) {
       return;
     }
 
@@ -171,6 +315,7 @@ export default function UserInfo1() {
     }
 
     setDraft({
+      username: usernameTrimmed,
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       country: trimmedCountry || null,
@@ -209,6 +354,55 @@ export default function UserInfo1() {
           />
         </AuthField>
 
+        <AuthField label="Username">
+          <View style={styles.usernameRow}>
+            <TextInput
+              value={usernameInput}
+              onChangeText={(value) => {
+                setUsernameInput(value);
+                setUsernameAvailable(null);
+              }}
+              autoCapitalize="none"
+              placeholder="my_username"
+              placeholderTextColor={colors.textMuted}
+              style={[styles.input, styles.usernameInput]}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.inlineButton,
+                (checkingUsername || !usernameInput.trim()) && styles.inlineButtonDisabled,
+              ]}
+              onPress={() => {
+                void checkUsernameAvailability();
+              }}
+              disabled={checkingUsername || !usernameInput.trim()}
+              activeOpacity={0.92}
+            >
+              {checkingUsername ? (
+                <ActivityIndicator color={colors.blkText} />
+              ) : (
+                <Text style={styles.inlineButtonText}>Check</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </AuthField>
+
+        {!!usernameInput.trim() && usernameSanitized !== usernameInput.trim().toLowerCase() ? (
+          <Text style={styles.helperText}>
+            Saved as <Text style={styles.helperValue}>{usernameSanitized}</Text>
+          </Text>
+        ) : null}
+
+        {usernameAvailable === true ? (
+          <Text style={[styles.helperText, styles.helperSuccess]}>Username is available.</Text>
+        ) : null}
+        {usernameAvailable === false ? (
+          <Text style={[styles.helperText, styles.helperDanger]}>
+            Username is already taken.
+          </Text>
+        ) : null}
+
         <AuthField
           label="Location"
           helperText="Optional. Used for local trends and relevant defaults."
@@ -228,7 +422,15 @@ export default function UserInfo1() {
           </TouchableOpacity>
         </AuthField>
 
-        <AuthButton label="Continue" icon="arrow-forward" onPress={handleNext} />
+        <AuthButton
+          label="Continue"
+          icon="arrow-forward"
+          onPress={() => {
+            void handleNext();
+          }}
+          disabled={checkingUsername}
+          loading={checkingUsername}
+        />
       </View>
 
       <AppPopup
@@ -311,6 +513,32 @@ function createStyles(
     input: {
       ...ui.fragments.input,
     },
+    usernameRow: {
+      flexDirection: 'row',
+      gap: 10,
+      alignItems: 'center',
+    },
+    usernameInput: {
+      flex: 1,
+    },
+    inlineButton: {
+      minWidth: 96,
+      minHeight: 56,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: ui.tones.accentStrong,
+      paddingHorizontal: 16,
+    },
+    inlineButtonDisabled: {
+      opacity: 0.62,
+    },
+    inlineButtonText: {
+      color: colors.blkText,
+      fontFamily: fonts.heading,
+      fontSize: 14,
+      lineHeight: 18,
+    },
     selectField: {
       minHeight: 56,
       borderRadius: 18,
@@ -331,7 +559,20 @@ function createStyles(
       lineHeight: 20,
     },
     helperText: {
-      ...ui.fragments.helperText,
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    helperValue: {
+      color: colors.text,
+      fontFamily: fonts.heading,
+    },
+    helperSuccess: {
+      color: colors.success,
+    },
+    helperDanger: {
+      color: colors.danger,
     },
     locationPopup: {
       maxHeight: '82%',

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import { getMyUserId, searchProfiles, type PublicProfile } from '@/lib/social/api';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 function initials(name: string) {
@@ -24,6 +25,7 @@ function initials(name: string) {
 
 export default function PeopleSearchScreen() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
@@ -77,13 +79,8 @@ export default function PeopleSearchScreen() {
   }, [query, rows.length, loading]);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    router.replace('/social');
-  }, [router]);
+    goBackSmart({ fallbackHref: '/social' });
+  }, [goBackSmart]);
 
   return (
     <View style={styles.safe}>

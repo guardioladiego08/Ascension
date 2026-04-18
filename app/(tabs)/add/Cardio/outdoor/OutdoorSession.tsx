@@ -16,6 +16,7 @@ import type { LatLng } from 'react-native-maps';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { HOME_TONES } from '../../../home/tokens';
 
 import OutdoorMetrics from './components/OutdoorMetrics';
@@ -67,6 +68,7 @@ import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 type Phase = 'idle' | 'running' | 'paused';
 type ActivityType = 'run' | 'walk' | 'hike' | 'other';
+const HOME_ROUTE = '/(tabs)/home';
 
 function outdoorTitle(activityType?: string, fallback?: string) {
   const t = (activityType ?? '').toLowerCase();
@@ -90,6 +92,7 @@ function makeId() {
 
 export default function OutdoorSession() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
@@ -499,7 +502,7 @@ export default function OutdoorSession() {
             'Session in progress',
             'You already have an active strength workout. Finish or cancel it before starting an outdoor session.'
           );
-          router.back();
+          goBackSmart({ fallbackHref: HOME_ROUTE });
           return;
         }
 
@@ -524,7 +527,7 @@ export default function OutdoorSession() {
             'Session in progress',
             `You already have a ${existing.mode.replace('_', ' ')} session in progress. Finish or cancel it before starting a new one.`
           );
-          router.back();
+          goBackSmart({ fallbackHref: HOME_ROUTE });
           return;
         }
 
@@ -539,7 +542,7 @@ export default function OutdoorSession() {
     return () => {
       mounted = false;
     };
-  }, [activeSession, activeSessionHydrated, lockMode, router, phase]);
+  }, [activeSession, activeSessionHydrated, goBackSmart, lockMode, phase]);
 
   useEffect(() => {
     if (
@@ -869,7 +872,7 @@ export default function OutdoorSession() {
     resetSession();
     setCancelOpen(false);
     await clearActiveRunWalkLock().catch(() => null);
-    router.replace('/(tabs)/home');
+    router.replace(HOME_ROUTE);
   }
 
   function onBackPress() {
@@ -879,7 +882,7 @@ export default function OutdoorSession() {
     } else {
       clearActiveRunWalkLock().catch(() => null);
       beginSessionExit();
-      router.back();
+      goBackSmart({ fallbackHref: HOME_ROUTE });
     }
   }
 

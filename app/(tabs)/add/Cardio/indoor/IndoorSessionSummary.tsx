@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useUnits } from '@/contexts/UnitsContext';
@@ -35,6 +35,7 @@ import {
   deleteDraft,
   type RunWalkDraft,
 } from '@/lib/runWalkDraftStore';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
 import DeleteDraftConfirmModal from './indoor/DeleteDraftConfirmModal';
@@ -58,6 +59,7 @@ const KMH_PER_MPS = 3.6;
 const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
+const SUMMARY_FALLBACK_ROUTE = '/(tabs)/home';
 
 function formatClock(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
@@ -112,7 +114,7 @@ type HeartRateSyncState =
   | 'failed';
 
 export default function IndoorSessionSummary() {
-  const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const { distanceUnit } = useUnits();
@@ -148,7 +150,7 @@ export default function IndoorSessionSummary() {
       try {
         if (!draftId) {
           Alert.alert('Error', 'Missing draft.');
-          router.back();
+          goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE });
           return;
         }
 
@@ -157,7 +159,7 @@ export default function IndoorSessionSummary() {
 
         if (!d) {
           Alert.alert('Error', 'Draft not found (it may have been deleted).');
-          router.back();
+          goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE });
           return;
         }
 
@@ -170,7 +172,7 @@ export default function IndoorSessionSummary() {
       } catch (e) {
         console.log('[IndoorSessionSummary] load error', e);
         Alert.alert('Error', 'Could not load summary.');
-        router.back();
+        goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE });
       } finally {
         if (mounted) setLoading(false);
       }
@@ -179,7 +181,7 @@ export default function IndoorSessionSummary() {
     return () => {
       mounted = false;
     };
-  }, [draftId, router]);
+  }, [draftId, goBackSmart]);
 
   const distUnit = distanceUnit;
   const distLabelUnit = distUnit === 'mi' ? 'MI' : 'KM';
@@ -438,14 +440,14 @@ export default function IndoorSessionSummary() {
       setDeleting(true);
       await deleteDraft(draftId);
       setShowDeleteModal(false);
-      router.back();
+      goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE });
     } catch (e) {
       console.log('[IndoorSessionSummary] delete error', e);
       Alert.alert('Error', 'Could not delete draft.');
     } finally {
       setDeleting(false);
     }
-  }, [draftId, router]);
+  }, [draftId, goBackSmart]);
 
   useEffect(() => {
     if (!savedSessionId || !isRunningSession) {
@@ -606,7 +608,6 @@ export default function IndoorSessionSummary() {
             totalTimeS: draft.total_time_s,
             avgPaceSPerMi: draft.avg_pace_s_per_mi ?? null,
             avgPaceSPerKm: draft.avg_pace_s_per_km ?? null,
-            visibility: 'followers',
           });
           shared = true;
         } catch (shareErr: any) {
@@ -700,7 +701,10 @@ export default function IndoorSessionSummary() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={[globalStyles.panel, styles.heroCard]}>
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE })}
+              >
                 <Ionicons name="chevron-back" size={18} color={colors.text} />
               </TouchableOpacity>
 
@@ -944,7 +948,7 @@ export default function IndoorSessionSummary() {
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={[globalStyles.buttonPrimary, styles.saveBtn]}
-                onPress={() => router.back()}
+                onPress={() => goBackSmart({ fallbackHref: SUMMARY_FALLBACK_ROUTE })}
               >
                 <Ionicons name="checkmark" size={18} color={colors.blkText} />
                 <Text style={globalStyles.buttonTextPrimary}>Done</Text>

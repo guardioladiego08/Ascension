@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import LogoHeader from '@/components/my components/logoHeader';
 import { listFollowers, listFollowing, type ConnectionProfile } from '@/lib/social/api';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Tab = 'followers' | 'following';
@@ -25,6 +26,7 @@ function initials(name: string) {
 
 export default function ConnectionsScreen() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
   const params = useLocalSearchParams<{
@@ -99,21 +101,14 @@ export default function ConnectionsScreen() {
   }, [loadRows]);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-      return;
-    }
-
-    if (userId) {
-      router.replace({
-        pathname: '/social/[userId]',
-        params: { userId },
-      });
-      return;
-    }
-
-    router.replace('/social');
-  }, [router, userId]);
+    const fallbackHref = userId
+      ? {
+          pathname: '/social/[userId]' as const,
+          params: { userId },
+        }
+      : '/social';
+    goBackSmart({ fallbackHref });
+  }, [goBackSmart, userId]);
 
   return (
     <View style={styles.safe}>

@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
+  Switch,
   View,
   Text,
   StyleSheet,
@@ -50,6 +52,9 @@ export default function SettingsScreen() {
   const [showRestTimerModal, setShowRestTimerModal] = useState(false);
   const [healthStatus, setHealthStatus] = useState('Not connected');
   const [restTimerSeconds, setRestTimerSeconds] = useState(90);
+  const [isPrivate, setIsPrivate] = useState(true);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
   const providerLabel = getCurrentHealthProviderLabel();
 
   const loadHealthStatus = useCallback(async () => {
@@ -71,11 +76,134 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadPrivacyPreference = useCallback(async () => {
+    try {
+      setPrivacyLoading(true);
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) return;
+
+      const [{ data: userRow, error: userError }, { data: profileRow, error: profileError }] =
+        await Promise.all([
+          supabase
+            .schema('user')
+            .from('users')
+            .select('is_private')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
+            .schema('public')
+            .from('profiles')
+            .select('is_private')
+            .eq('id', user.id)
+            .maybeSingle(),
+        ]);
+
+      if (userError && (userError as any).code !== 'PGRST116') {
+        console.warn('[Settings] failed to load user.users privacy setting', userError);
+      }
+      if (profileError && (profileError as any).code !== 'PGRST116') {
+        console.warn('[Settings] failed to load public.profiles privacy setting', profileError);
+      }
+
+      const nextIsPrivate =
+        typeof userRow?.is_private === 'boolean'
+          ? userRow.is_private
+          : typeof profileRow?.is_private === 'boolean'
+            ? profileRow.is_private
+            : true;
+      setIsPrivate(nextIsPrivate);
+    } catch (error) {
+      console.warn('[Settings] failed to load privacy setting', error);
+    } finally {
+      setPrivacyLoading(false);
+    }
+  }, []);
+
+  const updatePrivacyPreference = useCallback(async (nextValue: boolean) => {
+    if (privacySaving) return;
+
+    const previousValue = isPrivate;
+    setIsPrivate(nextValue);
+    setPrivacySaving(true);
+
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (authError || !user) {
+        throw new Error('You are not signed in.');
+      }
+
+      const [{ error: userError }, { error: profileError }] = await Promise.all([
+        supabase
+          .schema('user')
+          .from('users')
+          .update({ is_private: nextValue })
+          .eq('user_id', user.id),
+        supabase
+          .schema('public')
+          .from('profiles')
+          .update({ is_private: nextValue })
+          .eq('id', user.id),
+      ]);
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (profileError && (profileError as any).code !== 'PGRST116') {
+        console.warn('[Settings] non-fatal public.profiles privacy sync failed', profileError);
+      }
+
+      if (!nextValue) {
+        const [{ error: postsVisibilityError }, { error: workoutsVisibilityError }] =
+          await Promise.all([
+            supabase
+              .schema('social')
+              .from('posts')
+              .update({ visibility: 'public' })
+              .eq('user_id', user.id),
+            supabase
+              .schema('strength')
+              .from('strength_workouts')
+              .update({ privacy: 'public' })
+              .eq('user_id', user.id),
+          ]);
+
+        if (postsVisibilityError) {
+          console.warn(
+            '[Settings] non-fatal social.posts visibility sync failed',
+            postsVisibilityError
+          );
+        }
+
+        if (workoutsVisibilityError) {
+          console.warn(
+            '[Settings] non-fatal strength visibility sync failed',
+            workoutsVisibilityError
+          );
+        }
+      }
+    } catch (error: any) {
+      setIsPrivate(previousValue);
+      Alert.alert('Could not update privacy', error?.message ?? 'Please try again.');
+    } finally {
+      setPrivacySaving(false);
+    }
+  }, [isPrivate, privacySaving]);
+
   useFocusEffect(
     useCallback(() => {
       loadHealthStatus();
       loadRestTimerPreference();
-    }, [loadHealthStatus, loadRestTimerPreference])
+      loadPrivacyPreference();
+    }, [loadHealthStatus, loadRestTimerPreference, loadPrivacyPreference])
   );
 
   const handleComingSoon = (label: string) => {
@@ -286,6 +414,39 @@ export default function SettingsScreen() {
                 />
               </View>
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* PRIVACY */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacy</Text>
+          <View style={styles.card}>
+            <View style={styles.row}>
+              <View style={styles.privacyTextWrap}>
+                <Text style={styles.rowLabel}>Private account</Text>
+                <Text style={styles.privacyHint}>
+                  {isPrivate
+                    ? 'Only approved followers can view your profile.'
+                    : 'Anyone can view your profile.'}
+                </Text>
+              </View>
+
+              <View style={styles.privacyControl}>
+                {privacySaving ? <ActivityIndicator size="small" color={colors.highlight1} /> : null}
+                <Switch
+                  value={isPrivate}
+                  onValueChange={(nextValue) => {
+                    void updatePrivacyPreference(nextValue);
+                  }}
+                  disabled={privacyLoading || privacySaving}
+                  trackColor={{
+                    false: colors.borderStrong,
+                    true: colors.highlight1,
+                  }}
+                  thumbColor={colors.card}
+                />
+              </View>
+            </View>
           </View>
         </View>
 
@@ -535,6 +696,22 @@ function createStyles(
       fontFamily: fonts.body,
       fontSize: 12,
       lineHeight: 16,
+    },
+    privacyTextWrap: {
+      flex: 1,
+      paddingRight: 12,
+    },
+    privacyHint: {
+      color: colors.textMuted,
+      fontFamily: fonts.body,
+      fontSize: 12,
+      lineHeight: 16,
+      marginTop: 4,
+    },
+    privacyControl: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     logoutContainer: {
       marginTop: 28,

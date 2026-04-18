@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { HOME_TONES } from '../../../home/tokens';
 
 import FinishConfirmModal from './indoor/FinishConfirmModal';
@@ -89,6 +90,7 @@ function makeId() {
 
 export default function IndoorSession() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
   const params = useLocalSearchParams<{ mode?: string }>();
   const { distanceUnit } = useUnits();
@@ -340,7 +342,7 @@ export default function IndoorSession() {
             'Session in progress',
             'You already have an active strength workout. Finish or cancel it before starting an indoor session.'
           );
-          router.back();
+          goBackSmart({ fallbackHref: HOME_ROUTE });
           return;
         }
 
@@ -359,7 +361,7 @@ export default function IndoorSession() {
             'Session in progress',
             `You already have a ${existing.mode.replace('_', ' ')} session in progress. Finish or cancel it before starting a new one.`
           );
-          router.back();
+          goBackSmart({ fallbackHref: HOME_ROUTE });
           return;
         }
 
@@ -375,7 +377,7 @@ export default function IndoorSession() {
     return () => {
       mounted = false;
     };
-  }, [activeSession, activeSessionHydrated, lockMode, mode, router]);
+  }, [activeSession, activeSessionHydrated, goBackSmart, lockMode, mode]);
 
   // keep speed aligned with unit/mode defaults
   useEffect(() => {
@@ -489,7 +491,7 @@ export default function IndoorSession() {
     // no progress: clear lock and exit
     clearActiveRunWalkLock().catch(() => null);
     beginSessionExit();
-    router.replace(HOME_ROUTE);
+    goBackSmart({ fallbackHref: HOME_ROUTE });
   };
 
   // Finish -> draft -> clear lock -> reset -> go summary

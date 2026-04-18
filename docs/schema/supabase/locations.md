@@ -7,6 +7,8 @@
 - Strength workout templates migration: `supabase/migrations/20260331_strength_workout_templates.sql`
 - Strength template schema-cache refresh migration: `supabase/migrations/20260401_strength_template_schema_cache_refresh.sql`
 - Strength muscle-profile radar migration: `supabase/migrations/20260402_strength_muscle_profile_radar_support.sql`
+- Profile feed visibility RPC migration: `supabase/migrations/20260410_profile_feed_visibility_rpc.sql`
+- Run/walk summary parity migration: `supabase/migrations/20260410_run_walk_summary_source_parity.sql`
 - Signup auth trigger hardening migration: `supabase/migrations/20260329_signup_auth_trigger_hardening.sql`
 - Signup bootstrap compatibility migration: `supabase/migrations/20260329_signup_bootstrap_schema_compat.sql`
 - Signup username availability migration: `supabase/migrations/20260329_signup_username_availability_rpc.sql`

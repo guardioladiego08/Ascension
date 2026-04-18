@@ -10,11 +10,11 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { supabase } from '@/lib/supabase';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { uploadMyProfilePhotoFromUri } from '@/lib/profile';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 
@@ -49,7 +49,7 @@ function formatProfileError(err: any) {
 }
 
 export default function EditProfileScreen() {
-  const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const { colors, fonts } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
 
@@ -287,7 +287,7 @@ export default function EditProfileScreen() {
       });
 
       Alert.alert('Profile updated', 'Your profile has been saved.', [
-        { text: 'OK', onPress: () => router.back() },
+        { text: 'OK', onPress: () => goBackSmart({ fallbackHref: '/(tabs)/profile' }) },
       ]);
     } catch (err: any) {
       console.error('[EditProfile] handleSave failed', err);
@@ -435,7 +435,11 @@ export default function EditProfileScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()} disabled={saving}>
+        <TouchableOpacity
+          style={styles.cancelButton}
+          onPress={() => goBackSmart({ fallbackHref: '/(tabs)/profile' })}
+          disabled={saving}
+        >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
       </ScrollView>

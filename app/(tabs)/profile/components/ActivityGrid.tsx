@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -23,6 +24,7 @@ import {
   type StrengthMuscleProfile,
 } from '@/lib/strength/muscleProfile';
 import { supabase } from '@/lib/supabase';
+import { getSocialFeedForUser } from '@/lib/social/feed';
 import { useUnits } from '@/contexts/UnitsContext';
 
 type ActivityKind = 'strength' | 'run' | 'walk';
@@ -34,6 +36,7 @@ type UnifiedActivity = {
   id: string;
   source: ActivitySource;
   kind: ActivityKind;
+  postId?: string;
 
   startedAt: string;
   durationS: number | null;
@@ -65,6 +68,7 @@ const LB_PER_KG = 2.20462;
 
 const PAGE_SIZE = 24;
 const COLUMN_COUNT = 2;
+const DEBUG_ACTIVITY_GRID = __DEV__;
 
 const TABLES = {
   strengthWorkouts: { schema: 'strength', table: 'strength_workouts' },
@@ -140,6 +144,28 @@ function kindFromText(t: string): ActivityKind | null {
   return null;
 }
 
+function metricNum(
+  metrics: Record<string, number | string | null> | null | undefined,
+  keys: string[]
+): number | null {
+  if (!metrics) return null;
+  for (const key of keys) {
+    const raw = metrics[key];
+    if (raw == null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function normalizeRouteId(value: unknown): string | null {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return null;
+  if (trimmed.toLowerCase() === 'undefined') return null;
+  if (trimmed.toLowerCase() === 'null') return null;
+  return trimmed;
+}
+
 /**
  * Attempt a select; if it fails with missing-column (42703), return null so caller can try next.
  */
@@ -161,6 +187,18 @@ function isRpcUnavailableError(error: any): boolean {
     code === 'PGRST204' ||
     msg.includes('could not find the function') ||
     msg.includes('schema cache')
+  );
+}
+
+function isAccessDeniedError(error: any): boolean {
+  if (!error) return false;
+  const code = String(error?.code ?? '');
+  const msg = String(error?.message ?? '').toLowerCase();
+  return (
+    code === '42501' ||
+    code === 'PGRST301' ||
+    msg.includes('permission denied') ||
+    msg.includes('row-level security')
   );
 }
 
@@ -207,6 +245,18 @@ export default function ActivityGrid({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const logDebug = useCallback(
+    (event: string, payload?: Record<string, unknown>) => {
+      if (!DEBUG_ACTIVITY_GRID) return;
+      console.log('[ActivityGridDebug]', event, {
+        userId,
+        filter,
+        ...(payload ?? {}),
+      });
+    },
+    [filter, userId]
+  );
+
   const strengthOffset = useRef(0);
   const sessionsOffset = useRef(0);
   const outdoorOffset = useRef(0);
@@ -214,6 +264,8 @@ export default function ActivityGrid({
   const strengthDone = useRef(false);
   const sessionsDone = useRef(false);
   const outdoorDone = useRef(false);
+  const socialDone = useRef(false);
+  const socialOffset = useRef(0);
 
   const cardWidth = useMemo(() => {
     const usable = width - contentPaddingHorizontal * 2 - gap * (COLUMN_COUNT - 1);
@@ -234,7 +286,7 @@ export default function ActivityGrid({
       });
 
       if (!rpcRes.error) {
-        return ((rpcRes.data ?? []) as any[]).map(
+        const rows = ((rpcRes.data ?? []) as any[]).map(
           (row) =>
             ({
               id: String(row.id),
@@ -246,99 +298,126 @@ export default function ActivityGrid({
               strengthMuscleProfile: coerceStrengthMuscleProfile(row.muscle_profile),
             }) satisfies UnifiedActivity
         );
+        logDebug('strength_rpc_success', { from, to, count: rows.length });
+        return rows;
       }
 
+      logDebug('strength_rpc_failed', {
+        from,
+        to,
+        code: rpcRes.error?.code ?? null,
+        message: rpcRes.error?.message ?? null,
+      });
+
       if (!isRpcUnavailableError(rpcRes.error)) {
+        if (isAccessDeniedError(rpcRes.error)) {
+          logDebug('strength_rpc_access_denied', { from, to });
+          return [];
+        }
         throw rpcRes.error;
       }
 
-      const base = supabase
-        .schema(TABLES.strengthWorkouts.schema)
-        .from(TABLES.strengthWorkouts.table);
+      try {
+        const base = supabase
+          .schema(TABLES.strengthWorkouts.schema)
+          .from(TABLES.strengthWorkouts.table);
 
-      let workouts: any[] = [];
-      let durationMode: { type: 'col'; key: string } | { type: 'none' } = { type: 'none' };
+        let workouts: any[] = [];
+        let durationMode: { type: 'col'; key: string } | { type: 'none' } = { type: 'none' };
 
-      const t1 = await trySelectOrNull<any>(
-        base
-          .select('id, started_at, total_time_s')
-          .eq('user_id', userId)
-          .order('started_at', { ascending: false })
-          .range(from, to)
-      );
-      if (t1 && t1.error) throw t1.error;
-      if (t1) {
-        workouts = t1.data;
-        durationMode = { type: 'col', key: 'total_time_s' };
-      }
-
-      if (!t1) {
-        const t2 = await trySelectOrNull<any>(
+        const t1 = await trySelectOrNull<any>(
           base
-            .select('id, started_at, duration_s')
+            .select('id, started_at, total_time_s')
             .eq('user_id', userId)
             .order('started_at', { ascending: false })
             .range(from, to)
         );
-        if (t2 && t2.error) throw t2.error;
-        if (t2) {
-          workouts = t2.data;
-          durationMode = { type: 'col', key: 'duration_s' };
-        }
-      }
-
-      if (!t1 && workouts.length === 0) {
-        const res = await base
-          .select('id, started_at')
-          .eq('user_id', userId)
-          .order('started_at', { ascending: false })
-          .range(from, to);
-
-        if (res.error) throw res.error;
-        workouts = res.data ?? [];
-        durationMode = { type: 'none' };
-      }
-
-      const workoutIds = workouts.map((w) => w.id);
-
-      const volumeMap = new Map<string, number>();
-      if (workoutIds.length) {
-        const volRes = await supabase
-          .schema(TABLES.strengthSummary.schema)
-          .from(TABLES.strengthSummary.table)
-          .select('strength_workout_id, vol')
-          .eq('user_id', userId)
-          .in('strength_workout_id', workoutIds);
-
-        if (volRes.error) throw volRes.error;
-
-        for (const r of volRes.data ?? []) {
-          const k = String((r as any).strength_workout_id);
-          volumeMap.set(k, (volumeMap.get(k) ?? 0) + Number((r as any).vol ?? 0));
-        }
-      }
-
-      const page: UnifiedActivity[] = workouts.map((w) => {
-        let durationS: number | null = null;
-        if (durationMode.type === 'col') {
-          const v = w[durationMode.key];
-          durationS = v == null ? null : Number(v);
+        if (t1 && t1.error) throw t1.error;
+        if (t1) {
+          workouts = t1.data;
+          durationMode = { type: 'col', key: 'total_time_s' };
         }
 
-        return {
-          id: String(w.id),
-          source: 'strength',
-          kind: 'strength',
-          startedAt: w.started_at,
-          durationS,
-          totalVolume: volumeMap.get(String(w.id)) ?? 0,
-          strengthMuscleProfile: null,
-        };
-      });
+        if (!t1) {
+          const t2 = await trySelectOrNull<any>(
+            base
+              .select('id, started_at, duration_s')
+              .eq('user_id', userId)
+              .order('started_at', { ascending: false })
+              .range(from, to)
+          );
+          if (t2 && t2.error) throw t2.error;
+          if (t2) {
+            workouts = t2.data;
+            durationMode = { type: 'col', key: 'duration_s' };
+          }
+        }
 
-      return page;
+        if (!t1 && workouts.length === 0) {
+          const res = await base
+            .select('id, started_at')
+            .eq('user_id', userId)
+            .order('started_at', { ascending: false })
+            .range(from, to);
+
+          if (res.error) throw res.error;
+          workouts = res.data ?? [];
+          durationMode = { type: 'none' };
+        }
+
+        const workoutIds = workouts.map((w) => w.id);
+
+        const volumeMap = new Map<string, number>();
+        if (workoutIds.length) {
+          const volRes = await supabase
+            .schema(TABLES.strengthSummary.schema)
+            .from(TABLES.strengthSummary.table)
+            .select('strength_workout_id, vol')
+            .eq('user_id', userId)
+            .in('strength_workout_id', workoutIds);
+
+          if (volRes.error) throw volRes.error;
+
+          for (const r of volRes.data ?? []) {
+            const k = String((r as any).strength_workout_id);
+            volumeMap.set(k, (volumeMap.get(k) ?? 0) + Number((r as any).vol ?? 0));
+          }
+        }
+
+        const page: UnifiedActivity[] = workouts.map((w) => {
+          let durationS: number | null = null;
+          if (durationMode.type === 'col') {
+            const v = w[durationMode.key];
+            durationS = v == null ? null : Number(v);
+          }
+
+          return {
+            id: String(w.id),
+            source: 'strength',
+            kind: 'strength',
+            startedAt: w.started_at,
+            durationS,
+            totalVolume: volumeMap.get(String(w.id)) ?? 0,
+            strengthMuscleProfile: null,
+          };
+        });
+
+        logDebug('strength_fallback_success', { from, to, count: page.length });
+        return page;
+      } catch (fallbackError: any) {
+        if (isAccessDeniedError(fallbackError)) {
+          logDebug('strength_fallback_access_denied', {
+            from,
+            to,
+            code: fallbackError?.code ?? null,
+            message: fallbackError?.message ?? null,
+          });
+          return [];
+        }
+        throw fallbackError;
+      }
     },
-    [userId]
+    [logDebug, userId]
   );
 
   // -----------------------------
@@ -358,7 +437,18 @@ export default function ActivityGrid({
         .range(from, to);
 
       const res = await q;
-      if (res.error) throw res.error;
+      if (res.error) {
+        if (isAccessDeniedError(res.error)) {
+          logDebug('indoor_sessions_access_denied', {
+            from,
+            to,
+            code: res.error?.code ?? null,
+            message: res.error?.message ?? null,
+          });
+          return [];
+        }
+        throw res.error;
+      }
 
       const page = (res.data ?? [])
         .map((r: any) => {
@@ -387,13 +477,30 @@ export default function ActivityGrid({
         })
         .filter((item): item is UnifiedActivity => item != null);
 
-      if (activeFilter === 'all') return page;
-      return page.filter((item) => {
+      if (activeFilter === 'all') {
+        logDebug('indoor_sessions_success', {
+          from,
+          to,
+          count: page.length,
+          rawCount: page.length,
+          activeFilter,
+        });
+        return page;
+      }
+      const filtered = page.filter((item) => {
         if (activeFilter === 'strength') return false;
         return item.kind === activeFilter;
       });
+      logDebug('indoor_sessions_success', {
+        from,
+        to,
+        count: filtered.length,
+        rawCount: page.length,
+        activeFilter,
+      });
+      return filtered;
     },
-    [userId]
+    [logDebug, userId]
   );
 
   // -----------------------------
@@ -414,7 +521,18 @@ export default function ActivityGrid({
         .range(from, to);
 
       const res = await q;
-      if (res.error) throw res.error;
+      if (res.error) {
+        if (isAccessDeniedError(res.error)) {
+          logDebug('outdoor_sessions_access_denied', {
+            from,
+            to,
+            code: res.error?.code ?? null,
+            message: res.error?.message ?? null,
+          });
+          return [];
+        }
+        throw res.error;
+      }
 
       const rows = (res.data ?? []) as any[];
       const previewMap = await fetchOutdoorRoutePreviewMap(rows.map((row) => String(row.id)));
@@ -442,23 +560,133 @@ export default function ActivityGrid({
         })
         .filter((item): item is UnifiedActivity => item != null);
 
-      if (activeFilter === 'all') return page;
-      return page.filter((item) => {
+      if (activeFilter === 'all') {
+        logDebug('outdoor_sessions_success', {
+          from,
+          to,
+          count: page.length,
+          rawCount: page.length,
+          activeFilter,
+        });
+        return page;
+      }
+      const filtered = page.filter((item) => {
         if (activeFilter === 'strength') return false;
         return item.kind === activeFilter;
       });
+      logDebug('outdoor_sessions_success', {
+        from,
+        to,
+        count: filtered.length,
+        rawCount: page.length,
+        activeFilter,
+      });
+      return filtered;
     },
-    [userId]
+    [logDebug, userId]
+  );
+
+  const fetchSocialFallbackPage = useCallback(
+    async (from: number, to: number, activeFilter: ActivityFilter) => {
+      const limit = Math.max(1, to - from + 1);
+      const mappedFilter =
+        activeFilter === 'all' ? null : activeFilter === 'strength' ? 'strength' : activeFilter;
+
+      const posts = await getSocialFeedForUser({
+        userId,
+        offset: from,
+        limit,
+        activityType: mappedFilter,
+      });
+
+      const activityTypeCounts: Record<string, number> = {};
+      const visibilityCounts: Record<string, number> = {};
+      for (const post of posts) {
+        const typeKey = String(post.activityType ?? 'unknown');
+        const visibilityKey = String(post.visibility ?? 'unknown');
+        activityTypeCounts[typeKey] = (activityTypeCounts[typeKey] ?? 0) + 1;
+        visibilityCounts[visibilityKey] = (visibilityCounts[visibilityKey] ?? 0) + 1;
+      }
+      logDebug('social_fallback_raw', {
+        from,
+        to,
+        rawCount: posts.length,
+        activityTypeCounts,
+        visibilityCounts,
+      });
+
+      let droppedUnsupported = 0;
+      const page = posts
+        .map((post): UnifiedActivity | null => {
+          if (post.activityType !== 'strength' && post.activityType !== 'run' && post.activityType !== 'walk') {
+            droppedUnsupported += 1;
+            return null;
+          }
+
+          const source: ActivitySource =
+            post.activityType === 'strength'
+              ? 'strength'
+              : post.isOutdoorSession
+                ? 'outdoor'
+                : 'session';
+
+          const durationS = metricNum(post.metrics, ['total_time_s', 'duration_s', 'duration']);
+          const distanceM = metricNum(post.metrics, ['distance_m', 'total_distance_m']);
+          const paceKm = metricNum(post.metrics, ['avg_pace_s_per_km', 'pace_s_per_km']);
+          const paceMi =
+            metricNum(post.metrics, ['avg_pace_s_per_mi', 'pace_s_per_mi']) ??
+            (paceKm == null ? null : paceKm * 1.609344);
+
+          return {
+            id: String(post.sessionId ?? post.sourceId ?? post.id),
+            source,
+            kind: post.activityType,
+            postId: String(post.id),
+            startedAt: post.createdAt,
+            durationS: durationS == null ? null : Number(durationS),
+            distanceM: distanceM == null ? null : Number(distanceM),
+            paceKm: paceKm == null ? null : Number(paceKm),
+            paceMi: paceMi == null ? null : Number(paceMi),
+            speedMps: metricNum(post.metrics, ['avg_speed_mps']),
+            totalVolume:
+              post.activityType === 'strength'
+                ? metricNum(post.metrics, ['total_volume_kg', 'volume_kg'])
+                : null,
+            strengthMuscleProfile:
+              post.activityType === 'strength'
+                ? coerceStrengthMuscleProfile(post.strengthMuscleProfile)
+                : null,
+            routePreview:
+              post.activityType === 'run' || post.activityType === 'walk'
+                ? post.routePreview
+                : null,
+          };
+        })
+        .filter((item): item is UnifiedActivity => item != null);
+
+      logDebug('social_fallback_success', {
+        from,
+        to,
+        count: page.length,
+        rawCount: posts.length,
+        droppedUnsupported,
+        activeFilter,
+      });
+      return page;
+    },
+    [logDebug, userId]
   );
 
   const resetPagination = useCallback(() => {
     strengthOffset.current = 0;
     sessionsOffset.current = 0;
     outdoorOffset.current = 0;
+    socialOffset.current = 0;
 
     strengthDone.current = false;
     sessionsDone.current = false;
     outdoorDone.current = false;
+    socialDone.current = false;
 
     setItems([]);
   }, []);
@@ -467,6 +695,7 @@ export default function ActivityGrid({
     async (reset: boolean) => {
       // Always render header; when userId not ready, stop loading and show empty state.
       if (!isActive) {
+        logDebug('fetch_next_skipped_inactive', { reset });
         setLoadingInitial(false);
         setLoadingMore(false);
         return;
@@ -477,6 +706,7 @@ export default function ActivityGrid({
         setError(null);
         setLoadingInitial(false);
         setLoadingMore(false);
+        logDebug('fetch_next_skipped_missing_user', { reset });
         return;
       }
 
@@ -487,8 +717,18 @@ export default function ActivityGrid({
       if (!reset) {
         const strengthAllDone = !wantsStrength || strengthDone.current;
         const cardioAllDone = !wantsCardio || (sessionsDone.current && outdoorDone.current);
-        if (strengthAllDone && cardioAllDone) return;
+        if (strengthAllDone && cardioAllDone && socialDone.current) return;
       }
+
+      logDebug('fetch_next_start', {
+        reset,
+        wantsStrength,
+        wantsCardio,
+        strengthDone: strengthDone.current,
+        sessionsDone: sessionsDone.current,
+        outdoorDone: outdoorDone.current,
+        socialDone: socialDone.current,
+      });
 
       if (reset) resetPagination();
 
@@ -537,6 +777,22 @@ export default function ActivityGrid({
           outdoorDone.current = true;
         }
 
+        const primaryIncomingCount = incoming.length;
+        if (primaryIncomingCount > 0) {
+          socialDone.current = true;
+        }
+
+        if (incoming.length === 0 && !socialDone.current) {
+          const page = await fetchSocialFallbackPage(
+            socialOffset.current,
+            socialOffset.current + PAGE_SIZE - 1,
+            filter
+          );
+          socialOffset.current += page.length;
+          if (page.length < PAGE_SIZE) socialDone.current = true;
+          incoming.push(...page);
+        }
+
         setItems((prev) => {
           const map = new Map(prev.map((p) => [`${p.source}:${p.id}`, p]));
           for (const i of incoming) map.set(`${i.source}:${i.id}`, i);
@@ -545,9 +801,27 @@ export default function ActivityGrid({
             (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
           );
         });
+        logDebug('fetch_next_success', {
+          reset,
+          incomingCount: incoming.length,
+          strengthOffset: strengthOffset.current,
+          sessionsOffset: sessionsOffset.current,
+          outdoorOffset: outdoorOffset.current,
+          socialOffset: socialOffset.current,
+          strengthDone: strengthDone.current,
+          sessionsDone: sessionsDone.current,
+          outdoorDone: outdoorDone.current,
+          socialDone: socialDone.current,
+          usedSocialFallback: primaryIncomingCount === 0 && incoming.length > 0,
+        });
       } catch (e: any) {
         console.error('[ActivityGrid] fetchNext failed', e);
         setError(e?.message?.trim?.() ? e.message : 'Failed to load activities');
+        logDebug('fetch_next_failed', {
+          reset,
+          code: e?.code ?? null,
+          message: e?.message ?? String(e ?? ''),
+        });
       } finally {
         setLoadingInitial(false);
         setLoadingMore(false);
@@ -560,9 +834,21 @@ export default function ActivityGrid({
       fetchStrengthPage,
       fetchSessionsPage,
       fetchOutdoorPage,
+      fetchSocialFallbackPage,
+      logDebug,
       resetPagination,
     ]
   );
+
+  useEffect(() => {
+    logDebug('state_snapshot', {
+      items: items.length,
+      loadingInitial,
+      loadingMore,
+      error: error ?? null,
+      isActive,
+    });
+  }, [error, isActive, items.length, loadingInitial, loadingMore, logDebug]);
 
   // Fetch when active + user changes
   useEffect(() => {
@@ -624,27 +910,93 @@ export default function ActivityGrid({
     const strengthRadarVisible =
       item.kind === 'strength' && !!item.strengthMuscleProfile;
 
+    const onOpenCard = async () => {
+      const postId = normalizeRouteId(item.postId);
+      let sessionOrWorkoutId = normalizeRouteId(item.id);
+
+      // If an item came from a legacy feed row without source/session IDs, recover them by post id.
+      if (!sessionOrWorkoutId && postId) {
+        const postMetaRes = await supabase
+          .schema('social')
+          .from('posts')
+          .select('session_id,source_id')
+          .eq('id', postId)
+          .maybeSingle();
+
+        if (!postMetaRes.error && postMetaRes.data) {
+          const row = postMetaRes.data as any;
+          sessionOrWorkoutId = normalizeRouteId(row.session_id ?? row.source_id);
+          logDebug('card_press_resolved_from_post', {
+            source: item.source,
+            kind: item.kind,
+            postId,
+            resolvedId: sessionOrWorkoutId,
+          });
+        } else if (postMetaRes.error) {
+          logDebug('card_press_post_lookup_failed', {
+            source: item.source,
+            kind: item.kind,
+            postId,
+            code: postMetaRes.error?.code ?? null,
+            message: postMetaRes.error?.message ?? null,
+          });
+        }
+      }
+
+      if (!sessionOrWorkoutId) {
+        logDebug('card_press_missing_target', {
+          source: item.source,
+          kind: item.kind,
+          postId,
+          rawId: item.id,
+        });
+        Alert.alert(
+          'Activity unavailable',
+          'This activity could not be opened because its session reference is missing.'
+        );
+        return;
+      }
+
+      logDebug('card_press_opening', {
+        source: item.source,
+        kind: item.kind,
+        id: sessionOrWorkoutId,
+        postId,
+      });
+
+      if (item.source === 'strength') {
+        router.push({
+          pathname: '/add/Strength/[id]',
+          params: postId
+            ? { id: sessionOrWorkoutId, postId }
+            : { id: sessionOrWorkoutId },
+        });
+        return;
+      }
+
+      if (item.source === 'outdoor') {
+        router.push({
+          pathname: '/progress/outdoor/[id]',
+          params: postId
+            ? { id: sessionOrWorkoutId, postId }
+            : { id: sessionOrWorkoutId },
+        });
+        return;
+      }
+
+      router.push({
+        pathname: '/progress/run_walk/[sessionId]',
+        params: postId
+          ? { sessionId: sessionOrWorkoutId, postId }
+          : { sessionId: sessionOrWorkoutId },
+      });
+    };
+
     return (
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => {
-          if (item.source === 'strength') {
-            // Strength activity cards represent workout IDs.
-            // Open the workout summary screen (same destination as after finishing a workout).
-            router.push({ pathname: '/add/Strength/[id]', params: { id: item.id } });
-            return;
-          }
-          if (item.source === 'outdoor') {
-            router.push({
-              pathname: '/progress/outdoor/[id]',
-              params: { id: item.id },
-            });
-            return;
-          }
-          router.push({
-            pathname: '/progress/run_walk/[sessionId]',
-            params: { sessionId: item.id },
-          });
+          void onOpenCard();
         }}
         style={[
           styles.card,

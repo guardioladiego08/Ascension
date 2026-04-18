@@ -9,6 +9,20 @@ Use this file for durable schema context that should not live only in chat.
 - Compatibility seeds should inspect the live FK target and mirror demo food rows into that referenced table, otherwise ingredient or diary inserts can fail with `23503` even though the same ids were inserted into `nutrition.food_items`.
 - App runtime should still treat `nutrition.food_items` as the canonical catalog; this note is specifically for hosted-schema troubleshooting, migrations, and seeds.
 
+## 2026-04-10 - Non-followed public profile feeds need a user-scoped visibility RPC when `social` schema is not exposed
+
+- Some hosted API configs do not expose the `social` schema to PostgREST clients, so direct `supabase.schema('social').from('posts')` queries fail with `PGRST106`.
+- Existing `public.get_feed_user(...)` fallback is follow-feed scoped (accepted followees only), so it can return zero rows for a public profile the viewer does not follow even when profile stats report posts.
+- Add a user-scoped RPC (`public.get_profile_feed_user(...)`) that selects from `social.posts` with `social.can_view_post(...)` gating and supports pagination/activity filters.
+- Client feed hydration should prefer this profile RPC before follow-feed fallback whenever direct `social` schema reads are unavailable.
+
+## 2026-04-10 - Run/walk summary sources should stay parity-safe across own and shared sessions
+
+- Session-detail screens can diverge if own views read `run_walk` tables directly while shared views read RPCs with different return shapes.
+- `public.get_run_walk_session_summary_user(...)` should include `started_at` / `ended_at` so shared indoor summaries can support the same downstream calculations (for example timeline windows) as own summaries.
+- Outdoor session detail needs a dedicated visibility-safe RPC (`public.get_outdoor_session_summary_user(...)`) because many hosted projects keep `run_walk` table reads owner-scoped under RLS while still allowing social visibility via shared posts/privacy.
+- Client loaders for both indoor and outdoor summaries should prefer these RPCs first, with direct table reads only as compatibility fallback when RPCs are missing.
+
 ## 2026-04-04 - Hosted nutrition diary columns may still use enums instead of text
 
 - Some hosted projects have `nutrition.diary_items.meal_type` and possibly `nutrition.diary_items.meal_slot` stored as enum types even though the local 2026-03-22 migration path defines those columns as `text` plus a check constraint.

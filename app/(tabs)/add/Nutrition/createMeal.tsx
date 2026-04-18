@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import LogoHeader from '@/components/my components/logoHeader';
 import MealSummaryCard from './components/MealSummaryCard';
 import IngredientsList from './components/IngredientsList';
+import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import {
   createDiaryEntry,
   createUserMeal,
@@ -41,7 +42,7 @@ import {
   sanitizeDecimalInput,
   type MealDraftIngredient,
 } from '@/lib/nutrition/mealBuilder';
-import { nutritionDailySummaryHref } from '@/lib/nutrition/navigation';
+import { NUTRITION_ROUTES, nutritionDailySummaryHref } from '@/lib/nutrition/navigation';
 import { firstRouteParam } from '@/lib/nutrition/routeParams';
 import { syncAndFetchMyDailyGoalResult, toLocalISODate } from '@/lib/goals/client';
 import { useAppTheme } from '@/providers/AppThemeProvider';
@@ -64,6 +65,7 @@ function round(value: number, precision = 2) {
 
 export default function CreateMeal() {
   const router = useRouter();
+  const { goBackSmart } = useSmartBack();
   const params = useLocalSearchParams<{
     recipeId?: string | string[];
     intent?: string | string[];
@@ -406,7 +408,7 @@ export default function CreateMeal() {
           ? 'Your saved meal has been updated.'
           : 'Your meal was saved to your private library.'
       );
-      router.back();
+      goBackSmart({ fallbackHref: NUTRITION_ROUTES.logHub });
     } catch (error) {
       console.warn('[CreateMeal] Failed to save meal', error);
       Alert.alert(

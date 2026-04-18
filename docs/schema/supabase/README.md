@@ -17,6 +17,8 @@ It does not replace the SQL source of truth. It points to it and captures the re
 - Indoor run/walk summary triggers must use meter-based `weekly_summary` columns only; newer trigger-hardening migrations should not reintroduce `total_miles_*` writes.
 - Strength workout templates with normalized block exercise structure and future share visibility metadata
 - Strength workout muscle-profile aggregation and visibility-safe profile activity cards for radar previews
+- Visibility-safe profile feed RPC fallback for environments where the `social` schema is not client-exposed
+- Indoor and outdoor run/walk summary RPC parity so own and shared session detail screens resolve through the same visibility-safe source
 - Signup username availability compatibility across legacy and canonical user-profile stores
 - Signup bootstrap compatibility between hosted auth triggers, `public.profiles`, and `"user".users`
 - Signup auth-trigger hardening so legacy bootstrap insert failures do not abort `auth.users` creation
