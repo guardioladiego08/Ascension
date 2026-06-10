@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,15 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import LogoHeader from '@/components/my components/logoHeader';
+import MealsFoodsList from './components/MealsFoodsList';
 import {
-  copyDiaryEntryToDate,
   createDiaryEntry,
   getFavoriteFoods,
   getCanonicalFoodById,
@@ -51,6 +52,9 @@ import { syncAndFetchMyDailyGoalResult, toLocalISODate } from '@/lib/goals/clien
 import FoodQuickLogRow from './components/FoodQuickLogRow';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
+
+const SEARCH_SCOPE_TABS = ['My Meals', 'My Foods', 'All'] as const;
+type SearchScopeTab = (typeof SEARCH_SCOPE_TABS)[number];
 
 function toNumber(value: number | string | null | undefined, fallback = 0) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -88,6 +92,21 @@ function parsePositiveQuantity(value: string) {
   const parsed = Number(normalizeQuantityInput(value));
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+}
+
+function normalizeSearchText(value: string | null | undefined) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function matchesFoodSearch(food: CanonicalFoodRow, normalizedQuery: string) {
+  if (!normalizedQuery) return true;
+
+  const haystack = [food.name, food.brand, food.barcode]
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean)
+    .join(' ');
+
+  return haystack.includes(normalizedQuery);
 }
 
 function buildFoodSnapshot(
@@ -128,6 +147,10 @@ export default function LogFood() {
   const initialBarcode = firstRouteParam(params.barcode);
   const todayDate = useMemo(() => toLocalISODate(), []);
 
+  const [activeTab, setActiveTab] = useState<SearchScopeTab>('All');
+  const [tabWidth, setTabWidth] = useState(0);
+  const indicatorX = useRef(new Animated.Value(0)).current;
+
   const [mealSlot, setMealSlot] = useState<MealSlot>(getDefaultMealSlotForNow);
   const [selectedFood, setSelectedFood] = useState<CanonicalFoodRow | null>(null);
   const [selectionLoading, setSelectionLoading] = useState(false);
@@ -141,7 +164,6 @@ export default function LogFood() {
   const [recentFoods, setRecentFoods] = useState<RecentFoodRow[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
-  const [logAgainEntryId, setLogAgainEntryId] = useState<string | null>(null);
   const [favoriteFoods, setFavoriteFoods] = useState<CanonicalFoodRow[]>([]);
   const [favoriteFoodIds, setFavoriteFoodIds] = useState<string[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
@@ -159,6 +181,8 @@ export default function LogFood() {
     () => toNullableNumber(gramsPerUnitInput) ?? 100,
     [gramsPerUnitInput]
   );
+  const trimmedQuery = useMemo(() => query.trim(), [query]);
+  const normalizedQuery = useMemo(() => normalizeSearchText(query), [query]);
 
   const snapshotPreview = useMemo(() => {
     if (!selectedFood || quantity == null) return null;
@@ -166,6 +190,54 @@ export default function LogFood() {
   }, [gramsPerUnit, quantity, selectedFood]);
 
   const favoriteFoodIdSet = useMemo(() => new Set(favoriteFoodIds), [favoriteFoodIds]);
+  const showMealResults = trimmedQuery.length > 0 && (activeTab === 'My Meals' || activeTab === 'All');
+  const showPublicFoodResults = trimmedQuery.length > 0 && activeTab === 'All';
+  const showMyFoodResults = trimmedQuery.length > 0 && activeTab === 'My Foods';
+  const myFoodsLoading = favoritesLoading || recentLoading;
+  const myFoodsError = favoritesError ?? recentError;
+  const searchPlaceholder =
+    activeTab === 'My Meals'
+      ? 'Search my meals'
+      : activeTab === 'My Foods'
+        ? 'Search my foods'
+        : 'Search meals and foods';
+
+  const personalFoodResults = useMemo(() => {
+    const ordered: CanonicalFoodRow[] = [];
+    const seen = new Set<string>();
+
+    for (const food of favoriteFoods) {
+      if (seen.has(food.id)) continue;
+      seen.add(food.id);
+      ordered.push(food);
+    }
+
+    for (const recent of recentFoods) {
+      const food = recent.food;
+      if (seen.has(food.id)) continue;
+      seen.add(food.id);
+      ordered.push(food);
+    }
+
+    return ordered;
+  }, [favoriteFoods, recentFoods]);
+
+  const myFoodSearchResults = useMemo(() => {
+    if (!normalizedQuery) return [];
+    return personalFoodResults.filter((food) => matchesFoodSearch(food, normalizedQuery));
+  }, [normalizedQuery, personalFoodResults]);
+
+  const handleTabPress = (tab: SearchScopeTab, index: number) => {
+    setActiveTab(tab);
+    if (!tabWidth) return;
+
+    Animated.spring(indicatorX, {
+      toValue: index * tabWidth,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 80,
+    }).start();
+  };
 
   const loadRecentFoods = useCallback(async () => {
     setRecentLoading(true);
@@ -210,6 +282,12 @@ export default function LogFood() {
       void Promise.all([loadRecentFoods(), loadFavoriteFoods()]);
     }, [loadFavoriteFoods, loadRecentFoods])
   );
+
+  useEffect(() => {
+    if (!tabWidth) return;
+    const initialIndex = SEARCH_SCOPE_TABS.indexOf(activeTab);
+    indicatorX.setValue(initialIndex * tabWidth);
+  }, [activeTab, indicatorX, tabWidth]);
 
   useEffect(() => {
     let active = true;
@@ -259,9 +337,8 @@ export default function LogFood() {
 
   useEffect(() => {
     let active = true;
-    const trimmed = query.trim();
 
-    if (!trimmed) {
+    if (!trimmedQuery || activeTab !== 'All') {
       setSearching(false);
       setSearchError(null);
       setSearchResults([]);
@@ -275,7 +352,7 @@ export default function LogFood() {
       setSearchError(null);
 
       try {
-        const rows = await searchFoods(trimmed, 20);
+        const rows = await searchFoods(trimmedQuery, 20);
         if (!active) return;
         setSearchResults(rows);
       } catch (error) {
@@ -294,7 +371,7 @@ export default function LogFood() {
       active = false;
       clearTimeout(timeout);
     };
-  }, [query]);
+  }, [activeTab, trimmedQuery]);
 
   useEffect(() => {
     let active = true;
@@ -424,33 +501,6 @@ export default function LogFood() {
     }
   };
 
-  const handleLogAgain = async (recent: RecentFoodRow) => {
-    setLogAgainEntryId(recent.lastUsage.entryId);
-
-    try {
-      const copiedEntry = await copyDiaryEntryToDate(recent.lastUsage.entryId, todayDate);
-      if (!copiedEntry) {
-        throw new Error('Could not find the source entry to copy.');
-      }
-
-      try {
-        await syncAndFetchMyDailyGoalResult(todayDate);
-      } catch (goalError) {
-        console.warn('[LogFood] Goal sync failed after log again', goalError);
-      }
-
-      router.replace(nutritionDailySummaryHref(todayDate));
-    } catch (error) {
-      console.warn('[LogFood] Failed to log again', error);
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Could not log this food again.'
-      );
-    } finally {
-      setLogAgainEntryId(null);
-    }
-  };
-
   return (
     <View style={styles.page}>
       <View style={globalStyles.safeArea}>
@@ -466,36 +516,61 @@ export default function LogFood() {
             <Text style={styles.eyebrow}>Quick Food Log</Text>
             <Text style={styles.header}>Log an item fast</Text>
             <Text style={styles.heroText}>
-              Search public foods, use recents, or scan a barcode and confirm in one
-              flow.
+              Search meals, your foods, or the public catalog and confirm in one flow.
             </Text>
           </View>
 
-          <View style={styles.topActionRow}>
-            <View style={styles.datePill}>
-              <Text style={styles.dateLabel}>Date</Text>
-              <Text style={styles.dateValue}>{todayDate}</Text>
-            </View>
+          <TouchableOpacity
+            style={[styles.buttonSecondary, styles.scanButton]}
+            activeOpacity={0.9}
+            onPress={() => router.replace(NUTRITION_ROUTES.scanFood)}
+          >
+            <MaterialCommunityIcons
+              name="barcode-scan"
+              size={16}
+              color={HOME_TONES.textPrimary}
+            />
+            <Text style={styles.buttonTextSecondary}>Scan Barcode</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.buttonSecondary, styles.scanButton]}
-              activeOpacity={0.9}
-              onPress={() => router.replace(NUTRITION_ROUTES.scanFood)}
-            >
-              <MaterialCommunityIcons
-                name="barcode-scan"
-                size={16}
-                color={HOME_TONES.textPrimary}
+          <View
+            style={styles.tabRow}
+            onLayout={(event) => {
+              const width = event.nativeEvent.layout.width;
+              setTabWidth(width / SEARCH_SCOPE_TABS.length);
+            }}
+          >
+            {tabWidth > 0 ? (
+              <Animated.View
+                style={[
+                  styles.tabIndicator,
+                  { width: tabWidth, transform: [{ translateX: indicatorX }] },
+                ]}
               />
-              <Text style={styles.buttonTextSecondary}>Scan Barcode</Text>
-            </TouchableOpacity>
+            ) : null}
+
+            {SEARCH_SCOPE_TABS.map((tab, index) => {
+              const isActive = tab === activeTab;
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  style={styles.tabButton}
+                  activeOpacity={0.86}
+                  onPress={() => handleTabPress(tab, index)}
+                >
+                  <Text style={[styles.tabText, isActive ? styles.tabTextActive : null]}>
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <View style={styles.searchCard}>
             <Ionicons name="search" size={16} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search public foods"
+              placeholder={searchPlaceholder}
               placeholderTextColor={HOME_TONES.textTertiary}
               value={query}
               onChangeText={setQuery}
@@ -710,127 +785,114 @@ export default function LogFood() {
             </View>
           ) : null}
 
-          {!query.trim() ? (
-            <View style={styles.section}>
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Favorite Foods</Text>
-                  <Text style={styles.sectionHint}>Pinned for repeat logs</Text>
+          {trimmedQuery ? (
+            <View style={styles.searchResultsStack}>
+              {showMealResults ? (
+                <MealsFoodsList
+                  activeTab={activeTab}
+                  searchQuery={query}
+                  showQuickCopySections={false}
+                  showRecentMeals={false}
+                  mealsSectionTitle={activeTab === 'All' ? 'Meal Results' : 'My Meals'}
+                />
+              ) : null}
+
+              {showPublicFoodResults ? (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Food Results</Text>
+                    <Text style={styles.sectionHint}>Tap a food to prefill and log</Text>
+                  </View>
+
+                  {searchResults.length === 0 && !searching ? (
+                    <View style={styles.noResultsWrap}>
+                      <View style={[styles.panelSoft, styles.inlineState]}>
+                        <Text style={styles.stateText}>No foods found for this search.</Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.buttonSecondary, styles.createFoodCta]}
+                        activeOpacity={0.9}
+                        onPress={() =>
+                          router.push({
+                            pathname: NUTRITION_ROUTES.createFood,
+                            params: { q: trimmedQuery },
+                          })
+                        }
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color={HOME_TONES.textPrimary} />
+                        <Text style={styles.buttonTextSecondary}>Create Public Food</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.list}>
+                      {searchResults.map((food) => (
+                        <FoodQuickLogRow
+                          key={food.id}
+                          name={food.name}
+                          brand={food.brand}
+                          calories={food.calories}
+                          protein={food.protein}
+                          carbs={food.carbs}
+                          fat={food.fat}
+                          subtitle={food.barcode ? `Barcode ${food.barcode}` : null}
+                          selected={selectedFood?.id === food.id}
+                          onPress={() => handleSelectFood(food)}
+                          isFavorite={favoriteFoodIdSet.has(food.id)}
+                          favoriteLoading={favoriteActionFoodId === food.id}
+                          onToggleFavorite={() => handleToggleFoodFavorite(food)}
+                        />
+                      ))}
+                    </View>
+                  )}
                 </View>
+              ) : null}
 
-                {favoritesLoading ? (
-                  <View style={[styles.panelSoft, styles.inlineState]}>
-                    <ActivityIndicator size="small" color={colors.highlight1} />
-                    <Text style={styles.stateText}>Loading favorites...</Text>
+              {showMyFoodResults ? (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>My Foods</Text>
+                    <Text style={styles.sectionHint}>Favorites and recent foods that match</Text>
                   </View>
-                ) : favoritesError ? (
-                  <Text style={styles.errorText}>{favoritesError}</Text>
-                ) : favoriteFoods.length === 0 ? (
-                  <View style={[styles.panelSoft, styles.inlineState]}>
-                    <Text style={styles.stateText}>
-                      Star foods from search or recents to pin them here.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.list}>
-                    {favoriteFoods.map((food) => (
-                      <FoodQuickLogRow
-                        key={food.id}
-                        name={food.name}
-                        brand={food.brand}
-                        calories={food.calories}
-                        protein={food.protein}
-                        carbs={food.carbs}
-                        fat={food.fat}
-                        subtitle={food.barcode ? `Barcode ${food.barcode}` : null}
-                        selected={selectedFood?.id === food.id}
-                        onPress={() => handleSelectFood(food)}
-                        isFavorite={favoriteFoodIdSet.has(food.id)}
-                        favoriteLoading={favoriteActionFoodId === food.id}
-                        onToggleFavorite={() => handleToggleFoodFavorite(food)}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
 
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Recent Foods</Text>
-                  <Text style={styles.sectionHint}>Copy prior entries into today</Text>
+                  {myFoodsLoading ? (
+                    <View style={[styles.panelSoft, styles.inlineState]}>
+                      <ActivityIndicator size="small" color={colors.highlight1} />
+                      <Text style={styles.stateText}>Loading your foods...</Text>
+                    </View>
+                  ) : myFoodsError ? (
+                    <Text style={styles.errorText}>{myFoodsError}</Text>
+                  ) : myFoodSearchResults.length === 0 ? (
+                    <View style={[styles.panelSoft, styles.inlineState]}>
+                      <Text style={styles.stateText}>
+                        No foods in your favorites or recents match this search.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.list}>
+                      {myFoodSearchResults.map((food) => (
+                        <FoodQuickLogRow
+                          key={food.id}
+                          name={food.name}
+                          brand={food.brand}
+                          calories={food.calories}
+                          protein={food.protein}
+                          carbs={food.carbs}
+                          fat={food.fat}
+                          subtitle={food.barcode ? `Barcode ${food.barcode}` : null}
+                          selected={selectedFood?.id === food.id}
+                          onPress={() => handleSelectFood(food)}
+                          isFavorite={favoriteFoodIdSet.has(food.id)}
+                          favoriteLoading={favoriteActionFoodId === food.id}
+                          onToggleFavorite={() => handleToggleFoodFavorite(food)}
+                        />
+                      ))}
+                    </View>
+                  )}
                 </View>
-
-                {recentLoading ? (
-                  <View style={[styles.panelSoft, styles.inlineState]}>
-                    <ActivityIndicator size="small" color={colors.highlight1} />
-                    <Text style={styles.stateText}>Loading recent foods...</Text>
-                  </View>
-                ) : recentError ? (
-                  <Text style={styles.errorText}>{recentError}</Text>
-                ) : recentFoods.length === 0 ? (
-                  <View style={[styles.panelSoft, styles.inlineState]}>
-                    <Text style={styles.stateText}>No recent foods yet.</Text>
-                  </View>
-                ) : (
-                  <View style={styles.list}>
-                    {recentFoods.map((recent) => (
-                      <FoodQuickLogRow
-                        key={recent.lastUsage.entryId}
-                        name={recent.food.name}
-                        brand={recent.food.brand}
-                        calories={recent.food.calories}
-                        protein={recent.food.protein}
-                        carbs={recent.food.carbs}
-                        fat={recent.food.fat}
-                        subtitle={`${mealSlotLabel(recent.lastUsage.mealSlot)} • ${formatQuantity(recent.lastUsage.quantity)} ${recent.lastUsage.unitLabel}`}
-                        selected={selectedFood?.id === recent.food.id}
-                        onPress={() => handleSelectFood(recent.food)}
-                        actionLabel="Copy Today"
-                        actionLoading={logAgainEntryId === recent.lastUsage.entryId}
-                        onActionPress={() => handleLogAgain(recent)}
-                        isFavorite={favoriteFoodIdSet.has(recent.food.id)}
-                        favoriteLoading={favoriteActionFoodId === recent.food.id}
-                        onToggleFavorite={() => handleToggleFoodFavorite(recent.food)}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
+              ) : null}
             </View>
-          ) : (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Search Results</Text>
-                <Text style={styles.sectionHint}>Tap a food to prefill and log</Text>
-              </View>
-
-              {searchResults.length === 0 && !searching ? (
-                <View style={[styles.panelSoft, styles.inlineState]}>
-                  <Text style={styles.stateText}>No foods found for this search.</Text>
-                </View>
-              ) : (
-                <View style={styles.list}>
-                  {searchResults.map((food) => (
-                    <FoodQuickLogRow
-                      key={food.id}
-                      name={food.name}
-                      brand={food.brand}
-                      calories={food.calories}
-                      protein={food.protein}
-                      carbs={food.carbs}
-                      fat={food.fat}
-                      subtitle={food.barcode ? `Barcode ${food.barcode}` : null}
-                      selected={selectedFood?.id === food.id}
-                      onPress={() => handleSelectFood(food)}
-                      isFavorite={favoriteFoodIdSet.has(food.id)}
-                      favoriteLoading={favoriteActionFoodId === food.id}
-                      onToggleFavorite={() => handleToggleFoodFavorite(food)}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
+          ) : null}
         </ScrollView>
       </View>
     </View>
@@ -883,39 +945,45 @@ function createStyles(
       fontSize: 14,
       lineHeight: 20,
     },
-    topActionRow: {
-      flexDirection: 'row',
-      gap: 10,
-      alignItems: 'center',
+    scanButton: {
+      width: '100%',
+      gap: 6,
     },
-    datePill: {
-      flex: 1,
-      borderRadius: 16,
+    tabRow: {
+      flexDirection: 'row',
+      position: 'relative',
+      borderRadius: 18,
       borderWidth: 1,
       borderColor: HOME_TONES.borderSoft,
       backgroundColor: HOME_TONES.surface2,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      gap: 2,
+      padding: 4,
+      overflow: 'hidden',
     },
-    dateLabel: {
-      color: HOME_TONES.textTertiary,
+    tabIndicator: {
+      position: 'absolute',
+      top: 4,
+      bottom: 4,
+      left: 4,
+      borderRadius: 14,
+      backgroundColor: colors.highlight1,
+    },
+    tabButton: {
+      flex: 1,
+      minHeight: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1,
+    },
+    tabText: {
+      color: HOME_TONES.textSecondary,
       fontFamily: fonts.label,
-      fontSize: 10,
-      lineHeight: 12,
-      letterSpacing: 0.5,
+      fontSize: 12,
+      lineHeight: 14,
+      letterSpacing: 0.35,
       textTransform: 'uppercase',
     },
-    dateValue: {
-      color: HOME_TONES.textPrimary,
-      fontFamily: fonts.heading,
-      fontSize: 14,
-      lineHeight: 18,
-    },
-    scanButton: {
-      flexDirection: 'row',
-      gap: 6,
-      minWidth: 148,
+    tabTextActive: {
+      color: colors.blkText,
     },
     buttonPrimary: {
       height: 48,
@@ -971,6 +1039,12 @@ function createStyles(
       fontSize: 13,
       lineHeight: 17,
     },
+    noResultsWrap: {
+      gap: 10,
+    },
+    createFoodCta: {
+      gap: 8,
+    },
     errorText: {
       color: colors.danger,
       fontFamily: fonts.body,
@@ -1000,6 +1074,9 @@ function createStyles(
     },
     section: {
       gap: 10,
+    },
+    searchResultsStack: {
+      gap: 14,
     },
     sectionHeader: {
       flexDirection: 'row',

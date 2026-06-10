@@ -138,6 +138,7 @@ export default function IndoorSessionSummary() {
   const [heartRateLoaded, setHeartRateLoaded] = useState(false);
   const autoHeartRateRetryRef = useRef(false);
   const activeHeartRateSyncTokenRef = useRef(0);
+  const hydratedDraftIdRef = useRef<string | null>(null);
 
   // ✅ Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -154,6 +155,10 @@ export default function IndoorSessionSummary() {
           return;
         }
 
+        if (hydratedDraftIdRef.current === draftId) {
+          return;
+        }
+
         const d = await getDraft(draftId);
         if (!mounted) return;
 
@@ -163,6 +168,7 @@ export default function IndoorSessionSummary() {
           return;
         }
 
+        hydratedDraftIdRef.current = draftId;
         setDraft(d);
         console.log('[IndoorSessionSummary] draftId:', draftId);
         console.log('[IndoorSessionSummary] loaded draft:', d);

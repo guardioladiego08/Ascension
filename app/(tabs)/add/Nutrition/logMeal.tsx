@@ -1,12 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -17,36 +15,10 @@ import { NUTRITION_ROUTES } from '@/lib/nutrition/navigation';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { HOME_TONES } from '../../home/tokens';
 
-const TABS = ['My Meals', 'My Foods', 'All'] as const;
-type TabKey = (typeof TABS)[number];
-
 export default function LogMeal() {
   const router = useRouter();
   const { colors, fonts, globalStyles } = useAppTheme();
   const styles = useMemo(() => createStyles(colors, fonts), [colors, fonts]);
-
-  const [activeTab, setActiveTab] = useState<TabKey>('My Meals');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [tabWidth, setTabWidth] = useState(0);
-  const indicatorX = useRef(new Animated.Value(0)).current;
-
-  const handleTabPress = (tab: TabKey, index: number) => {
-    setActiveTab(tab);
-    if (!tabWidth) return;
-
-    Animated.spring(indicatorX, {
-      toValue: index * tabWidth,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 80,
-    }).start();
-  };
-
-  useEffect(() => {
-    if (!tabWidth) return;
-    const initialIndex = TABS.indexOf(activeTab);
-    indicatorX.setValue(initialIndex * tabWidth);
-  }, [activeTab, indicatorX, tabWidth]);
 
   return (
     <View style={styles.page}>
@@ -64,7 +36,7 @@ export default function LogMeal() {
               <Text style={styles.eyebrow}>Nutrition Log</Text>
               <Text style={styles.header}>Record meals</Text>
               <Text style={styles.heroText}>
-                Search saved meals, build new recipes, or scan packaged foods without
+                Review saved meals, build new recipes, or scan packaged foods without
                 leaving the nutrition flow.
               </Text>
             </View>
@@ -103,52 +75,16 @@ export default function LogMeal() {
             <Text style={styles.buttonTextSecondary}>Quick Log Food</Text>
           </TouchableOpacity>
 
-          <View style={styles.searchWrap}>
-            <Ionicons name="search" size={16} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search meals and foods"
-              placeholderTextColor={HOME_TONES.textTertiary}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-          </View>
-
-          <View
-            style={styles.tabRow}
-            onLayout={(event) => {
-              const width = event.nativeEvent.layout.width;
-              setTabWidth(width / TABS.length);
-            }}
+          <TouchableOpacity
+            style={[styles.buttonSecondary, styles.quickLogButton]}
+            activeOpacity={0.9}
+            onPress={() => router.push(NUTRITION_ROUTES.createFood)}
           >
-            {tabWidth > 0 ? (
-              <Animated.View
-                style={[
-                  styles.tabIndicator,
-                  { width: tabWidth, transform: [{ translateX: indicatorX }] },
-                ]}
-              />
-            ) : null}
+            <Ionicons name="add-circle-outline" size={16} color={HOME_TONES.textPrimary} />
+            <Text style={styles.buttonTextSecondary}>Create Public Food</Text>
+          </TouchableOpacity>
 
-            {TABS.map((tab, index) => {
-              const isActive = tab === activeTab;
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  style={styles.tabButton}
-                  activeOpacity={0.86}
-                  onPress={() => handleTabPress(tab, index)}
-                >
-                  <Text style={[styles.tabText, isActive ? styles.tabTextActive : null]}>
-                    {tab}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <MealsFoodsList activeTab={activeTab} searchQuery={searchQuery} />
+          <MealsFoodsList activeTab="My Meals" searchQuery="" />
         </ScrollView>
       </View>
     </View>
@@ -163,13 +99,6 @@ function createStyles(
     page: {
       flex: 1,
       backgroundColor: HOME_TONES.background,
-    },
-    panel: {
-      backgroundColor: HOME_TONES.surface1,
-      borderRadius: 28,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      padding: 22,
     },
     eyebrow: {
       color: HOME_TONES.textTertiary,
@@ -260,59 +189,6 @@ function createStyles(
     quickLogButton: {
       flexDirection: 'row',
       gap: 8,
-    },
-    searchWrap: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface2,
-      paddingHorizontal: 14,
-      minHeight: 52,
-    },
-    searchInput: {
-      flex: 1,
-      marginLeft: 10,
-      color: HOME_TONES.textPrimary,
-      fontFamily: fonts.body,
-      fontSize: 15,
-    },
-    tabRow: {
-      flexDirection: 'row',
-      position: 'relative',
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: HOME_TONES.borderSoft,
-      backgroundColor: HOME_TONES.surface2,
-      padding: 4,
-      overflow: 'hidden',
-    },
-    tabIndicator: {
-      position: 'absolute',
-      top: 4,
-      bottom: 4,
-      left: 4,
-      borderRadius: 14,
-      backgroundColor: colors.highlight1,
-    },
-    tabButton: {
-      flex: 1,
-      minHeight: 42,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1,
-    },
-    tabText: {
-      color: HOME_TONES.textSecondary,
-      fontFamily: fonts.label,
-      fontSize: 12,
-      lineHeight: 14,
-      letterSpacing: 0.35,
-      textTransform: 'uppercase',
-    },
-    tabTextActive: {
-      color: colors.blkText,
     },
   });
 }

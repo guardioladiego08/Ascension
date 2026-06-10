@@ -2,6 +2,13 @@
 
 Use this file for durable schema context that should not live only in chat.
 
+## 2026-05-29 - nutrition.food_items is now the only supported food catalog reference
+
+- Apply `20260529_nutrition_food_item_reference_canonicalization.sql` before deleting any legacy foods table such as `public.foods`.
+- `nutrition.diary_items.food_id`, `nutrition.recipe_ingredients.food_id`, `nutrition.user_favorite_foods.food_id`, and `nutrition.food_submissions.canonical_food_id` are now expected to store the UUID shape of `nutrition.food_items.id`.
+- App runtime should no longer translate `nutrition.food_items` UUIDs into legacy `foods` ids; schema drift must be fixed in the database, not hidden in the client.
+- Legacy `public.foods` or `nutrition.foods` rows are now migration-only backfill sources. New reads, writes, and future features should ignore them.
+
 ## 2026-04-04 - Hosted nutrition food foreign keys can still point at legacy foods tables
 
 - Some hosted projects still have live `food_id` foreign keys on nutrition tables pointing at a legacy `foods` table even when `nutrition.food_items` already exists.

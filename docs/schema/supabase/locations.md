@@ -3,6 +3,7 @@
 ## Primary SQL Sources
 
 - Migrations: `supabase/migrations/`
+- Nutrition food-reference canonicalization migration: `supabase/migrations/20260529_nutrition_food_item_reference_canonicalization.sql`
 - Indoor run/walk stats compatibility migration: `supabase/migrations/20260331_fix_indoor_run_walk_stats_meter_columns.sql`
 - Strength workout templates migration: `supabase/migrations/20260331_strength_workout_templates.sql`
 - Strength template schema-cache refresh migration: `supabase/migrations/20260401_strength_template_schema_cache_refresh.sql`
@@ -33,6 +34,8 @@
 ## Related App Code
 
 - Supabase client helpers: `lib/supabase.ts`
+- Nutrition data-access helpers: `lib/nutrition/dataAccess.ts`
+- Nutrition add/log screens: `app/(tabs)/add/Nutrition/
 - Shared user preference helpers: `lib/userPreferences.ts`
 - Shared auth bootstrap identity helpers: `lib/auth/bootstrapIdentity.ts`
 - Signup email flow: `app/SignInLogin/SignupEmail.tsx`

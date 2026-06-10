@@ -620,6 +620,182 @@ function isForeignKeyViolation(error: unknown, constraintName?: string) {
   );
 }
 
+function isUniqueViolation(error: unknown, constraintName?: string) {
+  const parsed = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+  const haystack = `${String(parsed?.message ?? '')} ${String(parsed?.details ?? '')} ${String(parsed?.hint ?? '')}`.toLowerCase();
+  const normalizedConstraint = String(constraintName ?? '').trim().toLowerCase();
+
+  if (String(parsed?.code ?? '') === '23505') {
+    if (!normalizedConstraint) return true;
+    return haystack.includes(normalizedConstraint);
+  }
+
+  return haystack.includes('duplicate key');
+}
+
+function isNutritionFoodReferenceTypeMismatch(error: unknown) {
+  const parsed = error as {
+    code?: unknown;
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+  };
+  const haystack = `${String(parsed?.message ?? '')} ${String(parsed?.details ?? '')} ${String(parsed?.hint ?? '')}`.toLowerCase();
+
+  return (
+    String(parsed?.code ?? '') === '22P02' &&
+    (
+      haystack.includes('invalid input syntax for type bigint') ||
+      haystack.includes('invalid input syntax for type integer') ||
+      haystack.includes('invalid input syntax for type uuid')
+    )
+  );
+}
+
+function getSupabaseishErrorHaystack(error: unknown) {
+  const parsed = error as {
+    message?: unknown;
+    details?: unknown;
+    hint?: unknown;
+    code?: unknown;
+    status?: unknown;
+  };
+
+  return [
+    typeof parsed?.message === 'string' ? parsed.message.trim() : '',
+    typeof parsed?.details === 'string' ? parsed.details.trim() : '',
+    typeof parsed?.hint === 'string' ? parsed.hint.trim() : '',
+    typeof parsed?.code === 'string' ? `code=${parsed.code}` : '',
+    typeof parsed?.status === 'number' ? `status=${parsed.status}` : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
+}
+
+function formatSupabaseishError(error: unknown, fallbackMessage = 'Unknown error') {
+  if (!error) return fallbackMessage;
+  if (typeof error === 'string') return error.trim() || fallbackMessage;
+  if (error instanceof Error) return error.message?.trim() || fallbackMessage;
+
+  const message = getSupabaseishErrorHaystack(error);
+  if (message) return message;
+
+  try {
+    const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error as object));
+    return serialized && serialized !== '{}' ? serialized : fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
+function normalizeThrownError(error: unknown, fallbackMessage = 'Unknown error') {
+  if (error instanceof Error) {
+    if (error.message?.trim()) return error;
+    error.message = fallbackMessage;
+    return error;
+  }
+
+  const nextMessage = formatSupabaseishError(error, fallbackMessage);
+  const wrapped = new Error(nextMessage);
+  if (error && typeof error === 'object') {
+    try {
+      Object.assign(
+        wrapped as unknown as Record<string, unknown>,
+        error as Record<string, unknown>
+      );
+    } catch {
+      // no-op: keep the wrapped message-only error
+    }
+  }
+  return wrapped;
+}
+
+function toCoreMealType(value: string | null | undefined, mealSlot: MealSlot) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === 'breakfast' || raw === 'lunch' || raw === 'dinner' || raw === 'snack') {
+    return raw;
+  }
+
+  if (mealSlot === 'breakfast' || mealSlot === 'lunch' || mealSlot === 'dinner') {
+    return mealSlot;
+  }
+
+  return 'snack';
+}
+
+function resolveVerificationStatusForCreateFood(payload: CreateCanonicalFoodPayload) {
+  return (
+    payload.verificationStatus ?? (payload.isVerified ? 'verified' : 'user_confirmed')
+  );
+}
+
+function buildCanonicalFoodInsertBase(
+  payload: CreateCanonicalFoodPayload,
+  createdBy: string,
+  verificationStatus: FoodVerificationStatus
+) {
+  return {
+    food_kind: payload.foodKind ?? 'ingredient',
+    name: String(payload.name ?? '').trim(),
+    brand: cleanNullableString(payload.brand),
+    barcode: cleanNullableString(payload.barcode),
+    serving_reference: (payload.servingReference ?? null) as JsonValue | null,
+    calories: toNullableNumber(payload.calories),
+    protein: toNullableNumber(payload.protein),
+    carbs: toNullableNumber(payload.carbs),
+    fat: toNullableNumber(payload.fat),
+    fiber: toNullableNumber(payload.fiber),
+    sodium_mg: toNullableNumber(payload.sodiumMg),
+    ingredients_text: cleanNullableString(payload.ingredientsText),
+    source: payload.source ?? 'user',
+    image_urls: cleanStringArray(payload.imageUrls),
+    created_by: createdBy,
+    is_verified: verificationStatus === 'verified',
+  };
+}
+
+async function insertCanonicalFoodRow(
+  canonicalFoodInsertBase: ReturnType<typeof buildCanonicalFoodInsertBase>,
+  verificationStatus: FoodVerificationStatus
+) {
+  let foodData: unknown = null;
+
+  const { data: nextFoodData, error: foodError } = await supabase
+    .schema(NUTRITION_SCHEMA)
+    .from('food_items')
+    .insert({
+      ...canonicalFoodInsertBase,
+      verification_status: verificationStatus,
+    })
+    .select(FOOD_ITEM_SELECT)
+    .single();
+
+  if (foodError) {
+    if (!isMissingColumn(foodError, 'verification_status')) {
+      throw foodError;
+    }
+
+    const { data: legacyFoodData, error: legacyFoodError } = await supabase
+      .schema(NUTRITION_SCHEMA)
+      .from('food_items')
+      .insert(canonicalFoodInsertBase)
+      .select(FOOD_ITEM_SELECT_LEGACY)
+      .single();
+
+    if (legacyFoodError) throw legacyFoodError;
+    foodData = legacyFoodData;
+  } else {
+    foodData = nextFoodData;
+  }
+
+  return asCanonicalFoodRow(foodData, verificationStatus);
+}
+
 function resolveFoodVerificationStatus(
   value: unknown,
   isVerifiedFallback: boolean
@@ -1906,14 +2082,39 @@ export async function getFoodSubmissionById(submissionId: string) {
   return (data as FoodSubmissionRow | null) ?? null;
 }
 
+export async function createCanonicalFood(
+  payload: CreateCanonicalFoodPayload
+): Promise<CanonicalFoodRow> {
+  const createdBy = await requireUserId(payload.createdBy);
+  const verificationStatus = resolveVerificationStatusForCreateFood(payload);
+
+  const canonicalFoodInsertBase = buildCanonicalFoodInsertBase(
+    payload,
+    createdBy,
+    verificationStatus
+  );
+
+  if (!canonicalFoodInsertBase.name) {
+    throw new Error('Food name is required');
+  }
+
+  try {
+    return await insertCanonicalFoodRow(canonicalFoodInsertBase, verificationStatus);
+  } catch (error) {
+    const barcode = cleanNullableString(payload.barcode);
+    if (barcode && isUniqueViolation(error)) {
+      const existing = await getFoodByBarcode(barcode);
+      if (existing) return existing;
+    }
+    throw error;
+  }
+}
+
 export async function confirmFoodSubmissionAndCreateCanonicalFood(
   payload: ConfirmFoodSubmissionAndCreateCanonicalFoodPayload
 ): Promise<ConfirmFoodSubmissionAndCreateCanonicalFoodResult> {
   const reviewedBy = await requireUserId(payload.reviewedBy);
-  const createdBy = await requireUserId(payload.food.createdBy ?? reviewedBy);
-  const verificationStatus: FoodVerificationStatus =
-    payload.food.verificationStatus ??
-    (payload.food.isVerified ? 'verified' : 'user_confirmed');
+  const verificationStatus = resolveVerificationStatusForCreateFood(payload.food);
 
   const { data: submissionToConfirm, error: submissionLookupError } = await supabase
     .schema(NUTRITION_SCHEMA)
@@ -1929,60 +2130,13 @@ export async function confirmFoodSubmissionAndCreateCanonicalFood(
     throw new Error('Food submission not found');
   }
 
-  const canonicalFoodInsertBase = {
-    food_kind: payload.food.foodKind ?? 'ingredient',
-    name: String(payload.food.name ?? '').trim(),
-    brand: cleanNullableString(payload.food.brand),
-    barcode: cleanNullableString(payload.food.barcode),
-    serving_reference: (payload.food.servingReference ?? null) as JsonValue | null,
-    calories: toNullableNumber(payload.food.calories),
-    protein: toNullableNumber(payload.food.protein),
-    carbs: toNullableNumber(payload.food.carbs),
-    fat: toNullableNumber(payload.food.fat),
-    fiber: toNullableNumber(payload.food.fiber),
-    sodium_mg: toNullableNumber(payload.food.sodiumMg),
-    ingredients_text: cleanNullableString(payload.food.ingredientsText),
-    source: payload.food.source ?? 'user',
-    image_urls: cleanStringArray(payload.food.imageUrls),
-    created_by: createdBy,
-    is_verified: verificationStatus === 'verified',
-  };
+  const food = await createCanonicalFood({
+    ...payload.food,
+    createdBy: payload.food.createdBy ?? reviewedBy,
+    verificationStatus,
+  });
 
-  if (!canonicalFoodInsertBase.name) {
-    throw new Error('Food name is required');
-  }
-
-  let foodData: unknown = null;
-
-  const { data: nextFoodData, error: foodError } = await supabase
-    .schema(NUTRITION_SCHEMA)
-    .from('food_items')
-    .insert({
-      ...canonicalFoodInsertBase,
-      verification_status: verificationStatus,
-    })
-    .select(FOOD_ITEM_SELECT)
-    .single();
-
-  if (foodError) {
-    if (!isMissingColumn(foodError, 'verification_status')) {
-      throw foodError;
-    }
-
-    const { data: legacyFoodData, error: legacyFoodError } = await supabase
-      .schema(NUTRITION_SCHEMA)
-      .from('food_items')
-      .insert(canonicalFoodInsertBase)
-      .select(FOOD_ITEM_SELECT_LEGACY)
-      .single();
-
-    if (legacyFoodError) throw legacyFoodError;
-    foodData = legacyFoodData;
-  } else {
-    foodData = nextFoodData;
-  }
-
-  const canonicalFoodId = extractInsertId(foodData);
+  const canonicalFoodId = extractInsertId(food);
   if (!canonicalFoodId) {
     throw new Error('Canonical food creation failed');
   }
@@ -2028,7 +2182,7 @@ export async function confirmFoodSubmissionAndCreateCanonicalFood(
   }
 
   return {
-    food: asCanonicalFoodRow(foodData, verificationStatus),
+    food,
     submission: submissionData as FoodSubmissionRow,
   };
 }
@@ -2285,11 +2439,12 @@ export async function createDiaryEntry(payload: CreateDiaryEntryPayload) {
     : multiplySnapshot(baseSnapshot, quantity);
 
   const mealSlot = normalizeMealSlot(payload.mealSlot ?? payload.mealType);
+  const mealType = toCoreMealType(cleanNullableString(payload.mealType), mealSlot);
 
   const insertPayload = {
     user_id: userId,
     diary_day_id: diaryDay.id,
-    meal_type: cleanNullableString(payload.mealType) ?? mealSlot,
+    meal_type: mealType,
     meal_slot: mealSlot,
     food_id: foodId,
     recipe_id: mealId,
@@ -2307,14 +2462,35 @@ export async function createDiaryEntry(payload: CreateDiaryEntryPayload) {
     note: cleanNullableString(payload.note),
   };
 
-  const { data, error } = await supabase
-    .schema(NUTRITION_SCHEMA)
-    .from('diary_items')
-    .insert(insertPayload)
-    .select(DIARY_ITEM_SELECT)
-    .single();
+  let data: unknown = null;
+  try {
+    const result = await supabase
+      .schema(NUTRITION_SCHEMA)
+      .from('diary_items')
+      .insert(insertPayload)
+      .select(DIARY_ITEM_SELECT)
+      .single();
 
-  if (error) throw error;
+    if (result.error) {
+      throw result.error;
+    }
+
+    data = result.data;
+  } catch (error) {
+    if (
+      foodId &&
+      (
+        isNutritionFoodReferenceTypeMismatch(error) ||
+        isForeignKeyViolation(error, 'diary_items_food_id_fkey')
+      )
+    ) {
+      throw new Error(
+        'Nutrition food references are out of date. Apply the nutrition food_items reference migration before logging foods.'
+      );
+    }
+
+    throw normalizeThrownError(error, 'Could not log this food.');
+  }
 
   await refreshDiaryDayTotals(diaryDay.id);
 

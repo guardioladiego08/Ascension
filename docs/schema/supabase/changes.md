@@ -1,5 +1,11 @@
 # Supabase Schema Changes
 
+## 2026-05-29 - Nutrition food references are now canonicalized onto nutrition.food_items UUIDs
+
+- What changed: Added migration `20260529_nutrition_food_item_reference_canonicalization.sql` to backfill legacy nutrition food references into `nutrition.food_items`, convert `nutrition.recipe_ingredients.food_id`, `nutrition.diary_items.food_id`, `nutrition.user_favorite_foods.food_id`, and `nutrition.food_submissions.canonical_food_id` onto UUID columns, and recreate their foreign keys against `nutrition.food_items(id)`. Also guarded `20260308_foods_ean_13_idx.sql` so replaying the migration history does not require `public.foods` to still exist.
+- Why: The app now logs foods strictly by the canonical `nutrition.food_items` shape, and the user plans to remove `public.foods`, so legacy FK drift can no longer be tolerated at runtime.
+- Follow-up: Apply this migration before deleting `public.foods`, reload PostgREST, and keep future nutrition features and seeds centered on `nutrition.food_items` instead of legacy `foods` tables.
+
 ## 2026-04-10 - Indoor and outdoor run/walk summaries now have parity-safe RPC sources
 
 - What changed: Added migration `20260410_run_walk_summary_source_parity.sql` to replace `public.get_run_walk_session_summary_user(...)` with a return shape that includes `started_at` / `ended_at`, and added `public.get_outdoor_session_summary_user(...)` with visibility checks mirroring social post/privacy rules plus ordered sample payloads.

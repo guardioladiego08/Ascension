@@ -42,6 +42,9 @@ export type TabKey = 'My Meals' | 'My Foods' | 'All';
 type MealsFoodsListProps = {
   activeTab: TabKey;
   searchQuery: string;
+  showQuickCopySections?: boolean;
+  showRecentMeals?: boolean;
+  mealsSectionTitle?: string;
 };
 
 type ActionKey = 'log' | 'edit-log' | 'edit' | 'copy-entry' | 'copy-slot' | 'favorite';
@@ -62,6 +65,9 @@ function formatShortDate(dateOnly: string) {
 const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
   activeTab,
   searchQuery,
+  showQuickCopySections = true,
+  showRecentMeals = true,
+  mealsSectionTitle = 'Saved Meals',
 }) => {
   const router = useRouter();
   const { colors, fonts } = useAppTheme();
@@ -325,7 +331,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
 
   return (
     <View style={styles.list}>
-      {yesterdayRepeatOptions.length > 0 || extraSlotCopyOptions.length > 0 ? (
+      {showQuickCopySections && (yesterdayRepeatOptions.length > 0 || extraSlotCopyOptions.length > 0) ? (
         <View style={styles.panelSoft}>
           {yesterdayRepeatOptions.length > 0 ? (
             <View style={styles.quickSection}>
@@ -387,7 +393,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
         </View>
       ) : null}
 
-      {visibleRecentMeals.length > 0 ? (
+      {showRecentMeals && visibleRecentMeals.length > 0 ? (
         <View style={styles.sectionBlock}>
           <Text style={styles.sectionTitle}>Recent Meals</Text>
           <View style={styles.list}>
@@ -462,7 +468,7 @@ const MealsFoodsList: React.FC<MealsFoodsListProps> = ({
       ) : null}
 
       <View style={styles.sectionBlock}>
-        <Text style={styles.sectionTitle}>Saved Meals</Text>
+        <Text style={styles.sectionTitle}>{mealsSectionTitle}</Text>
         {visibleMeals.length === 0 ? (
           <View style={[styles.panelSoft, styles.stateContainer]}>
             <Text style={styles.stateText}>
