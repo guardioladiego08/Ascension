@@ -36,6 +36,7 @@ const FILTERS: Array<{ key: ActivityFilter; label: string; icon?: keyof typeof I
   { key: 'all', label: 'All' },
   { key: 'run', label: 'Run', icon: 'walk-outline' },
   { key: 'walk', label: 'Walk', icon: 'walk-outline' },
+  { key: 'ride', label: 'Cycling', icon: 'bicycle-outline' },
   { key: 'strength', label: 'Strength', icon: 'barbell-outline' },
   { key: 'nutrition', label: 'Nutrition', icon: 'nutrition-outline' },
 ];
@@ -216,7 +217,11 @@ export default function Social() {
         return;
       }
 
-      if (post.activityType === 'run' || post.activityType === 'walk') {
+      if (
+        post.activityType === 'run' ||
+        post.activityType === 'walk' ||
+        post.activityType === 'ride'
+      ) {
         if (post.isOutdoorSession) {
           router.push({
             pathname: '/progress/outdoor/[id]',

@@ -6,11 +6,17 @@ import { useAppTheme } from '@/providers/AppThemeProvider';
 
 type Props = {
   visible: boolean;
+  sessionLabel?: string;
   onKeepGoing: () => void;
   onFinish: () => void;
 };
 
-export default function FinishConfirmModal({ visible, onKeepGoing, onFinish }: Props) {
+export default function FinishConfirmModal({
+  visible,
+  sessionLabel = 'indoor run or walk',
+  onKeepGoing,
+  onFinish,
+}: Props) {
   const { globalStyles } = useAppTheme();
 
   return (
@@ -19,7 +25,7 @@ export default function FinishConfirmModal({ visible, onKeepGoing, onFinish }: P
       onClose={onKeepGoing}
       eyebrow="Finish session"
       title="Wrap up this indoor session?"
-      subtitle="This will save your indoor run or walk to your history."
+      subtitle={`This will save your ${sessionLabel} to your history.`}
     >
       <View style={styles.row}>
         <TouchableOpacity

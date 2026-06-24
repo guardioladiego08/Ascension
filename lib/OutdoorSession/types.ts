@@ -1,6 +1,6 @@
-export type OutdoorMode = 'outdoor_run' | 'outdoor_walk';
+export type OutdoorMode = 'outdoor_run' | 'outdoor_walk' | 'outdoor_cycle';
 
-export type OutdoorActivityType = 'run' | 'walk';
+export type OutdoorActivityType = 'run' | 'walk' | 'ride';
 
 export type OutdoorSessionStatus = 'in_progress' | 'completed' | 'canceled';
 

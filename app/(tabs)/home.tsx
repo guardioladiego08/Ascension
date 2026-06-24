@@ -7,6 +7,7 @@ import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 import { useUnits } from '@/contexts/UnitsContext';
 import LogoHeader from '@/components/my components/logoHeader';
+import { getOutdoorCardioTitle } from '@/lib/cardio/activityTypes';
 import { getActiveRunWalkLock } from '@/lib/runWalkSessionLock';
 import { toLocalISODate } from '@/lib/goals/client';
 import { caloriesEnabled, computeRings } from '@/lib/goals/goalLogic';
@@ -285,11 +286,18 @@ export default function HomeScreen() {
   );
 
   const cardioLabel = useMemo(() => {
-    if (cardioSummary.runCount && cardioSummary.walkCount) return 'Run + walk';
+    const activeKinds = [
+      cardioSummary.runCount ? 'Run' : null,
+      cardioSummary.walkCount ? 'Walk' : null,
+      cardioSummary.cycleCount ? 'Cycling' : null,
+    ].filter(Boolean);
+
+    if (activeKinds.length >= 2) return activeKinds.join(' + ');
     if (cardioSummary.runCount) return 'Run';
     if (cardioSummary.walkCount) return 'Walk';
-    return 'Run / Walk';
-  }, [cardioSummary.runCount, cardioSummary.walkCount]);
+    if (cardioSummary.cycleCount) return 'Cycling';
+    return 'Cardio';
+  }, [cardioSummary.cycleCount, cardioSummary.runCount, cardioSummary.walkCount]);
 
   const handleOpenNutritionSummary = () => {
     router.push({
@@ -349,7 +357,7 @@ export default function HomeScreen() {
         <HomeSectionHeader
           eyebrow="Quick Actions"
           title="Log an Activity"
-          subtitle="Strength, cardio, and nutrition logging are all one tap away."
+          subtitle="Strength, cardio, nutrition, and body-metric logging are all one tap away."
           styles={styles}
         />
 
@@ -379,6 +387,21 @@ export default function HomeScreen() {
             accentColor={colors.accentTertiarySoft}
             styles={styles}
             onPress={() => router.push(NUTRITION_ROUTES.logHub)}
+          />
+
+          <HomeActionTile
+            title="Body metrics"
+            subtitle="Log weight, body fat, and muscle percentage for progress tracking."
+            icon={
+              <MaterialCommunityIcons
+                name="scale-bathroom"
+                size={22}
+                color={colors.warning}
+              />
+            }
+            accentColor={colors.accentSecondarySoft}
+            styles={styles}
+            onPress={() => router.push('/progress/body/log')}
           />
         </View>
 
@@ -436,6 +459,7 @@ export default function HomeScreen() {
         <HomeSectionHeader
           eyebrow="Nutrition"
           title="Calories and macros"
+          subtitle="Check today's intake progress and macro balance."
           styles={styles}
         />
 
@@ -465,7 +489,12 @@ export default function HomeScreen() {
             return;
           }
 
-          if (type === 'indoor_run' || type === 'indoor_walk') {
+          if (type === 'indoor_run') {
+            router.push('/add/Cardio/indoor/RunTypeSelect');
+            return;
+          }
+
+          if (type === 'indoor_walk') {
             router.push({
               pathname: '/add/Cardio/indoor/IndoorSession',
               params: { mode: type },
@@ -473,12 +502,36 @@ export default function HomeScreen() {
             return;
           }
 
-          if (type === 'outdoor_run' || type === 'outdoor_walk') {
+          if (type === 'indoor_cycle') {
+            router.push({
+              pathname: '/add/Cardio/indoor/IndoorSession',
+              params: { mode: type },
+            });
+            return;
+          }
+
+          if (type === 'outdoor_run') {
+            router.push('/add/Cardio/outdoor/RunTypeSelect');
+            return;
+          }
+
+          if (type === 'outdoor_walk') {
             router.push({
               pathname: '/add/Cardio/outdoor/OutdoorSession',
               params: {
-                title: type === 'outdoor_walk' ? 'Walking Session' : 'Running Session',
-                activityType: type === 'outdoor_walk' ? 'walk' : 'run',
+                title: 'Outdoor Walk',
+                activityType: 'walk',
+              },
+            });
+            return;
+          }
+
+          if (type === 'outdoor_cycle') {
+            router.push({
+              pathname: '/add/Cardio/outdoor/OutdoorSession',
+              params: {
+                title: getOutdoorCardioTitle('ride'),
+                activityType: 'ride',
               },
             });
           }

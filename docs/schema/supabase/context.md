@@ -2,6 +2,43 @@
 
 Use this file for durable schema context that should not live only in chat.
 
+## 2026-06-23 - user.body_metrics is the canonical daily biometrics log
+
+- Body-composition check-ins now live in `user.body_metrics` instead of being folded into `user.users` or ad hoc client storage.
+- The table stores one row per `user_id` + `logged_for_date`, so saving the same date should update that day's entry instead of creating duplicates.
+- Canonical stored fields are:
+  - `weight_kg`
+  - `body_fat_pct`
+  - `muscle_pct`
+- At least one metric must be present on every row.
+- Percentage fields must stay within `0..100`, and weight remains canonicalized to kilograms even when the UI is displaying pounds.
+- The progress body tab should derive `lean_mass_kg` from `weight_kg` and `body_fat_pct` at read time instead of persisting a second mass column that can drift from the source measurement.
+
+## 2026-06-23 - Indoor cycling stays on run_walk.sessions and persists cadence in run_walk.samples
+
+- Open indoor cycling should reuse the existing `run_walk.sessions` save path rather than creating another dedicated cardio table.
+- Hosted schemas therefore need `run_walk.sessions.exercise_type` to accept `indoor_cycle` in both enum-backed and text-check-backed deployments.
+- Indoor cycling cadence should persist on `run_walk.samples.cadence_rpm` so saved indoor ride summaries can still render cadence charts after the local draft is deleted.
+- `user.apply_indoor_run_walk_stats_delta(...)` must treat `indoor_cycle` as indoor cardio that increments `total_distance_biked_m` while leaving `total_distance_run_walk_m` reserved for run and walk sessions only.
+
+## 2026-06-23 - Indoor interval runs persist separately from open indoor runs
+
+- Leave `run_walk.sessions` as the open indoor run and walk summary table.
+- Indoor treadmill interval training now uses dedicated `run_walk.indoor_interval_templates`, `run_walk.indoor_interval_template_steps`, `run_walk.indoor_interval_sessions`, `run_walk.indoor_interval_session_steps`, and `run_walk.indoor_interval_samples` tables.
+- Indoor interval session rows intentionally mirror the core indoor summary columns (`exercise_type`, `status`, `started_at`, `ended_at`, `total_time_s`, `total_distance_m`, `total_elevation_m`, `avg_speed_mps`, `avg_pace_s_per_km`, `avg_pace_s_per_mi`, `timezone_str`) so weekly/lifetime indoor run stats can be updated by the same delta helper used for open indoor runs.
+- The shared `user.apply_indoor_run_walk_stats_delta(...)` helper still expects `numeric` distance and elevation arguments, so indoor interval trigger functions must cast `total_distance_m` and `total_elevation_m` out of the table’s `double precision` columns before calling it.
+- Indoor interval sample rows store treadmill-specific telemetry (`speed_mps`, `pace_s_per_km`, `pace_s_per_mi`, `incline_deg`, `elevation_m`) plus the active interval-phase metadata so finish summaries can chart speed/incline while heart-rate overlays still line up against the phase timeline.
+- Running badges now need to treat both `run_walk.sessions` and `run_walk.indoor_interval_sessions` as valid indoor run sources when evaluating completed-run totals and lifetime distance milestones.
+- Some deployments do not have the `badges` schema installed at all, so indoor interval migrations must guard badge-specific function overrides and triggers instead of assuming badge tables/functions are present.
+
+## 2026-06-22 - Interval runs now persist separately from open outdoor runs
+
+- Leave `run_walk.outdoor_sessions` and `run_walk.outdoor_samples` as the open-run path.
+- Interval running now uses dedicated `run_walk.interval_templates`, `run_walk.interval_template_steps`, `run_walk.interval_sessions`, `run_walk.interval_session_steps`, and `run_walk.interval_samples` tables.
+- Saved custom interval workouts are user-owned templates with ordered phase rows so presets and custom workouts can both be represented as explicit step sequences instead of a single repeated-duration blob.
+- Interval session rows intentionally mirror the core outdoor-run summary columns (`activity_type`, `status`, `started_at`, `ended_at`, `duration_s`, `distance_m`, `elev_gain_m`, `avg_pace_s_per_km`, `timezone_str`) so existing summary, goal, stat-rollup, and running-badge trigger helpers can be reused without forking more server logic.
+- Interval sample rows capture the active phase metadata (`phase_kind`, `session_step_index`, `interval_index`) alongside GPS timing so later analytics can answer which route segments happened during work vs. recovery.
+
 ## 2026-05-29 - nutrition.food_items is now the only supported food catalog reference
 
 - Apply `20260529_nutrition_food_item_reference_canonicalization.sql` before deleting any legacy foods table such as `public.foods`.

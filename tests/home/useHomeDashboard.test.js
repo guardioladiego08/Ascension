@@ -143,6 +143,12 @@ describe('useHomeDashboard', () => {
             total_distance_m: 3200,
           },
           {
+            ended_at: '2025-04-02T12:45:00.000Z',
+            exercise_type: 'indoor_cycle',
+            total_time_s: 1800,
+            total_distance_m: 10000,
+          },
+          {
             ended_at: '2025-04-02T13:00:00.000Z',
             exercise_type: 'elliptical',
             total_time_s: 2400,
@@ -151,11 +157,15 @@ describe('useHomeDashboard', () => {
         ],
         error: null,
       }),
+      'run_walk.indoor_interval_sessions': createQuery({
+        data: [],
+        error: null,
+      }),
       'run_walk.outdoor_sessions': createQuery({
         data: [
           {
             ended_at: '2025-04-02T14:00:00.000Z',
-            activity_type: 'outdoor_walk',
+            activity_type: 'walk',
             duration_s: 1800,
             distance_m: 2600,
           },
@@ -186,9 +196,10 @@ describe('useHomeDashboard', () => {
       volumeKg: 1250,
     });
     expect(state.cardioSummary).toEqual({
-      count: 2,
-      durationMin: 50,
-      distanceM: 5800,
+      count: 3,
+      durationMin: 80,
+      distanceM: 15800,
+      cycleCount: 1,
       runCount: 1,
       walkCount: 1,
     });

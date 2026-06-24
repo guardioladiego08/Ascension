@@ -17,7 +17,10 @@ Use it to find:
 - Summary: `docs/schema/supabase/README.md`
 - Context: `docs/schema/supabase/context.md`
 - Current nutrition note: `nutrition.food_items` is now the only supported food catalog source, and `20260529_nutrition_food_item_reference_canonicalization.sql` must be applied before removing legacy tables such as `public.foods`; after that migration, nutrition food references should stay UUID-backed on `nutrition.food_items.id` and the client should not carry legacy-ID translation logic.
+- Current interval-running note: open outdoor runs still live in `run_walk.outdoor_sessions`, open indoor runs still live in `run_walk.sessions`, outdoor interval workouts now use dedicated `run_walk.interval_*` tables, and indoor treadmill intervals now use dedicated `run_walk.indoor_interval_*` tables so both environments can keep separate template/session/sample models without collapsing into the open-run tables.
+- Current indoor cycling note: open indoor cycling also reuses `run_walk.sessions`, so hosted schemas must accept `indoor_cycle`, store cadence on `run_walk.samples.cadence_rpm`, and roll indoor cycling distance into `user.weekly_summary` / `user.lifetime_stats` bike totals instead of run/walk totals.
 - Current settings note: `user.user_preferences` is the canonical cross-device settings row for units, health-provider sync state, theme palette selection, and the default strength rest timer.
+- Current body metrics note: `user.body_metrics` is the canonical daily biometrics log, with one row per `user_id` + `logged_for_date`; weight is stored in kilograms, body-fat and muscle values are stored as percentages, and the app derives lean mass at read time instead of persisting it.
 - Current strength library note: shared exercise rows are the canonical visible library, and the 2026-03-27 exercise guard migration blocks future shared-vs-user name collisions after normalization.
 - Current strength template note: templates now live in normalized `strength.workout_templates*` tables with private-by-default ownership, per-exercise target set counts, and future-ready `visibility` / fork provenance for later feed sharing.
 - Current strength template compatibility note: hosted projects also need `20260401_strength_template_schema_cache_refresh.sql` after the template-table rollout so PostgREST reloads the `strength.workout_templates*` relations into its schema cache and the app stops hitting `PGRST205`.
@@ -53,6 +56,10 @@ Use it to find:
   - `supabase/migrations/20260410_profile_feed_visibility_rpc.sql`
   - `supabase/migrations/20260410_run_walk_summary_source_parity.sql`
   - `supabase/migrations/20260529_nutrition_food_item_reference_canonicalization.sql`
+  - `supabase/migrations/20260622_interval_runs.sql`
+  - `supabase/migrations/20260623_indoor_cycle_support.sql`
+  - `supabase/migrations/20260623_user_body_metrics.sql`
+  - `supabase/migrations/20260623_indoor_interval_runs.sql`
 
 ### Badges
 

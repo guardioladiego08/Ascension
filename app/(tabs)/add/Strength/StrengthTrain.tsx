@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LogoHeader from '@/components/my components/logoHeader';
+import { getSessionLabelFromMode } from '@/lib/cardio/activityTypes';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
 import { useUnits } from '@/contexts/UnitsContext';
 import {
@@ -56,7 +57,10 @@ import {
   pauseRunWalkClock,
   resumeRunWalkClock,
 } from '@/lib/runWalkSessionClock';
-import { clearActiveRunWalkSession } from '@/lib/activeRunWalkSessionStore';
+import {
+  clearActiveRunWalkSession,
+  setActiveRunWalkSession,
+} from '@/lib/activeRunWalkSessionStore';
 import { supabase } from '@/lib/supabase';
 import {
   fetchStrengthWorkoutTemplateById,
@@ -266,6 +270,45 @@ export default function StrengthTrain() {
     setPaused(false);
   }
 
+  async function persistStrengthSessionSnapshot(
+    phaseOverride: 'running' | 'paused' = pausedRef.current ? 'paused' : 'running'
+  ) {
+    if (
+      !authSession ||
+      !activeSessionHydrated ||
+      !workoutId ||
+      !sessionPersistEnabledRef.current ||
+      sessionExitRef.current
+    ) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    syncSecondsFromClock(nowMs, phaseOverride);
+    const nextRestTimer = syncStrengthRestTimer(restTimer, nowMs);
+    if (nextRestTimer !== restTimer) {
+      setRestTimer(nextRestTimer);
+    }
+
+    await setActiveRunWalkSession({
+      sessionId: sessionIdRef.current,
+      kind: 'strength',
+      title: sessionTitle,
+      sessionMode,
+      templateId: sourceTemplateId,
+      templateName: sourceTemplateName,
+      phase: phaseOverride,
+      workoutId,
+      userId,
+      startedAtISO,
+      clock: clockRef.current,
+      seconds: secondsRef.current,
+      blocks,
+      exercises,
+      restTimer: nextRestTimer,
+    });
+  }
+
   const clearRestTimerForOwner = (
     ownerKind: 'exercise' | 'superset',
     ownerId: string
@@ -355,17 +398,39 @@ export default function StrengthTrain() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active' || !sessionReady) return;
+      if (nextState === 'active') {
+        if (!sessionReady) return;
 
-      const nowMs = Date.now();
-      syncSecondsFromClock(nowMs, pausedRef.current ? 'paused' : 'running');
-      syncRestTimer(nowMs);
+        const nowMs = Date.now();
+        syncSecondsFromClock(nowMs, pausedRef.current ? 'paused' : 'running');
+        syncRestTimer(nowMs);
+        return;
+      }
+
+      if (nextState === 'inactive' || nextState === 'background') {
+        void persistStrengthSessionSnapshot(pausedRef.current ? 'paused' : 'running');
+      }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [sessionReady]);
+  }, [
+    activeSessionHydrated,
+    authSession,
+    blocks,
+    exercises,
+    paused,
+    restTimer,
+    sessionMode,
+    sessionReady,
+    sessionTitle,
+    sourceTemplateId,
+    sourceTemplateName,
+    startedAtISO,
+    userId,
+    workoutId,
+  ]);
 
   useEffect(() => {
     if (restTimer.status !== 'ready' || restTimer.readyAtMs == null) {
@@ -412,13 +477,9 @@ export default function StrengthTrain() {
 
         if (activeSession && activeSession.kind !== 'strength') {
           const sessionLabel =
-            activeSession.kind === 'outdoor'
-              ? activeSession.mode === 'outdoor_walk'
-                ? 'outdoor walk'
-                : 'outdoor run'
-              : activeSession.mode === 'indoor_walk'
-                ? 'indoor walk'
-                : 'indoor run';
+            activeSession.kind === 'outdoor' || activeSession.kind === 'indoor'
+              ? getSessionLabelFromMode(activeSession.mode)
+              : 'session';
 
           Alert.alert(
             'Session in progress',

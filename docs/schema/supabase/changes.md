@@ -1,5 +1,35 @@
 # Supabase Schema Changes
 
+## 2026-06-23 - Indoor cycling now persists through the open indoor cardio schema
+
+- What changed: Added migration `20260623_indoor_cycle_support.sql` to let `run_walk.sessions.exercise_type` accept `indoor_cycle`, persist `cadence_rpm` on `run_walk.samples`, replace `user.apply_indoor_run_walk_stats_delta(...)` so indoor cycling updates `total_distance_biked_m`, and refresh `public.get_run_walk_session_summary_user(...)` so saved indoor ride cadence samples come back through the summary RPC.
+- Why: The new indoor cycling logger reuses the existing open indoor session flow, but that path previously only recognized run/walk exercise types and would have dropped cycling cadence after the local draft was deleted.
+- Follow-up: Keep future indoor-cardio additions aligned with the shared `run_walk.sessions` trigger and summary RPC path, and verify any hosted enum/check drift before assuming new `exercise_type` labels will save cleanly.
+
+## 2026-06-23 - Added user.body_metrics for daily biometrics logging
+
+- What changed: Added migration `20260623_user_body_metrics.sql` creating `user.body_metrics` with own-row RLS, a unique `user_id` + `logged_for_date` key, range checks for percentage fields, and an indexed daily history path for the new body progress tab and home quick action.
+- Why: Biometrics such as weight, body-fat percentage, and muscle percentage need their own history table under the `user` schema so the app can log daily body-composition check-ins and chart them over time without overloading the profile row.
+- Follow-up: Keep weight canonicalized as `weight_kg`, continue deriving lean mass from saved weight/body-fat inputs at read time, and preserve the one-row-per-day contract when new body metrics are added later.
+
+## 2026-06-23 - Indoor interval stat triggers now cast doubles into the existing indoor stats helper
+
+- What changed: Added migration `20260623_fix_indoor_interval_stats_numeric_cast.sql` to replace `user.on_indoor_interval_session_completed()` and `run_walk.revert_indoor_interval_session_from_stats()` so both cast `total_distance_m` and `total_elevation_m` from `double precision` into `numeric` before calling `user.apply_indoor_run_walk_stats_delta(...)`.
+- Why: Saving a completed indoor interval session was failing with Postgres `42883` because the new table stores distance/elevation as doubles while the older indoor run/walk stats helper is defined with `numeric` arguments.
+- Follow-up: Keep future trigger helpers aligned with the exact shared function signatures they call, especially when new tables mirror older schemas but choose slightly different column types.
+
+## 2026-06-23 - Indoor treadmill intervals now use dedicated run_walk tables
+
+- What changed: Added migration `20260623_indoor_interval_runs.sql` creating `run_walk.indoor_interval_templates`, `run_walk.indoor_interval_template_steps`, `run_walk.indoor_interval_sessions`, `run_walk.indoor_interval_session_steps`, and `run_walk.indoor_interval_samples`, plus own-row RLS, ordered indexes, indoor run stat-rollup triggers, and guarded running-badge aggregation support that only activates when the `badges` schema is installed.
+- Why: Indoor interval training needs saved custom workouts, explicit phase ordering, speed/incline sample storage, and a dedicated finish-summary data model without overloading the existing open indoor run table.
+- Follow-up: If indoor intervals need to count toward every goal/history surface, extend the remaining queries or RPCs that still read only `run_walk.sessions` or `run_walk.outdoor_sessions`.
+
+## 2026-06-22 - Interval runs now use dedicated run_walk tables with reusable step sequences
+
+- What changed: Added migration `20260622_interval_runs.sql` creating `run_walk.interval_templates`, `run_walk.interval_template_steps`, `run_walk.interval_sessions`, `run_walk.interval_session_steps`, and `run_walk.interval_samples`, plus own-row RLS, ordered indexes, and trigger reuse for weekly/lifetime stats, daily goals, and running badges.
+- Why: Interval workouts need saved custom templates, explicit phase ordering for both presets and custom builders, lock-screen cue support, and per-phase sampling without overloading the existing open outdoor run tables.
+- Follow-up: If interval runs need to appear in every existing progress/history surface, extend the client queries that currently read only `run_walk.outdoor_sessions` so they union or otherwise include `run_walk.interval_sessions`.
+
 ## 2026-05-29 - Nutrition food references are now canonicalized onto nutrition.food_items UUIDs
 
 - What changed: Added migration `20260529_nutrition_food_item_reference_canonicalization.sql` to backfill legacy nutrition food references into `nutrition.food_items`, convert `nutrition.recipe_ingredients.food_id`, `nutrition.diary_items.food_id`, `nutrition.user_favorite_foods.food_id`, and `nutrition.food_submissions.canonical_food_id` onto UUID columns, and recreate their foreign keys against `nutrition.food_items(id)`. Also guarded `20260308_foods_ean_13_idx.sql` so replaying the migration history does not require `public.foods` to still exist.

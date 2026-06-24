@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type {
+  IndoorCardioMode,
+  OutdoorCardioMode,
+} from '@/lib/cardio/activityTypes';
+import type { IntervalPlan } from '@/lib/intervals/types';
 import type { DistanceUnit, RunWalkSample } from '@/lib/runWalkDraftStore';
 import type { OutdoorDraftSample } from '@/lib/OutdoorSession/draftStore';
 import type { PersistedRunWalkClock } from '@/lib/runWalkSessionClock';
@@ -15,8 +20,9 @@ export type ActiveSessionPhase = 'running' | 'paused';
 export type ActiveIndoorSession = {
   sessionId?: string;
   kind: 'indoor';
-  mode: 'indoor_run' | 'indoor_walk';
+  mode: IndoorCardioMode;
   title: string;
+  sessionVariant?: 'open' | 'interval';
   phase: ActiveSessionPhase;
   clock?: PersistedRunWalkClock;
   distanceUnit: DistanceUnit;
@@ -26,6 +32,7 @@ export type ActiveIndoorSession = {
   speed: number;
   inclineDeg: number;
   samples: RunWalkSample[];
+  intervalPlan?: IntervalPlan;
 };
 
 export type ActiveOutdoorCoord = {
@@ -36,7 +43,7 @@ export type ActiveOutdoorCoord = {
 export type ActiveOutdoorSession = {
   sessionId?: string;
   kind: 'outdoor';
-  mode: 'outdoor_run' | 'outdoor_walk';
+  mode: OutdoorCardioMode;
   title: string;
   phase: ActiveSessionPhase;
   clock?: PersistedRunWalkClock;
@@ -46,6 +53,9 @@ export type ActiveOutdoorSession = {
   distanceMeters: number;
   coords: ActiveOutdoorCoord[];
   samples: OutdoorDraftSample[];
+  sessionVariant?: 'open' | 'interval';
+  runSubtype?: string | null;
+  intervalPlan?: IntervalPlan;
 };
 
 export type ActiveStrengthSession = {

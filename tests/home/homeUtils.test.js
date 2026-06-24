@@ -69,9 +69,10 @@ describe('home utils', () => {
     expect(strengthTargetKg({ strength_volume_min: 150, strength_volume_unit: 'kg' })).toBe(150);
   });
 
-  it('recognizes run and walk activity types and formats friendly dates', () => {
+  it('recognizes supported cardio activity types and formats friendly dates', () => {
     expect(isRunWalkType('outdoor_run')).toBe(true);
     expect(isRunWalkType('Walk')).toBe(true);
+    expect(isRunWalkType('indoor_cycle')).toBe(true);
     expect(isRunWalkType('elliptical')).toBe(false);
 
     expect(friendlyDateLabel('not-a-date')).toBe('not-a-date');

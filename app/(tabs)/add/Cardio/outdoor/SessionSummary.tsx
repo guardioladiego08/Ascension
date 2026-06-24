@@ -13,6 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import BadgeSummarySection from '@/components/badges/BadgeSummarySection';
+import {
+  getOutdoorCardioTitle,
+  type OutdoorCardioActivityType,
+} from '@/lib/cardio/activityTypes';
 import { getBadgeUnlocksForSource } from '@/lib/badges/api';
 import type { BadgeUnlockItem } from '@/lib/badges/types';
 import { useUnits } from '@/contexts/UnitsContext';
@@ -64,8 +68,17 @@ const HEART_RATE_AUTO_RETRY_DELAY_MS = 45_000;
 const HEART_RATE_MANUAL_DELAY_MS = 20_000;
 const HEART_RATE_PROVIDER_LABEL = getCurrentHealthProviderLabel();
 
-function normalizeOutdoorActivityType(activityType?: string): 'run' | 'walk' {
-  return String(activityType ?? '').toLowerCase().includes('walk') ? 'walk' : 'run';
+function normalizeOutdoorActivityType(activityType?: string): OutdoorCardioActivityType {
+  const normalized = String(activityType ?? '').toLowerCase();
+  if (normalized.includes('walk')) return 'walk';
+  if (
+    normalized.includes('ride') ||
+    normalized.includes('cycle') ||
+    normalized.includes('bike')
+  ) {
+    return 'ride';
+  }
+  return 'run';
 }
 
 function getSafeIsoDate(value?: string | null, fallbackDate?: Date) {
@@ -449,11 +462,17 @@ export default function SessionSummary() {
 
         await shareRunWalkSessionToFeed({
           sessionId,
-          exerciseType: activityType === 'walk' ? 'outdoor_walk' : 'outdoor_run',
+          exerciseType:
+            activityType === 'walk'
+              ? 'outdoor_walk'
+              : activityType === 'ride'
+                ? 'outdoor_cycle'
+                : 'outdoor_run',
           totalDistanceM: distanceMeters,
           totalTimeS: elapsedSeconds,
           avgPaceSPerMi: avgPacePerMi,
           avgPaceSPerKm: avgPace,
+          avgSpeedMps,
         });
 
         setSharedToFeed(true);
@@ -472,7 +491,7 @@ export default function SessionSummary() {
         setSharingToFeed(false);
       }
     },
-    [activityType, avgPace, avgPacePerMi, distanceMeters, elapsedSeconds, sharingToFeed]
+    [activityType, avgPace, avgPacePerMi, avgSpeedMps, distanceMeters, elapsedSeconds, sharingToFeed]
   );
 
   async function onSave() {
@@ -599,7 +618,9 @@ export default function SessionSummary() {
               <View style={styles.headerCenter}>
                 <Text style={globalStyles.eyebrow}>Session summary</Text>
                 <Text style={styles.title}>{title}</Text>
-                <Text style={styles.sub}>{activityType.toUpperCase()}</Text>
+                <Text style={styles.sub}>
+                  {activityType === 'ride' ? 'CYCLING' : activityType.toUpperCase()}
+                </Text>
               </View>
               <View style={styles.iconBtnSpacer} />
             </View>
@@ -628,7 +649,7 @@ export default function SessionSummary() {
 
           <OutdoorSummaryRouteCard
             coords={routeCoords}
-            title={activityType === 'walk' ? 'Outdoor walk route' : 'Outdoor run route'}
+            title={`${getOutdoorCardioTitle(activityType)} route`}
             subtitle="Review the exact GPS path captured during this session."
           />
 

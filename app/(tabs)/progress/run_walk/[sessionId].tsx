@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { isCyclingActivity } from '@/lib/cardio/activityTypes';
 import LogoHeader from '@/components/my components/logoHeader';
 import { supabase } from '@/lib/supabase';
 import MetricChart, { type SamplePoint } from '@/components/charts/MetricLineChart';
@@ -82,6 +83,7 @@ type SampleRow = {
   pace_s_per_mi: number | null;
   pace_s_per_km: number | null;
   speed_mps: number | null;
+  cadence_rpm: number | null;
   elevation_m: number | null;
   incline_deg: number | null;
 };
@@ -133,6 +135,7 @@ function parseSampleRows(value: unknown): SampleRow[] {
     pace_s_per_mi: row?.pace_s_per_mi == null ? null : Number(row.pace_s_per_mi),
     pace_s_per_km: row?.pace_s_per_km == null ? null : Number(row.pace_s_per_km),
     speed_mps: row?.speed_mps == null ? null : Number(row.speed_mps),
+    cadence_rpm: row?.cadence_rpm == null ? null : Number(row.cadence_rpm),
     elevation_m: row?.elevation_m == null ? null : Number(row.elevation_m),
     incline_deg: row?.incline_deg == null ? null : Number(row.incline_deg),
   }));
@@ -227,7 +230,9 @@ export default function RunWalkSessionSummary() {
           const directSamples = await supabase
             .schema('run_walk')
             .from('samples')
-            .select('elapsed_s, pace_s_per_mi, pace_s_per_km, speed_mps, elevation_m, incline_deg')
+            .select(
+              'elapsed_s, pace_s_per_mi, pace_s_per_km, speed_mps, cadence_rpm, elevation_m, incline_deg'
+            )
             .eq('session_id', sessionIdParam)
             .order('elapsed_s');
 
@@ -403,9 +408,11 @@ export default function RunWalkSessionSummary() {
   const title = useMemo(() => {
     if (!session) return '';
     if (session.exercise_type?.includes('walk')) return 'WALK SUMMARY';
+    if (isCyclingActivity(session.exercise_type)) return 'CYCLING SUMMARY';
     if (session.exercise_type?.includes('run')) return 'RUN SUMMARY';
     return 'RUN / WALK SUMMARY';
   }, [session]);
+  const isCycleSession = isCyclingActivity(session?.exercise_type ?? null);
 
   const pacePoints: SamplePoint[] = useMemo(
     () =>
@@ -438,6 +445,28 @@ export default function RunWalkSessionSummary() {
           v: distanceUnit === 'mi' ? s.elevation_m! * FT_PER_M : s.elevation_m!,
         })),
     [samples, distanceUnit]
+  );
+
+  const inclinePoints: SamplePoint[] = useMemo(
+    () =>
+      samples
+        .filter((s) => s.incline_deg != null)
+        .map((s) => ({
+          t: s.elapsed_s,
+          v: s.incline_deg!,
+        })),
+    [samples]
+  );
+
+  const cadencePoints: SamplePoint[] = useMemo(
+    () =>
+      samples
+        .filter((s) => s.cadence_rpm != null && s.cadence_rpm > 0)
+        .map((s) => ({
+          t: s.elapsed_s,
+          v: s.cadence_rpm!,
+        })),
+    [samples]
   );
 
   const heartRateSummary = useMemo(() => {
@@ -509,6 +538,15 @@ export default function RunWalkSessionSummary() {
   const avgPaceForUnit = distanceUnit === 'mi'
     ? session.avg_pace_s_per_mi
     : session.avg_pace_s_per_km;
+  const avgSpeedDisplay =
+    session.total_time_s > 0
+      ? (session.total_distance_m / session.total_time_s) *
+        (distanceUnit === 'mi' ? MPH_PER_MPS : KMH_PER_MPS)
+      : 0;
+  const avgCadenceDisplay =
+    cadencePoints.length > 0
+      ? cadencePoints.reduce((sum, point) => sum + point.v, 0) / cadencePoints.length
+      : null;
 
   const speedUnitSuffix = distanceUnit === 'mi' ? 'mph' : 'km/h';
   const paceSuffix = distanceUnit === 'mi' ? '/mi' : '/km';
@@ -535,7 +573,9 @@ export default function RunWalkSessionSummary() {
                 <Text style={globalStyles.eyebrow}>Session summary</Text>
                 <Text style={styles.title}>{title}</Text>
                 <Text style={styles.heroSubtitle}>
-                  Review distance, pace, elevation, and cardio effort for this session.
+                  {isCycleSession
+                    ? 'Review distance, speed, cadence, and resistance for this saved indoor ride.'
+                    : 'Review distance, pace, elevation, and cardio effort for this session.'}
                 </Text>
               </View>
 
@@ -565,9 +605,11 @@ export default function RunWalkSessionSummary() {
               </View>
               <View style={styles.heroStat}>
                 <Text style={styles.heroStatValue}>
-                  {formatPace(avgPaceForUnit, distanceUnit === 'mi' ? '/mi' : '/km')}
+                  {isCycleSession
+                    ? `${avgSpeedDisplay.toFixed(1)} ${speedUnitSuffix}`
+                    : formatPace(avgPaceForUnit, distanceUnit === 'mi' ? '/mi' : '/km')}
                 </Text>
-                <Text style={styles.heroStatLabel}>avg pace</Text>
+                <Text style={styles.heroStatLabel}>{isCycleSession ? 'avg speed' : 'avg pace'}</Text>
               </View>
             </View>
           </View>
@@ -579,16 +621,35 @@ export default function RunWalkSessionSummary() {
               value={formatDistance(session.total_distance_m, distanceUnit)}
               styles={styles}
             />
-            <Row
-              label="Elevation Gain"
-              value={formatElevation(session.total_elevation_m, distanceUnit)}
-              styles={styles}
-            />
-            <Row
-              label="Avg Pace"
-              value={formatPace(avgPaceForUnit, distanceUnit === 'mi' ? '/mi' : '/km')}
-              styles={styles}
-            />
+            {isCycleSession ? (
+              <>
+                <Row
+                  label="Avg Speed"
+                  value={`${avgSpeedDisplay.toFixed(1)} ${speedUnitSuffix}`}
+                  styles={styles}
+                />
+                <Row
+                  label="Avg Cadence"
+                  value={
+                    avgCadenceDisplay != null ? `${Math.round(avgCadenceDisplay)} rpm` : '—'
+                  }
+                  styles={styles}
+                />
+              </>
+            ) : (
+              <>
+                <Row
+                  label="Elevation Gain"
+                  value={formatElevation(session.total_elevation_m, distanceUnit)}
+                  styles={styles}
+                />
+                <Row
+                  label="Avg Pace"
+                  value={formatPace(avgPaceForUnit, distanceUnit === 'mi' ? '/mi' : '/km')}
+                  styles={styles}
+                />
+              </>
+            )}
           </View>
 
           {canDelete ? (
@@ -695,14 +756,16 @@ export default function RunWalkSessionSummary() {
           ) : null}
 
           <View style={styles.chartsWrap}>
-            <MetricChart
-              title={`Pace Over Time (${paceSuffix})`}
-              color={colors.highlight1}
-              points={pacePoints}
-              cardBg={colors.card}
-              textColor={colors.text}
-              hideDataPoints
-            />
+            {!isCycleSession ? (
+              <MetricChart
+                title={`Pace Over Time (${paceSuffix})`}
+                color={colors.highlight1}
+                points={pacePoints}
+                cardBg={colors.card}
+                textColor={colors.text}
+                hideDataPoints
+              />
+            ) : null}
 
             <MetricChart
               title={`Speed Over Time (${speedUnitSuffix})`}
@@ -714,13 +777,26 @@ export default function RunWalkSessionSummary() {
             />
 
             <MetricChart
-              title={`Elevation Over Time (${elevationUnitSuffix})`}
+              title={isCycleSession ? 'Resistance Over Time' : `Elevation Over Time (${elevationUnitSuffix})`}
               color={colors.highlight2}
-              points={elevationPoints}
+              points={isCycleSession ? inclinePoints : elevationPoints}
               cardBg={colors.card}
               textColor={colors.text}
+              unitSuffix={isCycleSession ? 'lvl' : undefined}
               hideDataPoints
             />
+
+            {isCycleSession ? (
+              <MetricChart
+                title="Cadence Over Time (rpm)"
+                color={colors.highlight1}
+                points={cadencePoints}
+                cardBg={colors.card}
+                textColor={colors.text}
+                unitSuffix="rpm"
+                hideDataPoints
+              />
+            ) : null}
           </View>
 
           <View style={{ height: 18 }} />

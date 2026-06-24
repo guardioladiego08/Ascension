@@ -1,7 +1,15 @@
 import type { ActiveRunWalkSession } from '@/lib/activeRunWalkSessionStore';
+import {
+  getSessionLabelFromMode,
+  isCyclingActivity,
+} from '@/lib/cardio/activityTypes';
 import { getRunWalkElapsedSeconds } from '@/lib/runWalkSessionClock';
 
-export type ActiveSessionIconName = 'barbell-outline' | 'map-outline' | 'walk-outline';
+export type ActiveSessionIconName =
+  | 'barbell-outline'
+  | 'map-outline'
+  | 'walk-outline'
+  | 'bicycle-outline';
 
 export function getActiveSessionElapsedSeconds(
   session: ActiveRunWalkSession,
@@ -42,10 +50,17 @@ export function getActiveSessionActivityLabel(session: ActiveRunWalkSession): st
   }
 
   if (session.kind === 'outdoor') {
-    return session.mode === 'outdoor_walk' ? 'Outdoor Walk' : 'Outdoor Run';
+    if (session.sessionVariant === 'interval') {
+      return 'Interval Run';
+    }
+    return titleCaseLabel(getSessionLabelFromMode(session.mode));
   }
 
-  return session.mode === 'indoor_walk' ? 'Indoor Walk' : 'Indoor Run';
+  if (session.sessionVariant === 'interval') {
+    return 'Indoor Interval Run';
+  }
+
+  return titleCaseLabel(getSessionLabelFromMode(session.mode));
 }
 
 export function getActiveSessionIconName(
@@ -55,5 +70,13 @@ export function getActiveSessionIconName(
     return 'barbell-outline';
   }
 
+  if (isCyclingActivity(session.mode)) {
+    return 'bicycle-outline';
+  }
+
   return session.kind === 'outdoor' ? 'map-outline' : 'walk-outline';
+}
+
+function titleCaseLabel(value: string) {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase());
 }

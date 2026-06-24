@@ -17,6 +17,7 @@ import LogoHeader from '@/components/my components/logoHeader';
 import { Colors } from '@/constants/Colors';
 import { GlobalStyles } from '@/constants/GlobalStyles';
 import { useUnits } from '@/contexts/UnitsContext';
+import { getCardioActivityKind } from '@/lib/cardio/activityTypes';
 import {
   fetchCardioSessions,
   formatCardioActivityTypeLabel,
@@ -35,7 +36,7 @@ import {
 import HistoryFilterModal from '../components/HistoryFilterModal';
 import HistoryListItem from '../components/HistoryListItem';
 
-type ActivityFilter = 'all' | 'run' | 'walk';
+type ActivityFilter = 'all' | 'run' | 'walk' | 'cycle';
 type SourceFilter = 'all' | 'indoor' | 'outdoor';
 
 const BG = Colors.dark.background;
@@ -158,9 +159,8 @@ export default function AllCardioSessionsScreen() {
     const maxDurationValue = parsePositiveNumber(maxDuration);
 
     return sessions.filter((session) => {
-      const activityValue = session.activityType.toLowerCase();
-      if (activityFilter === 'run' && !activityValue.includes('run')) return false;
-      if (activityFilter === 'walk' && !activityValue.includes('walk')) return false;
+      const activityKind = getCardioActivityKind(session.activityType);
+      if (activityFilter !== 'all' && activityKind !== activityFilter) return false;
 
       if (sourceFilter !== 'all' && session.source !== sourceFilter) return false;
 
@@ -340,6 +340,11 @@ export default function AllCardioSessionsScreen() {
                 label="Walk"
                 active={activityFilter === 'walk'}
                 onPress={() => setActivityFilter('walk')}
+              />
+              <FilterChip
+                label="Cycling"
+                active={activityFilter === 'cycle'}
+                onPress={() => setActivityFilter('cycle')}
               />
             </View>
           </View>

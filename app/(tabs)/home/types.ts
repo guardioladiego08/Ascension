@@ -62,6 +62,13 @@ export type IndoorSessionRow = {
   total_distance_m: number | null;
 };
 
+export type IndoorIntervalSessionRow = {
+  ended_at: string | null;
+  exercise_type: string;
+  total_time_s: number | null;
+  total_distance_m: number | null;
+};
+
 export type OutdoorSessionRow = {
   ended_at: string | null;
   activity_type: string;
@@ -81,6 +88,7 @@ export type CardioDaySummary = {
   distanceM: number;
   runCount: number;
   walkCount: number;
+  cycleCount: number;
 };
 
 export type HomeGoalLaneItem = {
@@ -113,4 +121,5 @@ export const EMPTY_CARDIO_SUMMARY: CardioDaySummary = {
   distanceM: 0,
   runCount: 0,
   walkCount: 0,
+  cycleCount: 0,
 };

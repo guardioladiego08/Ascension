@@ -1,4 +1,4 @@
-export type ProgressTabId = 'strength' | 'running' | 'nutrition' | 'hybrid';
+export type ProgressTabId = 'strength' | 'running' | 'nutrition' | 'body';
 
 export type ProgressTabDefinition = {
   id: ProgressTabId;
@@ -23,8 +23,8 @@ export const PROGRESS_TABS: ProgressTabDefinition[] = [
     heading: 'Nutrition',
   },
   {
-    id: 'hybrid',
-    label: 'Hybrid',
-    heading: 'Hybrid',
+    id: 'body',
+    label: 'Body',
+    heading: 'Body Composition',
   },
 ];

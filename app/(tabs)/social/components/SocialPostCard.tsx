@@ -37,6 +37,7 @@ type Metric = {
 const TYPE_LABEL: Record<SocialActivityType, string> = {
   run: 'Run',
   walk: 'Walk',
+  ride: 'Cycling',
   strength: 'Strength',
   nutrition: 'Nutrition',
   other: 'Post',
@@ -45,6 +46,7 @@ const TYPE_LABEL: Record<SocialActivityType, string> = {
 const TYPE_ICON: Record<SocialActivityType, keyof typeof Ionicons.glyphMap> = {
   run: 'walk-outline',
   walk: 'walk-outline',
+  ride: 'bicycle-outline',
   strength: 'barbell-outline',
   nutrition: 'nutrition-outline',
   other: 'sparkles-outline',
@@ -54,6 +56,7 @@ function buildTypeGradients(colors: ReturnType<typeof useAppTheme>['colors']) {
   return {
     run: [colors.accentSecondarySoft, colors.cardDark] as [string, string],
     walk: [colors.accentSoft, colors.cardDark] as [string, string],
+    ride: [colors.highlight2, colors.cardDark] as [string, string],
     strength: [colors.accentSoft, colors.cardDark] as [string, string],
     nutrition: [colors.accentTertiarySoft, colors.cardDark] as [string, string],
     other: [colors.card3, colors.cardDark] as [string, string],
@@ -115,6 +118,12 @@ function formatDistance(meters: number, unit: 'mi' | 'km'): string {
   return `${val.toFixed(val >= 10 ? 1 : 2)} ${unit}`;
 }
 
+function formatSpeed(speedMps: number, unit: 'mi' | 'km'): string {
+  if (!Number.isFinite(speedMps) || speedMps <= 0) return '—';
+  const value = unit === 'mi' ? speedMps * 2.236936 : speedMps * 3.6;
+  return `${value.toFixed(1)} ${unit === 'mi' ? 'mph' : 'km/h'}`;
+}
+
 function formatRelativeTime(iso: string): string {
   const ts = new Date(iso).getTime();
   if (!Number.isFinite(ts)) return '';
@@ -145,26 +154,44 @@ function buildMetricList(
 ): Metric[] {
   const m = post.metrics as Record<string, unknown>;
   const out: Metric[] = [];
+  const isCardioPost =
+    post.activityType === 'run' || post.activityType === 'walk' || post.activityType === 'ride';
 
-  if (post.activityType === 'run' || post.activityType === 'walk') {
+  if (isCardioPost) {
     const distanceM = pickNumber(m, ['distance_m', 'total_distance_m']);
+    const durationS = pickNumber(m, ['total_time_s', 'duration_s']);
     if (distanceM != null && distanceM > 0) {
       out.push({ label: 'Distance', value: formatDistance(distanceM, distanceUnit) });
     }
 
-    const durationS = pickNumber(m, ['total_time_s', 'duration_s']);
     if (durationS != null && durationS > 0) {
       out.push({ label: 'Time', value: formatDuration(durationS) });
     }
 
-    const paceMi = pickNumber(m, ['avg_pace_s_per_mi']);
-    const paceKm = pickNumber(m, ['avg_pace_s_per_km']);
-    const paceForUnit =
-      distanceUnit === 'mi'
-        ? paceMi ?? (paceKm != null && paceKm > 0 ? paceKm * 1.609344 : null)
-        : paceKm ?? (paceMi != null && paceMi > 0 ? paceMi / 1.609344 : null);
-    if (paceForUnit != null && paceForUnit > 0) {
-      out.push({ label: 'Pace', value: formatPace(paceForUnit, distanceUnit) });
+    if (post.activityType === 'ride') {
+      const speedMps =
+        pickNumber(m, ['avg_speed_mps']) ??
+        (distanceM != null && distanceM > 0 && durationS != null && durationS > 0
+          ? distanceM / durationS
+          : null);
+      if (speedMps != null && speedMps > 0) {
+        out.push({ label: 'Avg Speed', value: formatSpeed(speedMps, distanceUnit) });
+      }
+
+      const cadenceRpm = pickNumber(m, ['avg_cadence_rpm']);
+      if (cadenceRpm != null && cadenceRpm > 0) {
+        out.push({ label: 'Cadence', value: `${Math.round(cadenceRpm)} rpm` });
+      }
+    } else {
+      const paceMi = pickNumber(m, ['avg_pace_s_per_mi']);
+      const paceKm = pickNumber(m, ['avg_pace_s_per_km']);
+      const paceForUnit =
+        distanceUnit === 'mi'
+          ? paceMi ?? (paceKm != null && paceKm > 0 ? paceKm * 1.609344 : null)
+          : paceKm ?? (paceMi != null && paceMi > 0 ? paceMi / 1.609344 : null);
+      if (paceForUnit != null && paceForUnit > 0) {
+        out.push({ label: 'Pace', value: formatPace(paceForUnit, distanceUnit) });
+      }
     }
 
     const hr = pickNumber(m, ['avg_hr', 'heart_rate_avg']);
@@ -228,7 +255,11 @@ function buildHeroMetric(post: SocialFeedPost, metrics: Metric[]): Metric | null
 
   if (post.activityType === 'strength') return { label: 'Activity', value: 'Strength' };
   if (post.activityType === 'nutrition') return { label: 'Activity', value: 'Nutrition' };
-  if (post.activityType === 'run' || post.activityType === 'walk') {
+  if (
+    post.activityType === 'run' ||
+    post.activityType === 'walk' ||
+    post.activityType === 'ride'
+  ) {
     return { label: 'Activity', value: TYPE_LABEL[post.activityType] };
   }
   return null;
@@ -394,7 +425,9 @@ export default function SocialPostCard({
   const routePreviewVisible =
     showRoutePreview &&
     post.isOutdoorSession &&
-    (post.activityType === 'run' || post.activityType === 'walk') &&
+    (post.activityType === 'run' ||
+      post.activityType === 'walk' ||
+      post.activityType === 'ride') &&
     !!post.routePreview &&
     post.routePreview.length >= 2;
   const strengthRadarVisible =
@@ -408,6 +441,7 @@ export default function SocialPostCard({
     !!post.sessionId &&
     (post.activityType === 'run' ||
       post.activityType === 'walk' ||
+      post.activityType === 'ride' ||
       post.activityType === 'strength');
   const badgeSourceId = post.sourceId ?? post.sessionId;
   const badgeDomain: BadgeDomain | null =

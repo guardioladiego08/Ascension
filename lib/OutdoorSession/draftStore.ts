@@ -19,7 +19,7 @@ export type OutdoorSessionDraft = {
   created_at: string;
   started_at: string;
   ended_at: string;
-  activity_type: 'run' | 'walk';
+  activity_type: 'run' | 'walk' | 'ride';
   total_time_s: number;
   total_distance_m: number;
   avg_speed_mps: number | null;

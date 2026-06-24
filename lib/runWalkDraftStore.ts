@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { CardioMode } from '@/lib/cardio/activityTypes';
 
 export type DistanceUnit = 'mi' | 'km';
-export type Mode = 'indoor_run' | 'indoor_walk' | 'outdoor_run' | 'outdoor_walk';
+export type Mode = CardioMode;
 
 export type RunWalkSample = {
   seq: number;
@@ -12,6 +13,7 @@ export type RunWalkSample = {
   pace_s_per_mi: number | null;
   incline_deg: number;
   elevation_m: number;
+  cadence_rpm?: number | null;
 };
 
 export type RunWalkDraft = {
@@ -28,6 +30,7 @@ export type RunWalkDraft = {
   avg_speed_mps: number;
   avg_pace_s_per_km: number | null;
   avg_pace_s_per_mi: number | null;
+  avg_cadence_rpm?: number | null;
 
   samples: RunWalkSample[];
 };

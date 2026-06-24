@@ -14,8 +14,10 @@ import { HOME_TONES } from './tokens';
 export type RunWalkExerciseType =
   | 'outdoor_run'
   | 'outdoor_walk'
+  | 'outdoor_cycle'
   | 'indoor_run'
-  | 'indoor_walk';
+  | 'indoor_walk'
+  | 'indoor_cycle';
 
 type Props = {
   visible: boolean;
@@ -32,8 +34,8 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
       visible={visible}
       onClose={onClose}
       eyebrow="Session Type"
-      title="Start run or walk"
-      subtitle="The selected home theme is also driving this modal."
+      title="Start cardio"
+      subtitle="Run flows keep the extra type picker. Walks and cycling jump straight into the live tracker."
       showCloseButton
     >
       <View style={styles.list}>
@@ -42,7 +44,7 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           iconColor={colors.highlight1}
           iconBg={colors.accentSoft}
           label="Outdoor Run"
-          detail="GPS route, outdoor pace, and distance."
+          detail="Pick open, interval, and other run types before you start."
           onPress={() => onSelect('outdoor_run')}
           styles={styles}
         />
@@ -56,11 +58,20 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           styles={styles}
         />
         <OptionRow
+          icon="bicycle-outline"
+          iconColor={colors.highlight2}
+          iconBg={colors.accentSecondarySoft}
+          label="Outdoor Cycling"
+          detail="Reuse the outdoor live tracker with cycling-specific labeling."
+          onPress={() => onSelect('outdoor_cycle')}
+          styles={styles}
+        />
+        <OptionRow
           icon="speedometer-outline"
           iconColor={colors.highlight2}
           iconBg={colors.accentSecondarySoft}
           label="Indoor Run"
-          detail="Treadmill-style tracking without GPS."
+          detail="Choose open or interval training before you start."
           onPress={() => onSelect('indoor_run')}
           styles={styles}
         />
@@ -71,6 +82,15 @@ export default function RunWalkTypeModal({ visible, onClose, onSelect }: Props) 
           label="Indoor Walk"
           detail="Quick indoor walking session flow."
           onPress={() => onSelect('indoor_walk')}
+          styles={styles}
+        />
+        <OptionRow
+          icon="bicycle-outline"
+          iconColor={colors.highlight1}
+          iconBg={colors.accentSoft}
+          label="Indoor Cycling"
+          detail="Track indoor speed, cadence, and resistance."
+          onPress={() => onSelect('indoor_cycle')}
           styles={styles}
         />
       </View>

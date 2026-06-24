@@ -13,6 +13,7 @@ import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { withAlpha } from '@/constants/Colors';
+import { getOutdoorActivityTypeFromMode } from '@/lib/cardio/activityTypes';
 import {
   getActiveRunWalkSession,
   setActiveRunWalkSession,
@@ -157,15 +158,28 @@ export function ActiveRunWalkProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') return;
+      if (nextState === 'active') {
+        loadStoredSession().catch(() => null);
+        return;
+      }
 
-      loadStoredSession().catch(() => null);
+      if (
+        !authSession ||
+        (nextState !== 'inactive' && nextState !== 'background') ||
+        !activeSession ||
+        activeSession.kind === 'outdoor'
+      ) {
+        return;
+      }
+
+      const refreshed = refreshActiveSessionTiming(activeSession, Date.now());
+      setActiveRunWalkSession(refreshed).catch(() => null);
     });
 
     return () => {
       subscription.remove();
     };
-  }, [loadStoredSession]);
+  }, [activeSession, authSession, loadStoredSession]);
 
   const setSession = useCallback((session: ActiveRunWalkSession | null) => {
     if (!authSession) {
@@ -231,13 +245,19 @@ function ActiveRunWalkResumeBanner() {
   const sessionTickKey =
     activeSession?.kind === 'strength' ? activeSession.workoutId : activeSession?.mode;
 
-  const isIndoorScreen = pathname.includes('/add/Cardio/indoor/IndoorSession');
-  const isOutdoorScreen = pathname.includes('/add/Cardio/outdoor/OutdoorSession');
+  const isIndoorOpenScreen = pathname.includes('/add/Cardio/indoor/IndoorSession');
+  const isIndoorIntervalScreen = pathname.includes('/add/Cardio/indoor/interval/Session');
+  const isOutdoorOpenScreen = pathname.includes('/add/Cardio/outdoor/OutdoorSession');
+  const isOutdoorIntervalScreen = pathname.includes('/add/Cardio/outdoor/interval/Session');
   const isStrengthScreen = pathname.includes('/add/Strength/StrengthTrain');
   const onCurrentSessionScreen =
     !!activeSession &&
-    ((activeSession.kind === 'indoor' && isIndoorScreen) ||
-      (activeSession.kind === 'outdoor' && isOutdoorScreen) ||
+    ((activeSession.kind === 'indoor' &&
+      ((activeSession.sessionVariant === 'interval' && isIndoorIntervalScreen) ||
+        ((activeSession.sessionVariant ?? 'open') === 'open' && isIndoorOpenScreen))) ||
+      (activeSession.kind === 'outdoor' &&
+        ((activeSession.sessionVariant === 'interval' && isOutdoorIntervalScreen) ||
+          ((activeSession.sessionVariant ?? 'open') === 'open' && isOutdoorOpenScreen))) ||
       (activeSession.kind === 'strength' && isStrengthScreen));
   const shouldHideBanner =
     authLoading || !authSession || !hydrated || !activeSession || onCurrentSessionScreen;
@@ -281,21 +301,45 @@ function ActiveRunWalkResumeBanner() {
 
   const openActiveSession = () => {
     if (activeSession.kind === 'indoor') {
-      router.push({
-        pathname: '/add/Cardio/indoor/IndoorSession',
-        params: { mode: activeSession.mode },
-      });
+      if (activeSession.sessionVariant === 'interval' && activeSession.intervalPlan) {
+        router.push({
+          pathname: '/add/Cardio/indoor/interval/Session',
+          params: {
+            title: activeSession.title,
+            planPayload: JSON.stringify(activeSession.intervalPlan),
+          },
+        });
+      } else {
+        router.push({
+          pathname: '/add/Cardio/indoor/IndoorSession',
+          params: {
+            mode: activeSession.mode,
+            sessionVariant: activeSession.sessionVariant ?? 'open',
+          },
+        });
+      }
       return;
     }
 
     if (activeSession.kind === 'outdoor') {
-      router.push({
-        pathname: '/add/Cardio/outdoor/OutdoorSession',
-        params: {
-          title: activeSession.title,
-          activityType: activeSession.mode === 'outdoor_walk' ? 'walk' : 'run',
-        },
-      });
+      if (activeSession.sessionVariant === 'interval' && activeSession.intervalPlan) {
+        router.push({
+          pathname: '/add/Cardio/outdoor/interval/Session',
+          params: {
+            title: activeSession.title,
+            planPayload: JSON.stringify(activeSession.intervalPlan),
+          },
+        });
+      } else {
+        router.push({
+          pathname: '/add/Cardio/outdoor/OutdoorSession',
+          params: {
+            title: activeSession.title,
+            activityType: getOutdoorActivityTypeFromMode(activeSession.mode),
+            runSubtype: activeSession.runSubtype ?? undefined,
+          },
+        });
+      }
       return;
     }
 

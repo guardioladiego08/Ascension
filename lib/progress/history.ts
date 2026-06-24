@@ -1,4 +1,8 @@
 import { supabase } from '@/lib/supabase';
+import {
+  formatCardioActivityTypeLabel as formatSharedCardioActivityTypeLabel,
+  isSupportedCardioActivity,
+} from '@/lib/cardio/activityTypes';
 
 export type StrengthWorkoutRow = {
   id: string;
@@ -73,20 +77,14 @@ export async function getAuthenticatedUserId() {
 }
 
 export function isRunWalkActivity(activityType: string) {
-  const value = (activityType ?? '').toLowerCase();
-  return value.includes('run') || value.includes('walk');
+  return isSupportedCardioActivity(activityType);
 }
 
 export function formatCardioActivityTypeLabel(
   activityType: string,
   source: 'indoor' | 'outdoor'
 ) {
-  const value = (activityType ?? '').toLowerCase();
-  const prefix = source === 'indoor' ? 'Indoor' : 'Outdoor';
-
-  if (value.includes('walk')) return `${prefix} walk`;
-  if (value.includes('run')) return `${prefix} run`;
-  return `${prefix} session`;
+  return formatSharedCardioActivityTypeLabel(activityType, source);
 }
 
 export function getCardioSessionTimestamp(session: CardioSessionItem) {

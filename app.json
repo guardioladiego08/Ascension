@@ -69,6 +69,12 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "defaultChannel": "interval-cues"
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow TENSR to access your camera to scan food barcodes."

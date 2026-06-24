@@ -3,6 +3,10 @@
 ## Primary SQL Sources
 
 - Migrations: `supabase/migrations/`
+- Indoor cycling compatibility migration: `supabase/migrations/20260623_indoor_cycle_support.sql`
+- Body metrics migration: `supabase/migrations/20260623_user_body_metrics.sql`
+- Indoor interval run schema migration: `supabase/migrations/20260623_indoor_interval_runs.sql`
+- Interval run schema migration: `supabase/migrations/20260622_interval_runs.sql`
 - Nutrition food-reference canonicalization migration: `supabase/migrations/20260529_nutrition_food_item_reference_canonicalization.sql`
 - Indoor run/walk stats compatibility migration: `supabase/migrations/20260331_fix_indoor_run_walk_stats_meter_columns.sql`
 - Strength workout templates migration: `supabase/migrations/20260331_strength_workout_templates.sql`
@@ -34,6 +38,10 @@
 ## Related App Code
 
 - Supabase client helpers: `lib/supabase.ts`
+- Biometrics helpers: `lib/biometrics/`
+- Body progress panel + chart helpers: `app/(tabs)/progress/components/body/`
+- Biometrics log screen: `app/(tabs)/progress/body/log.tsx`
+- Home quick-action entry: `app/(tabs)/home.tsx`
 - Nutrition data-access helpers: `lib/nutrition/dataAccess.ts`
 - Nutrition add/log screens: `app/(tabs)/add/Nutrition/
 - Shared user preference helpers: `lib/userPreferences.ts`
@@ -41,6 +49,11 @@
 - Signup email flow: `app/SignInLogin/SignupEmail.tsx`
 - Signup username availability helper: `lib/auth/usernameAvailability.ts`
 - Outdoor session Supabase helpers: `lib/OutdoorSession/supabase.ts`
+- Interval session Supabase helpers: `lib/intervals/supabase.ts`
+- Indoor interval session Supabase helpers: `lib/indoorIntervals/supabase.ts`
+- Interval plan helpers and notifications: `lib/intervals/`
+- Interval setup/session screens: `app/(tabs)/add/Cardio/outdoor/interval/`
+- Indoor interval setup/session screens: `app/(tabs)/add/Cardio/indoor/interval/`
 - Units settings sync: `contexts/UnitsContext.tsx`
 - Theme settings sync: `providers/AppThemeProvider.tsx`
 - Strength rest timer settings sync: `lib/strength/restTimerPreferences.ts`

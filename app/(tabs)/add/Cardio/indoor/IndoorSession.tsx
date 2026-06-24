@@ -13,6 +13,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  getIndoorCardioTitle,
+  isCyclingActivity,
+} from '@/lib/cardio/activityTypes';
 import { useUnits } from '@/contexts/UnitsContext';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { useSmartBack } from '@/lib/navigation/useSmartBack';
@@ -42,6 +46,7 @@ import {
   pauseRunWalkClock,
   resumeRunWalkClock,
 } from '@/lib/runWalkSessionClock';
+import { setActiveRunWalkSession } from '@/lib/activeRunWalkSessionStore';
 import { useActiveRunWalk } from '@/providers/ActiveRunWalkProvider';
 
 const M_PER_MI = 1609.344;
@@ -84,6 +89,10 @@ function formatPace(secondsPerUnit: number, suffix: '/mi' | '/km') {
   return `${mm}:${String(ss).padStart(2, '0')} ${suffix}`;
 }
 
+function cadenceFromSpeedAndResistance(speedMps: number, resistanceLevel: number) {
+  return clamp(Math.round(speedMps * 10 + 35 - resistanceLevel * 0.8), 50, 130);
+}
+
 function makeId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
@@ -92,7 +101,11 @@ export default function IndoorSession() {
   const router = useRouter();
   const { goBackSmart } = useSmartBack();
   const { colors, fonts, globalStyles } = useAppTheme();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{
+    mode?: string;
+    title?: string;
+    sessionVariant?: string;
+  }>();
   const { distanceUnit } = useUnits();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -108,16 +121,27 @@ export default function IndoorSession() {
     setSession: setActiveSession,
     clearSession: clearActiveSession,
   } = useActiveRunWalk();
+  const sessionVariant = params.sessionVariant === 'interval' ? 'interval' : 'open';
 
-  const mode: Extract<Mode, 'indoor_run' | 'indoor_walk'> =
-    params.mode === 'indoor_walk' ? 'indoor_walk' : 'indoor_run';
+  const mode: Extract<Mode, 'indoor_run' | 'indoor_walk' | 'indoor_cycle'> =
+    params.mode === 'indoor_walk'
+      ? 'indoor_walk'
+      : params.mode === 'indoor_cycle'
+        ? 'indoor_cycle'
+        : 'indoor_run';
 
-  const lockMode: Extract<RunWalkMode, 'indoor_run' | 'indoor_walk'> = mode;
+  const isCycleSession = mode === 'indoor_cycle';
 
-  const title = mode === 'indoor_walk' ? 'INDOOR WALK' : 'INDOOR RUN';
+  const lockMode: Extract<RunWalkMode, 'indoor_run' | 'indoor_walk' | 'indoor_cycle'> = mode;
+
+  const title = params.title?.toString() ?? getIndoorCardioTitle(mode);
   const heroSubtitle = compact
-    ? 'Treadmill controls, live pace, and a cleaner finish.'
-    : 'Treadmill-style controls, live pace, and a cleaner finish flow.';
+    ? isCycleSession
+      ? 'Bike controls, live cadence, and a cleaner finish.'
+      : 'Treadmill controls, live pace, and a cleaner finish.'
+    : isCycleSession
+      ? 'Bike-style controls, live cadence, and a cleaner finish flow.'
+      : 'Treadmill-style controls, live pace, and a cleaner finish flow.';
 
   // session state
   const [isRunning, setIsRunning] = useState(true);
@@ -125,9 +149,13 @@ export default function IndoorSession() {
 
   // treadmill controls
   const defaultSpeed = useMemo(() => {
+    if (isCycleSession) {
+      return distanceUnit === 'mi' ? 15.0 : 24.0;
+    }
+
     if (distanceUnit === 'mi') return mode === 'indoor_walk' ? 3.2 : 6.0;
     return mode === 'indoor_walk' ? 5.0 : 10.0;
-  }, [distanceUnit, mode]);
+  }, [distanceUnit, isCycleSession, mode]);
 
   const [speed, setSpeed] = useState(defaultSpeed);
   const [inclineDeg, setInclineDeg] = useState(0);
@@ -147,6 +175,7 @@ export default function IndoorSession() {
   const hydrationAppliedRef = useRef(false);
   const sessionExitRef = useRef(false);
   const sessionIdRef = useRef(makeId());
+  const isRunningRef = useRef(true);
 
   // refs for interval accuracy (avoid stale closures)
   const elapsedRef = useRef(0);
@@ -158,6 +187,7 @@ export default function IndoorSession() {
   const clockRef = useRef(resumeRunWalkClock(createPausedRunWalkClock(0)));
 
   useEffect(() => { elapsedRef.current = elapsedS; }, [elapsedS]);
+  useEffect(() => { isRunningRef.current = isRunning; }, [isRunning]);
   useEffect(() => { distanceRef.current = distanceM; }, [distanceM]);
   useEffect(() => { elevRef.current = elevM; }, [elevM]);
   useEffect(() => { speedRef.current = speed; }, [speed]);
@@ -167,7 +197,7 @@ export default function IndoorSession() {
 
   function syncSessionFromClock(
     nowMs = Date.now(),
-    phaseOverride: 'running' | 'paused' = isRunning ? 'running' : 'paused'
+    phaseOverride: 'running' | 'paused' = isRunningRef.current ? 'running' : 'paused'
   ) {
     const normalizedClock = normalizeRunWalkClock({
       clock: clockRef.current,
@@ -184,7 +214,9 @@ export default function IndoorSession() {
     const deltaMs = phaseOverride === 'running' ? Math.max(0, nextElapsedMs - previousElapsedMs) : 0;
     const speedMps = speedToMps(speedRef.current, distanceUnit);
     const deltaDistanceM = speedMps * (deltaMs / 1000);
-    const deltaElevM = deltaDistanceM * Math.sin(deg2rad(inclineRef.current));
+    const deltaElevM = isCycleSession
+      ? 0
+      : deltaDistanceM * Math.sin(deg2rad(inclineRef.current));
     const nextDistanceM = previousDistanceM + deltaDistanceM;
     const nextElevM = previousElevM + deltaElevM;
     const nextElapsedS = Math.floor(nextElapsedMs / 1000);
@@ -200,6 +232,9 @@ export default function IndoorSession() {
         const sampleElevM = previousElevM + deltaElevM * progress;
         const paceMi = paceFromMps(speedMps, 'mi');
         const paceKm = paceFromMps(speedMps, 'km');
+        const cadenceRpm = isCycleSession
+          ? cadenceFromSpeedAndResistance(speedMps, inclineRef.current)
+          : null;
 
         seqRef.current += 1;
         samplesRef.current.push({
@@ -207,10 +242,13 @@ export default function IndoorSession() {
           elapsed_s: Math.floor(boundaryElapsedMs / 1000),
           distance_m: Number(sampleDistanceM.toFixed(2)),
           speed_mps: Number(speedMps.toFixed(6)),
-          pace_s_per_km: Number.isFinite(paceKm) ? Number(paceKm.toFixed(2)) : null,
-          pace_s_per_mi: Number.isFinite(paceMi) ? Number(paceMi.toFixed(2)) : null,
+          pace_s_per_km:
+            isCycleSession || !Number.isFinite(paceKm) ? null : Number(paceKm.toFixed(2)),
+          pace_s_per_mi:
+            isCycleSession || !Number.isFinite(paceMi) ? null : Number(paceMi.toFixed(2)),
           incline_deg: Number(inclineRef.current.toFixed(2)),
           elevation_m: Number(sampleElevM.toFixed(2)),
+          cadence_rpm: cadenceRpm,
         });
       }
 
@@ -242,11 +280,41 @@ export default function IndoorSession() {
     setIsRunning(true);
   }
 
+  async function persistIndoorSessionSnapshot(
+    phaseOverride: 'running' | 'paused' = isRunningRef.current ? 'running' : 'paused'
+  ) {
+    if (!activeSessionHydrated || !sessionInitializedRef.current || sessionExitRef.current) {
+      return;
+    }
+
+    const nowMs = Date.now();
+    syncSessionFromClock(nowMs, phaseOverride);
+
+    await setActiveRunWalkSession({
+      sessionId: sessionIdRef.current,
+      kind: 'indoor',
+      mode,
+      title,
+      sessionVariant,
+      phase: phaseOverride,
+      clock: clockRef.current,
+      distanceUnit,
+      elapsedS: elapsedRef.current,
+      distanceM: distanceRef.current,
+      elevM: elevRef.current,
+      speed: speedRef.current,
+      inclineDeg: inclineRef.current,
+      samples: samplesRef.current,
+    });
+  }
+
   useEffect(() => {
     if (!activeSessionHydrated || hydrationAppliedRef.current || sessionExitRef.current) return;
 
     const existingSession =
-      activeSession?.kind === 'indoor' && activeSession.mode === mode
+      activeSession?.kind === 'indoor' &&
+      activeSession.mode === mode &&
+      (activeSession.sessionVariant ?? 'open') === sessionVariant
         ? activeSession
         : null;
 
@@ -284,7 +352,7 @@ export default function IndoorSession() {
     }
 
     hydrationAppliedRef.current = true;
-  }, [activeSession, activeSessionHydrated, mode]);
+  }, [activeSession, activeSessionHydrated, mode, sessionVariant]);
 
   const resetSessionState = (nextRunning: boolean) => {
     // Stop ticking, clear everything
@@ -348,7 +416,9 @@ export default function IndoorSession() {
 
         const existing = await getActiveRunWalkLock();
         const resumingExisting =
-          activeSession?.kind === 'indoor' && activeSession.mode === mode;
+          activeSession?.kind === 'indoor' &&
+          activeSession.mode === mode &&
+          (activeSession.sessionVariant ?? 'open') === sessionVariant;
         if (!mounted) return;
 
         if (existing) {
@@ -377,7 +447,7 @@ export default function IndoorSession() {
     return () => {
       mounted = false;
     };
-  }, [activeSession, activeSessionHydrated, goBackSmart, lockMode, mode]);
+  }, [activeSession, activeSessionHydrated, goBackSmart, lockMode, mode, sessionVariant]);
 
   // keep speed aligned with unit/mode defaults
   useEffect(() => {
@@ -395,6 +465,7 @@ export default function IndoorSession() {
       kind: 'indoor',
       mode,
       title,
+      sessionVariant,
       phase: isRunning ? 'running' : 'paused',
       clock: clockRef.current,
       distanceUnit,
@@ -414,6 +485,7 @@ export default function IndoorSession() {
     inclineDeg,
     isRunning,
     mode,
+    sessionVariant,
     setActiveSession,
     speed,
     title,
@@ -437,20 +509,28 @@ export default function IndoorSession() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') return;
-      syncSessionFromClock(Date.now(), isRunning ? 'running' : 'paused');
+      if (nextState === 'active') {
+        syncSessionFromClock(Date.now(), isRunningRef.current ? 'running' : 'paused');
+        return;
+      }
+
+      if (nextState === 'inactive' || nextState === 'background') {
+        void persistIndoorSessionSnapshot(isRunningRef.current ? 'running' : 'paused');
+      }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [distanceUnit, isRunning]);
+  }, [activeSessionHydrated, distanceUnit, isRunning, mode, sessionVariant, title]);
 
   // UI helpers
   const distLabelUnit = distanceUnit === 'mi' ? 'MI' : 'KM';
   const speedLabelUnit = distanceUnit === 'mi' ? 'MPH' : 'KPH';
-  const speedStep = distanceUnit === 'mi' ? 0.1 : 0.2;
-  const inclineStep = 0.5;
+  const speedStep = isCycleSession ? (distanceUnit === 'mi' ? 0.5 : 1) : distanceUnit === 'mi' ? 0.1 : 0.2;
+  const inclineStep = isCycleSession ? 1 : 0.5;
+  const secondaryLabel = isCycleSession ? 'Resistance' : 'Incline';
+  const secondaryUnit = isCycleSession ? 'lvl' : '°';
 
   const displayDistance = mToDisplay(distanceM, distanceUnit);
 
@@ -458,6 +538,21 @@ export default function IndoorSession() {
   const avgSpeedDisplay = distanceUnit === 'mi' ? avgSpeedMps * 2.236936 : avgSpeedMps * 3.6;
 
   const currentSpeedMps = speedToMps(speed, distanceUnit);
+  const currentCadence = isCycleSession
+    ? cadenceFromSpeedAndResistance(currentSpeedMps, inclineDeg)
+    : null;
+  const avgCadence = isCycleSession
+    ? (() => {
+        const values = samplesRef.current
+          .map((sample) => Number(sample.cadence_rpm ?? 0))
+          .filter((value) => Number.isFinite(value) && value > 0);
+        if (values.length === 0) {
+          return currentCadence;
+        }
+        const total = values.reduce((sum, value) => sum + value, 0);
+        return Math.round(total / values.length);
+      })()
+    : null;
   const currentPace =
     distanceUnit === 'mi'
       ? formatPace(paceFromMps(currentSpeedMps, 'mi'), '/mi')
@@ -509,8 +604,19 @@ export default function IndoorSession() {
     const totalElevM = elevRef.current;
 
     const avgSpeedMpsFinal = totalTimeS > 0 ? totalDistM / totalTimeS : 0;
-    const paceKm = totalDistM > 0 ? totalTimeS / (totalDistM / M_PER_KM) : null;
-    const paceMi = totalDistM > 0 ? totalTimeS / (totalDistM / M_PER_MI) : null;
+    const paceKm =
+      isCycleSession || totalDistM <= 0 ? null : totalTimeS / (totalDistM / M_PER_KM);
+    const paceMi =
+      isCycleSession || totalDistM <= 0 ? null : totalTimeS / (totalDistM / M_PER_MI);
+    const cadenceValues = samplesRef.current
+      .map((sample) => Number(sample.cadence_rpm ?? 0))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const avgCadenceRpm =
+      isCycleSession && cadenceValues.length > 0
+        ? Math.round(
+            cadenceValues.reduce((sum, value) => sum + value, 0) / cadenceValues.length
+          )
+        : null;
 
     const draftId = makeId();
 
@@ -526,6 +632,7 @@ export default function IndoorSession() {
       avg_speed_mps: Number(avgSpeedMpsFinal.toFixed(6)),
       avg_pace_s_per_km: paceKm == null ? null : Number(paceKm.toFixed(2)),
       avg_pace_s_per_mi: paceMi == null ? null : Number(paceMi.toFixed(2)),
+      avg_cadence_rpm: avgCadenceRpm,
       samples: samplesRef.current,
     };
 
@@ -633,15 +740,35 @@ export default function IndoorSession() {
           <Text style={styles.centerLabel}>Total distance</Text>
 
           <View style={styles.centerRow}>
-            <View style={styles.centerMini}>
-              <Text style={styles.centerMiniValue}>{currentPace}</Text>
-              <Text style={styles.centerMiniLabel}>Current pace</Text>
-            </View>
+            {isCycleSession ? (
+              <>
+                <View style={styles.centerMini}>
+                  <Text style={styles.centerMiniValue}>
+                    {currentCadence == null ? '—' : `${currentCadence} rpm`}
+                  </Text>
+                  <Text style={styles.centerMiniLabel}>Current cadence</Text>
+                </View>
 
-            <View style={styles.centerMini}>
-              <Text style={styles.centerMiniValue}>{avgPace}</Text>
-              <Text style={styles.centerMiniLabel}>Average pace</Text>
-            </View>
+                <View style={styles.centerMini}>
+                  <Text style={styles.centerMiniValue}>
+                    {avgCadence == null ? '—' : `${avgCadence} rpm`}
+                  </Text>
+                  <Text style={styles.centerMiniLabel}>Average cadence</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.centerMini}>
+                  <Text style={styles.centerMiniValue}>{currentPace}</Text>
+                  <Text style={styles.centerMiniLabel}>Current pace</Text>
+                </View>
+
+                <View style={styles.centerMini}>
+                  <Text style={styles.centerMiniValue}>{avgPace}</Text>
+                  <Text style={styles.centerMiniLabel}>Average pace</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -683,7 +810,13 @@ export default function IndoorSession() {
               style={[styles.controlBtn, !isRunning && styles.disabled]}
               onPress={() => {
                 syncSessionFromClock();
-                setInclineDeg((v) => clamp(Number((v - inclineStep).toFixed(1)), 0, 20));
+                setInclineDeg((v) =>
+                  clamp(
+                    Number((v - inclineStep).toFixed(isCycleSession ? 0 : 1)),
+                    0,
+                    20
+                  )
+                );
               }}
               disabled={!isRunning}
             >
@@ -692,17 +825,23 @@ export default function IndoorSession() {
 
             <View style={styles.controlCenter}>
               <Text style={styles.controlValue}>
-                {inclineDeg.toFixed(1)}
-                <Text style={styles.controlUnit}>°</Text>
+                {inclineDeg.toFixed(isCycleSession ? 0 : 1)}
+                <Text style={styles.controlUnit}> {secondaryUnit}</Text>
               </Text>
-              <Text style={styles.controlLabel}>Incline</Text>
+              <Text style={styles.controlLabel}>{secondaryLabel}</Text>
             </View>
 
             <Pressable
               style={[styles.controlBtn, !isRunning && styles.disabled]}
               onPress={() => {
                 syncSessionFromClock();
-                setInclineDeg((v) => clamp(Number((v + inclineStep).toFixed(1)), 0, 20));
+                setInclineDeg((v) =>
+                  clamp(
+                    Number((v + inclineStep).toFixed(isCycleSession ? 0 : 1)),
+                    0,
+                    20
+                  )
+                );
               }}
               disabled={!isRunning}
             >
@@ -752,12 +891,20 @@ export default function IndoorSession() {
 
         <FinishConfirmModal
           visible={showFinishConfirm}
+          sessionLabel={isCycleSession ? 'indoor cycling' : mode === 'indoor_walk' ? 'indoor walk' : 'indoor run'}
           onKeepGoing={() => setShowFinishConfirm(false)}
           onFinish={finishToSummary}
         />
 
         <RunWalkCancelConfirmModal
           visible={showCancelConfirm}
+          subtitle={
+            isCycleSession
+              ? 'This will discard your current indoor cycling session.'
+              : mode === 'indoor_walk'
+                ? 'This will discard your current indoor walk session.'
+                : 'This will discard your current indoor run session.'
+          }
           onKeep={() => setShowCancelConfirm(false)} // stays paused; user can resume
           onDiscard={confirmDiscardCancel}
         />

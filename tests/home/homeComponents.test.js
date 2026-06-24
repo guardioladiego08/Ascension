@@ -154,7 +154,7 @@ describe('home components', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('routes run and walk modal selections through callbacks', async () => {
+  it('routes cardio modal selections through callbacks', async () => {
     const onSelect = jest.fn();
     const onClose = jest.fn();
     const tree = await renderAsync(
@@ -163,10 +163,14 @@ describe('home components', () => {
 
     pressByText(tree, 'Outdoor Run');
     pressByText(tree, 'Indoor Walk');
+    pressByText(tree, 'Outdoor Cycling');
+    pressByText(tree, 'Indoor Cycling');
     pressByText(tree, 'Close');
 
     expect(onSelect).toHaveBeenNthCalledWith(1, 'outdoor_run');
     expect(onSelect).toHaveBeenNthCalledWith(2, 'indoor_walk');
+    expect(onSelect).toHaveBeenNthCalledWith(3, 'outdoor_cycle');
+    expect(onSelect).toHaveBeenNthCalledWith(4, 'indoor_cycle');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

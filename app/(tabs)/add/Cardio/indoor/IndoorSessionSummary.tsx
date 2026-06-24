@@ -11,6 +11,11 @@ import {
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import {
+  getIndoorCardioSummaryTitle,
+  type IndoorCardioMode,
+  isCyclingActivity,
+} from '@/lib/cardio/activityTypes';
 import { useUnits } from '@/contexts/UnitsContext';
 import BadgeSummarySection from '@/components/badges/BadgeSummarySection';
 import LogoHeader from '@/components/my components/logoHeader';
@@ -194,17 +199,19 @@ export default function IndoorSessionSummary() {
 
   const title = useMemo(() => {
     if (!draft) return 'SESSION SUMMARY';
-    switch (draft.exercise_type) {
-      case 'indoor_walk':
-        return 'INDOOR WALK SUMMARY';
-      case 'indoor_run':
-      default:
-        return 'INDOOR RUN SUMMARY';
-    }
+    return getIndoorCardioSummaryTitle(draft.exercise_type as IndoorCardioMode);
   }, [draft]);
+  const isCycleSession = isCyclingActivity(draft?.exercise_type ?? null);
   const isRunningSession = isRunningExerciseType(draft?.exercise_type ?? null);
 
   const displayDistance = draft ? mToDisplay(draft.total_distance_m, distUnit) : 0;
+  const avgSpeedDisplay = draft?.avg_speed_mps
+    ? draft.avg_speed_mps * (distUnit === 'mi' ? MPH_PER_MPS : KMH_PER_MPS)
+    : 0;
+  const avgCadenceText =
+    draft?.avg_cadence_rpm && Number.isFinite(draft.avg_cadence_rpm)
+      ? `${Math.round(draft.avg_cadence_rpm)} rpm`
+      : '—';
 
   const avgPaceForUnit = paceForUnit(
     draft?.avg_pace_s_per_mi ?? null,
@@ -374,6 +381,13 @@ export default function IndoorSessionSummary() {
       .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.speed_mps) * mult }));
   }, [draft?.samples, distUnit]);
 
+  const cadencePoints: SamplePoint[] = useMemo(() => {
+    if (!draft?.samples?.length) return [];
+    return draft.samples
+      .filter((s: any) => Number.isFinite(s.cadence_rpm) && s.cadence_rpm > 0)
+      .map((s: any) => ({ t: Number(s.elapsed_s ?? 0), v: Number(s.cadence_rpm) }));
+  }, [draft?.samples]);
+
   const elevationPoints: SamplePoint[] = useMemo(() => {
     if (!draft?.samples?.length) return [];
     const mult = distUnit === 'mi' ? FT_PER_M : 1;
@@ -526,7 +540,11 @@ export default function IndoorSessionSummary() {
       };
 
       const fallbackExerciseType =
-        draft.exercise_type === 'indoor_walk' ? 'walk' : 'run';
+        draft.exercise_type === 'indoor_walk'
+          ? 'walk'
+          : draft.exercise_type === 'indoor_cycle'
+            ? 'indoor_cycle'
+            : 'run';
 
       // 1) insert session (with enum compatibility fallback)
       let savedExerciseType: string = draft.exercise_type;
@@ -540,7 +558,11 @@ export default function IndoorSessionSummary() {
         .select('id')
         .single();
 
-      if (insErr && fallbackExerciseType !== savedExerciseType) {
+      if (
+        insErr &&
+        fallbackExerciseType !== savedExerciseType &&
+        draft.exercise_type !== 'indoor_cycle'
+      ) {
         const msg = String(insErr.message ?? '').toLowerCase();
         const looksLikeEnumMismatch =
           insErr.code === '22P02' || msg.includes('invalid input value for enum');
@@ -579,6 +601,7 @@ export default function IndoorSessionSummary() {
           speed_mps: s.speed_mps,
           pace_s_per_km: s.pace_s_per_km,
           pace_s_per_mi: s.pace_s_per_mi,
+          cadence_rpm: s.cadence_rpm ?? null,
           incline_deg: s.incline_deg,
           elevation_m: s.elevation_m,
         }));
@@ -614,6 +637,8 @@ export default function IndoorSessionSummary() {
             totalTimeS: draft.total_time_s,
             avgPaceSPerMi: draft.avg_pace_s_per_mi ?? null,
             avgPaceSPerKm: draft.avg_pace_s_per_km ?? null,
+            avgSpeedMps: draft.avg_speed_mps ?? null,
+            avgCadenceRpm: draft.avg_cadence_rpm ?? null,
           });
           shared = true;
         } catch (shareErr: any) {
@@ -718,7 +743,9 @@ export default function IndoorSessionSummary() {
                 <Text style={globalStyles.eyebrow}>Session summary</Text>
                 <Text style={styles.title}>{title}</Text>
                 <Text style={styles.heroSubtitle}>
-                  Review distance, pace, elevation, and saved cardio effort before you move on.
+                  {isCycleSession
+                    ? 'Review distance, speed, cadence, and resistance before you move on.'
+                    : 'Review distance, pace, elevation, and saved cardio effort before you move on.'}
                 </Text>
               </View>
 
@@ -735,8 +762,10 @@ export default function IndoorSessionSummary() {
                 <Text style={styles.heroStatLabel}>distance</Text>
               </View>
               <View style={styles.heroStat}>
-                <Text style={styles.heroStatValue}>{avgPaceText}</Text>
-                <Text style={styles.heroStatLabel}>avg pace</Text>
+                <Text style={styles.heroStatValue}>
+                  {isCycleSession ? `${avgSpeedDisplay.toFixed(1)} ${speedUnitSuffix}` : avgPaceText}
+                </Text>
+                <Text style={styles.heroStatLabel}>{isCycleSession ? 'avg speed' : 'avg pace'}</Text>
               </View>
             </View>
           </View>
@@ -748,12 +777,25 @@ export default function IndoorSessionSummary() {
               value={`${displayDistance.toFixed(2)} ${distLabelUnit}`}
               styles={styles}
             />
-            <Row
-              label="Elevation Gain"
-              value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
-              styles={styles}
-            />
-            <Row label="Avg Pace" value={avgPaceText} styles={styles} />
+            {isCycleSession ? (
+              <>
+                <Row
+                  label="Avg Speed"
+                  value={`${avgSpeedDisplay.toFixed(1)} ${speedUnitSuffix}`}
+                  styles={styles}
+                />
+                <Row label="Avg Cadence" value={avgCadenceText} styles={styles} />
+              </>
+            ) : (
+              <>
+                <Row
+                  label="Elevation Gain"
+                  value={`${totalElevationDisplay.toFixed(0)} ${elevationUnitSuffix}`}
+                  styles={styles}
+                />
+                <Row label="Avg Pace" value={avgPaceText} styles={styles} />
+              </>
+            )}
           </View>
 
           <View style={[globalStyles.panelSoft, styles.heartRateCard]}>
@@ -884,21 +926,23 @@ export default function IndoorSessionSummary() {
           ) : null}
 
           <View style={styles.chartsWrap}>
-            <MetricChart
-              title={`Pace Over Time (${paceSuffix})`}
-              color={colors.highlight1}
-              points={pacePoints}
-              cardBg={colors.card}
-              textColor={colors.text}
-              valueFormatter={paceFormatter}
-              xLabelFormatter={elapsedLabel}
-              yClampMin={1}
-              noOfSections={5}
-              showGrid={false}
-              showYAxisIndices={false}
-              showXAxisIndices={false}
-              hideDataPoints
-            />
+            {!isCycleSession ? (
+              <MetricChart
+                title={`Pace Over Time (${paceSuffix})`}
+                color={colors.highlight1}
+                points={pacePoints}
+                cardBg={colors.card}
+                textColor={colors.text}
+                valueFormatter={paceFormatter}
+                xLabelFormatter={elapsedLabel}
+                yClampMin={1}
+                noOfSections={5}
+                showGrid={false}
+                showYAxisIndices={false}
+                showXAxisIndices={false}
+                hideDataPoints
+              />
+            ) : null}
 
             <MetricChart
               title={`Speed Over Time (${speedUnitSuffix})`}
@@ -918,14 +962,14 @@ export default function IndoorSessionSummary() {
             />
 
             <MetricChart
-              title={`Elevation Over Time (${elevationUnitSuffix})`}
+              title={isCycleSession ? 'Resistance Over Time' : `Elevation Over Time (${elevationUnitSuffix})`}
               color={colors.highlight2}
-              points={elevationPoints}
+              points={isCycleSession ? inclinePoints : elevationPoints}
               cardBg={colors.card}
               textColor={colors.text}
               valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
               xLabelFormatter={elapsedLabel}
-              unitSuffix={elevationUnitSuffix}
+              unitSuffix={isCycleSession ? 'lvl' : elevationUnitSuffix}
               noOfSections={4}
               showGrid={false}
               showYAxisIndices={false}
@@ -933,20 +977,38 @@ export default function IndoorSessionSummary() {
               hideDataPoints
             />
 
-            <MetricChart
-              title="Incline Over Time (deg)"
-              color={colors.highlight3}
-              points={inclinePoints}
-              cardBg={colors.card}
-              textColor={colors.text}
-              valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
-              xLabelFormatter={elapsedLabel}
-              noOfSections={4}
-              showGrid={false}
-              showYAxisIndices={false}
-              showXAxisIndices={false}
-              hideDataPoints
-            />
+            {isCycleSession ? (
+              <MetricChart
+                title="Cadence Over Time (rpm)"
+                color={colors.highlight1}
+                points={cadencePoints}
+                cardBg={colors.card}
+                textColor={colors.text}
+                valueFormatter={(v) => (Number.isFinite(v) ? `${Math.round(v)}` : '—')}
+                xLabelFormatter={elapsedLabel}
+                unitSuffix="rpm"
+                noOfSections={4}
+                showGrid={false}
+                showYAxisIndices={false}
+                showXAxisIndices={false}
+                hideDataPoints
+              />
+            ) : (
+              <MetricChart
+                title="Incline Over Time (deg)"
+                color={colors.highlight3}
+                points={inclinePoints}
+                cardBg={colors.card}
+                textColor={colors.text}
+                valueFormatter={(v) => (Number.isFinite(v) ? v.toFixed(1) : '—')}
+                xLabelFormatter={elapsedLabel}
+                noOfSections={4}
+                showGrid={false}
+                showYAxisIndices={false}
+                showXAxisIndices={false}
+                hideDataPoints
+              />
+            )}
           </View>
 
           <View style={styles.actions}>

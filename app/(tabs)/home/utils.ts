@@ -1,4 +1,5 @@
 import { M_PER_KM, M_PER_MI } from '@/lib/units';
+import { isSupportedCardioActivity } from '@/lib/cardio/activityTypes';
 import type { GoalSnapshot } from './types';
 
 export function clamp01(value: number) {
@@ -40,8 +41,7 @@ export function getDaySegment() {
 }
 
 export function isRunWalkType(value: string) {
-  const normalized = String(value ?? '').toLowerCase();
-  return normalized.includes('run') || normalized.includes('walk');
+  return isSupportedCardioActivity(value);
 }
 
 export function toProgress(actual: number, target: number | null | undefined) {

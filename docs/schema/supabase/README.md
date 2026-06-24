@@ -12,6 +12,10 @@ It does not replace the SQL source of truth. It points to it and captures the re
 
 ## Current Focus Areas
 
+- Indoor cycling now reuses the open `run_walk.sessions` flow, which means hosted schemas must accept `indoor_cycle`, persist cadence on `run_walk.samples`, and roll indoor cycling distance into `total_distance_biked_m` instead of run/walk totals
+- Daily `user.body_metrics` biometrics check-ins for weight, body-fat percentage, and muscle percentage, powering the home quick action and the body progress tab
+- Interval running now has dedicated `run_walk.interval_*` tables for saved custom workouts, executed phase breakdowns, and sampled interval-session GPS points while reusing the existing outdoor summary, goal, and running-badge trigger helpers.
+- Indoor treadmill intervals now have their own `run_walk.indoor_interval_*` tables for saved workouts, completed sessions, per-phase breakdowns, and sampled speed/incline data without changing the open indoor run table.
 - Account-synced `user.user_preferences` settings for units, health providers, theme palette, and strength rest timer
 - Strength template schema-cache compatibility after custom-schema DDL
 - Indoor run/walk summary triggers must use meter-based `weekly_summary` columns only; newer trigger-hardening migrations should not reintroduce `total_miles_*` writes.

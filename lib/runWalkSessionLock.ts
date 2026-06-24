@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getActiveRunWalkSession } from '@/lib/activeRunWalkSessionStore';
+import type { CardioMode } from '@/lib/cardio/activityTypes';
 
-export type RunWalkMode = 'indoor_run' | 'indoor_walk' | 'outdoor_run' | 'outdoor_walk';
+export type RunWalkMode = CardioMode;
 
 type ActiveLock = {
   mode: RunWalkMode;

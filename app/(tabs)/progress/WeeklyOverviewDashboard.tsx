@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
+import { isSupportedCardioActivity } from '@/lib/cardio/activityTypes';
 import { useAppTheme } from '@/providers/AppThemeProvider';
 import { supabase } from '@/lib/supabase';
 import { useUnits } from '@/contexts/UnitsContext';
@@ -86,8 +87,7 @@ function buildDayKeys(rangeStart: Date, rangeEnd: Date) {
 }
 
 function ensureRunWalk(value: string) {
-  const normalized = value.toLowerCase();
-  return normalized.includes('run') || normalized.includes('walk');
+  return isSupportedCardioActivity(value);
 }
 
 function formatHours(minutes: number) {

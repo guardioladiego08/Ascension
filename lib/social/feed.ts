@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
+import { toSocialCardioActivityType } from '@/lib/cardio/activityTypes';
 import {
   fetchOutdoorRoutePreviewMap,
   type RoutePreviewPoint,
@@ -10,7 +11,7 @@ import {
   type StrengthMuscleProfile,
 } from '@/lib/strength/muscleProfile';
 
-export type SocialActivityType = 'run' | 'walk' | 'strength' | 'nutrition' | 'other';
+export type SocialActivityType = 'run' | 'walk' | 'ride' | 'strength' | 'nutrition' | 'other';
 export type PostVisibility = 'public' | 'followers' | 'private';
 
 export type SocialCounts = {
@@ -360,6 +361,7 @@ function parseSupportedActivityType(value: unknown): SocialActivityType | null {
   const v = String(value ?? '').toLowerCase();
   if (v === 'run') return 'run';
   if (v === 'walk') return 'walk';
+  if (v === 'ride') return 'ride';
   if (v === 'strength') return 'strength';
   if (v === 'nutrition') return 'nutrition';
   if (v === 'other') return 'other';
@@ -612,7 +614,7 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
       const rawMetrics = row.metrics;
       const isOutdoorSession =
         inferOutdoorRunWalkPost(row) &&
-        (activityType === 'run' || activityType === 'walk');
+        (activityType === 'run' || activityType === 'walk' || activityType === 'ride');
 
       return {
         id: String(row.id),
@@ -646,7 +648,9 @@ async function hydrateFeedPosts(postRows: any[]): Promise<SocialFeedPost[]> {
     .filter(
       (post) =>
         post.isOutdoorSession &&
-        (post.activityType === 'run' || post.activityType === 'walk') &&
+        (post.activityType === 'run' ||
+          post.activityType === 'walk' ||
+          post.activityType === 'ride') &&
         !!post.sessionId
     )
     .map((post) => post.sessionId as string);
@@ -1084,10 +1088,7 @@ export async function togglePostLike(postId: string, currentlyLiked: boolean): P
 }
 
 function mapRunWalkExerciseTypeToActivityType(exerciseType: string): SocialActivityType {
-  const v = String(exerciseType ?? '').toLowerCase();
-  if (v.includes('walk')) return 'walk';
-  if (v.includes('run')) return 'run';
-  return 'other';
+  return toSocialCardioActivityType(exerciseType);
 }
 
 function buildRunWalkTitle(exerciseType: string, activityType: SocialActivityType): string {
@@ -1095,14 +1096,17 @@ function buildRunWalkTitle(exerciseType: string, activityType: SocialActivityTyp
   const environment = source.includes('outdoor') ? 'Outdoor' : 'Indoor';
 
   if (activityType === 'walk') return `${environment} Walk`;
+  if (activityType === 'ride') return `${environment} Cycling`;
   if (activityType === 'run') return `${environment} Run`;
   return `${environment} Session`;
 }
 
 function buildRunWalkSubtitle(exerciseType: string): string {
-  return String(exerciseType ?? '').toLowerCase().includes('outdoor')
-    ? 'Outdoor Session'
-    : 'Run/Walk Session';
+  const source = String(exerciseType ?? '').toLowerCase();
+  if (source.includes('outdoor')) {
+    return source.includes('cycle') ? 'Outdoor Cycling Session' : 'Outdoor Session';
+  }
+  return source.includes('cycle') ? 'Indoor Cycling Session' : 'Run/Walk Session';
 }
 
 export async function shareRunWalkSessionToFeed(args: {
@@ -1112,6 +1116,8 @@ export async function shareRunWalkSessionToFeed(args: {
   totalTimeS: number;
   avgPaceSPerMi: number | null;
   avgPaceSPerKm: number | null;
+  avgSpeedMps?: number | null;
+  avgCadenceRpm?: number | null;
   caption?: string | null;
   visibility?: PostVisibility;
 }): Promise<string> {
@@ -1130,6 +1136,12 @@ export async function shareRunWalkSessionToFeed(args: {
     avg_pace_s_per_km:
       args.avgPaceSPerKm != null && Number.isFinite(args.avgPaceSPerKm)
         ? args.avgPaceSPerKm
+        : null,
+    avg_speed_mps:
+      args.avgSpeedMps != null && Number.isFinite(args.avgSpeedMps) ? args.avgSpeedMps : null,
+    avg_cadence_rpm:
+      args.avgCadenceRpm != null && Number.isFinite(args.avgCadenceRpm)
+        ? args.avgCadenceRpm
         : null,
     source_session_ref: sessionUuid ? null : String(args.sessionId ?? '').trim() || null,
   };

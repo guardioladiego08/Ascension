@@ -128,6 +128,7 @@ const baseDashboardState = {
     count: 2,
     durationMin: 50,
     distanceM: 5800,
+    cycleCount: 0,
     runCount: 1,
     walkCount: 1,
   },
@@ -201,16 +202,26 @@ describe('HomeScreen', () => {
     });
   });
 
-  it('opens the indoor and outdoor modal and routes an indoor session', async () => {
+  it('opens the cardio modal and routes indoor runs through the run-type picker', async () => {
     const tree = await renderAsync(<HomeScreen />);
 
     pressByText(tree, 'Indoor / outdoor');
     await pressByTextAsync(tree, 'Indoor Run');
 
     expect(mockGetActiveRunWalkLock).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/add/Cardio/indoor/RunTypeSelect');
+  });
+
+  it('routes indoor cycling straight into the live indoor session flow', async () => {
+    const tree = await renderAsync(<HomeScreen />);
+
+    pressByText(tree, 'Indoor / outdoor');
+    await pressByTextAsync(tree, 'Indoor Cycling');
+
+    expect(mockGetActiveRunWalkLock).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/add/Cardio/indoor/IndoorSession',
-      params: { mode: 'indoor_run' },
+      params: { mode: 'indoor_cycle' },
     });
   });
 

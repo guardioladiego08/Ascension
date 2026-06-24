@@ -116,6 +116,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           isAndroidForegroundServiceEnabled: true,
         },
       ],
+      [
+        'expo-notifications',
+        {
+          defaultChannel: 'interval-cues',
+        },
+      ],
       'expo-task-manager',
 
       // Mapbox

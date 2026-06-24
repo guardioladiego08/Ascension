@@ -26,8 +26,9 @@ import {
 import { supabase } from '@/lib/supabase';
 import { getSocialFeedForUser } from '@/lib/social/feed';
 import { useUnits } from '@/contexts/UnitsContext';
+import { getCardioActivityKind } from '@/lib/cardio/activityTypes';
 
-type ActivityKind = 'strength' | 'run' | 'walk';
+type ActivityKind = 'strength' | 'run' | 'walk' | 'ride';
 type ActivityFilter = 'all' | ActivityKind;
 
 type ActivitySource = 'strength' | 'session' | 'outdoor';
@@ -107,6 +108,13 @@ function formatPace(unit: 'mi' | 'km', km?: number | null, mi?: number | null) {
   return `${mm}:${ss < 10 ? '0' : ''}${ss} /${unit}`;
 }
 
+function formatSpeed(unit: 'mi' | 'km', mps?: number | null) {
+  const v = mps == null ? null : Number(mps);
+  if (!v || v <= 0) return '-';
+  const display = unit === 'mi' ? v * 2.236936 : v * 3.6;
+  return `${display.toFixed(1)} ${unit === 'mi' ? 'mph' : 'km/h'}`;
+}
+
 function formatVolume(valueKg: number | null | undefined, unit: 'kg' | 'lb') {
   const v = valueKg == null ? 0 : Number(valueKg);
   if (!Number.isFinite(v) || v <= 0) return '0';
@@ -128,19 +136,22 @@ function formatCardDate(iso: string) {
 
 function iconFor(kind: ActivityKind): keyof typeof Ionicons.glyphMap {
   if (kind === 'strength') return 'barbell-outline';
+  if (kind === 'ride') return 'bicycle-outline';
   return 'walk-outline';
 }
 
 function labelFor(kind: ActivityKind, source: ActivitySource) {
   if (kind === 'strength') return 'Strength';
+  if (kind === 'ride') return source === 'outdoor' ? 'Outdoor cycling' : 'Cycling';
   if (kind === 'walk') return source === 'outdoor' ? 'Outdoor walk' : 'Walk';
   return source === 'outdoor' ? 'Outdoor run' : 'Run';
 }
 
 function kindFromText(t: string): ActivityKind | null {
-  const v = (t ?? '').toLowerCase();
-  if (v.includes('walk')) return 'walk';
-  if (v.includes('run')) return 'run';
+  const kind = getCardioActivityKind(t);
+  if (kind === 'walk') return 'walk';
+  if (kind === 'run') return 'run';
+  if (kind === 'cycle') return 'ride';
   return null;
 }
 
@@ -618,7 +629,12 @@ export default function ActivityGrid({
       let droppedUnsupported = 0;
       const page = posts
         .map((post): UnifiedActivity | null => {
-          if (post.activityType !== 'strength' && post.activityType !== 'run' && post.activityType !== 'walk') {
+          if (
+            post.activityType !== 'strength' &&
+            post.activityType !== 'run' &&
+            post.activityType !== 'walk' &&
+            post.activityType !== 'ride'
+          ) {
             droppedUnsupported += 1;
             return null;
           }
@@ -657,7 +673,9 @@ export default function ActivityGrid({
                 ? coerceStrengthMuscleProfile(post.strengthMuscleProfile)
                 : null,
             routePreview:
-              post.activityType === 'run' || post.activityType === 'walk'
+              post.activityType === 'run' ||
+              post.activityType === 'walk' ||
+              post.activityType === 'ride'
                 ? post.routePreview
                 : null,
           };
@@ -711,7 +729,8 @@ export default function ActivityGrid({
       }
 
       const wantsStrength = filter === 'all' || filter === 'strength';
-      const wantsCardio = filter === 'all' || filter === 'run' || filter === 'walk';
+      const wantsCardio =
+        filter === 'all' || filter === 'run' || filter === 'walk' || filter === 'ride';
 
       // If not reset and everything requested is already done, do nothing.
       if (!reset) {
@@ -895,6 +914,12 @@ export default function ActivityGrid({
             onPress={() => setFilter('walk')}
             styles={styles}
           />
+          <FilterPill
+            label="Cycling"
+            active={filter === 'ride'}
+            onPress={() => setFilter('ride')}
+            styles={styles}
+          />
         </View>
       </View>
     );
@@ -904,11 +929,19 @@ export default function ActivityGrid({
     const dateLabel = formatCardDate(item.startedAt);
     const routePreviewVisible =
       item.source === 'outdoor' &&
-      (item.kind === 'run' || item.kind === 'walk') &&
+      (item.kind === 'run' || item.kind === 'walk' || item.kind === 'ride') &&
       !!item.routePreview &&
       item.routePreview.length >= 2;
     const strengthRadarVisible =
       item.kind === 'strength' && !!item.strengthMuscleProfile;
+    const derivedSpeedMps =
+      item.speedMps ??
+      (item.distanceM != null &&
+      item.distanceM > 0 &&
+      item.durationS != null &&
+      item.durationS > 0
+        ? item.distanceM / item.durationS
+        : null);
 
     const onOpenCard = async () => {
       const postId = normalizeRouteId(item.postId);
@@ -1061,7 +1094,9 @@ export default function ActivityGrid({
             </View>
           ) : (
             <Text style={styles.overlayText}>
-              {formatDistance(distanceUnit, item.distanceM)} • {formatPace(distanceUnit, item.paceKm, item.paceMi)}
+              {item.kind === 'ride'
+                ? `${formatDistance(distanceUnit, item.distanceM)} • ${formatSpeed(distanceUnit, derivedSpeedMps)}`
+                : `${formatDistance(distanceUnit, item.distanceM)} • ${formatPace(distanceUnit, item.paceKm, item.paceMi)}`}
             </Text>
           )}
         </View>

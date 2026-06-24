@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
+import { getCardioActivityKind } from '@/lib/cardio/activityTypes';
 import { supabase } from '@/lib/supabase';
 import { syncAndFetchMyDailyGoalResult, toLocalISODate } from '@/lib/goals/client';
 import type { DailyGoalResults } from '@/lib/goals/goalLogic';
@@ -12,6 +13,7 @@ import {
   type CardioDaySummary,
   type DiaryDay,
   type GoalSnapshot,
+  type IndoorIntervalSessionRow,
   type IndoorSessionRow,
   type OutdoorSessionRow,
   type StrengthDaySummary,
@@ -83,6 +85,7 @@ export function useHomeDashboard() {
             goalSnapshotRes,
             strengthRes,
             indoorRes,
+            indoorIntervalRes,
             outdoorRes,
             goalRow,
           ] = await Promise.all([
@@ -150,6 +153,14 @@ export function useHomeDashboard() {
               .lte('ended_at', endIso),
             supabase
               .schema('run_walk')
+              .from('indoor_interval_sessions')
+              .select('ended_at, exercise_type, total_time_s, total_distance_m')
+              .eq('user_id', user.id)
+              .eq('status', 'completed')
+              .gte('ended_at', startIso)
+              .lte('ended_at', endIso),
+            supabase
+              .schema('run_walk')
               .from('outdoor_sessions')
               .select('ended_at, activity_type, duration_s, distance_m')
               .eq('user_id', user.id)
@@ -171,6 +182,7 @@ export function useHomeDashboard() {
           }
           if (strengthRes.error) throw strengthRes.error;
           if (indoorRes.error) throw indoorRes.error;
+          if (indoorIntervalRes.error) throw indoorIntervalRes.error;
           if (outdoorRes.error) throw outdoorRes.error;
 
           const strengthRows = (strengthRes.data ?? []) as StrengthWorkoutRow[];
@@ -196,11 +208,14 @@ export function useHomeDashboard() {
           const indoorRows = ((indoorRes.data ?? []) as IndoorSessionRow[]).filter((row) =>
             isRunWalkType(row.exercise_type)
           );
+          const indoorIntervalRows = (
+            (indoorIntervalRes.data ?? []) as IndoorIntervalSessionRow[]
+          ).filter((row) => isRunWalkType(row.exercise_type));
           const outdoorRows = ((outdoorRes.data ?? []) as OutdoorSessionRow[]).filter((row) =>
             isRunWalkType(row.activity_type)
           );
 
-          const cardioSummary = [...indoorRows, ...outdoorRows].reduce<CardioDaySummary>(
+          const cardioSummary = [...indoorRows, ...indoorIntervalRows, ...outdoorRows].reduce<CardioDaySummary>(
             (summary, row) => {
               summary.count += 1;
               summary.distanceM += Number(
@@ -212,9 +227,11 @@ export function useHomeDashboard() {
 
               const type = String(
                 'exercise_type' in row ? row.exercise_type : row.activity_type
-              ).toLowerCase();
-              if (type.includes('walk')) summary.walkCount += 1;
-              if (type.includes('run')) summary.runCount += 1;
+              );
+              const kind = getCardioActivityKind(type);
+              if (kind === 'walk') summary.walkCount += 1;
+              if (kind === 'run') summary.runCount += 1;
+              if (kind === 'cycle') summary.cycleCount += 1;
 
               return summary;
             },
